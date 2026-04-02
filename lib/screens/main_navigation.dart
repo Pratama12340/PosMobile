@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
-// Import file konten Anda
+
+// Karena main_navigation.dart sekarang SATU RUMAH (satu folder) dengan home dan history,
+// kita tinggal panggil nama filenya langsung tanpa embel-embel nama folder.
 import 'home_screen.dart'; 
 import 'history_screen.dart';
+
+// Karena hover_scale.dart ada di folder berbeda, 
+// kita pakai '../' untuk mundur satu langkah keluar dari folder screens, lalu masuk ke folder widgets.
+import '../widgets/hover_scale.dart';
 
 class MainNavigationScaffold extends StatefulWidget {
   const MainNavigationScaffold({super.key});
@@ -38,16 +44,38 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.menu, size: 28, color: Colors.black87),
-                      onPressed: () => setState(() => _isSidebarVisible = !_isSidebarVisible),
+                      icon: const Icon(
+                        Icons.menu,
+                        size: 28,
+                        color: Colors.black87,
+                      ),
+                      onPressed: () => setState(
+                        () => _isSidebarVisible = !_isSidebarVisible,
+                      ),
                     ),
                     const SizedBox(width: 16),
                     const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text('ARANUS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, height: 1.0, fontFamily: 'Poppins')),
-                        Text('POS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, height: 1.0, fontFamily: 'Poppins')),
+                        Text(
+                          'ARANUS',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            height: 1.0,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        Text(
+                          'POS',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            height: 1.0,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -57,7 +85,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                 Expanded(
                   child: Center(
                     child: Container(
-                      constraints: const BoxConstraints(maxWidth: 400), // Batas lebar agar tetap proporsional
+                      constraints: const BoxConstraints(
+                        maxWidth: 400,
+                      ), // Batas lebar agar tetap proporsional
                       height: 42,
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
@@ -67,12 +97,20 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       child: TextField(
                         textAlignVertical: TextAlignVertical.center,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.search, color: Colors.grey.shade600, size: 20),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: Colors.grey.shade600,
+                            size: 20,
+                          ),
                           hintText: 'Cari menu atau pesanan...',
-                          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14, fontFamily: 'Poppins'),
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 14,
+                            fontFamily: 'Poppins',
+                          ),
                           border: InputBorder.none,
                           // Mengatur padding agar teks pas di tengah secara vertikal
-                          contentPadding: const EdgeInsets.only(bottom: 12), 
+                          contentPadding: const EdgeInsets.only(bottom: 12),
                         ),
                       ),
                     ),
@@ -92,12 +130,26 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('Fatimah', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Poppins')),
-                        Text('Cashier', style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontFamily: 'Poppins')),
+                        const Text(
+                          'Fatimah',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        Text(
+                          'Cashier',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
                       ],
                     ),
                   ],
-                )
+                ),
               ],
             ),
           ),
@@ -115,7 +167,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                     width: 220,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      border: Border(right: BorderSide(color: Colors.grey.shade100)),
+                      border: Border(
+                        right: BorderSide(color: Colors.grey.shade100),
+                      ),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Column(
@@ -124,7 +178,12 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                         _buildMenuItem(Icons.history, 'History', index: 1),
                         const Spacer(),
                         _buildMenuItem(Icons.settings, 'Setting', index: -1),
-                        _buildMenuItem(Icons.logout, 'Logout', index: -2, isLogout: true),
+                        _buildMenuItem(
+                          Icons.logout,
+                          'Logout',
+                          index: -2,
+                          isLogout: true,
+                        ),
                       ],
                     ),
                   ),
@@ -134,8 +193,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                   child: IndexedStack(
                     index: _currentIndex,
                     children: const [
-                      HomeScreenContent(),   // Index 0
-                      HistoryScreenContent(), // Index 1
+                      HomeScreen(),   
+                      HistoryScreenContent(), 
                     ],
                   ),
                 ),
@@ -150,40 +209,48 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   // ==========================================
   // WIDGET BANTUAN UNTUK MENU SIDEBAR
   // ==========================================
-  Widget _buildMenuItem(IconData icon, String title, {required int index, bool isLogout = false}) {
+  Widget _buildMenuItem(
+    IconData icon,
+    String title, {
+    required int index,
+    bool isLogout = false,
+  }) {
     // Mengecek apakah menu ini yang sedang aktif
     bool isActive = _currentIndex == index;
-    
-    Color color = isActive 
-        ? Colors.blue 
+
+    Color color = isActive
+        ? Colors.blue
         : (isLogout ? Colors.red : Colors.grey.shade700);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.blue.shade50 : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: color),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: color, 
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            fontFamily: 'Poppins'
-          ),
+    // --- HOVER ANIMASI DITAMBAHKAN DI SINI ---
+    return HoverScale(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.blue.shade50 : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
         ),
-        onTap: () {
-          if (index >= 0) {
-            // Berpindah halaman
-            setState(() => _currentIndex = index);
-          } else if (isLogout) {
-            // Kembali ke Login
-            Navigator.pushReplacementNamed(context, '/'); 
-            // Catatan: Pastikan di main.dart rute '/' adalah LoginScreen
-          }
-        },
+        child: ListTile(
+          leading: Icon(icon, color: color),
+          title: Text(
+            title,
+            style: TextStyle(
+              color: color,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              fontFamily: 'Poppins',
+            ),
+          ),
+          onTap: () {
+            if (index >= 0) {
+              // Berpindah halaman
+              setState(() => _currentIndex = index);
+            } else if (isLogout) {
+              // Kembali ke Login
+              Navigator.pushReplacementNamed(context, '/');
+              // Catatan: Pastikan di main.dart rute '/' adalah LoginScreen
+            }
+          },
+        ),
       ),
     );
   }

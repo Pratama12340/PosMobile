@@ -1,9 +1,9 @@
-import 'dart:convert'; // Wajib ditambahkan untuk mengolah JSON
-import 'package:http/http.dart' as http; // Wajib ditambahkan untuk memanggil API
+import 'dart:convert'; 
+import 'package:http/http.dart' as http; 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main_navigation.dart'; 
-// Hapus import api_service.dart karena logikanya langsung kita tanam di bawah
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -53,32 +53,44 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
 
-   // 3. MULAI TEMBAK API LANGSUNG DARI SINI!
+    // 3. MULAI TEMBAK API
     bool isSuccess = false;
     try {
       final response = await http.post(
-        // ---> GANTI ALAMATNYA MENJADI LOGIN-PIN DI SINI <---
         Uri.parse('https://api.etres.my.id/api/v1/login-pin'), 
         headers: {
           'Accept': 'application/json',       
           'Content-Type': 'application/json', 
         },
         body: jsonEncode({
-          'pin': _pin, // Kita kirimkan 6 digit angka PIN-nya
+          'pin': _pin, 
         }),
       );
 
-      print("STATUS LOGIN SAYA: ${response.statusCode}");
-      print("HASIL DARI SERVER: ${response.body}");
-
       if (response.statusCode == 200) {
-        isSuccess = true; // Berhasil masuk!
+        // Buka bungkus balasan dari Laravel
+        final data = jsonDecode(response.body);
+        
+        // Ambil Nama dan Token
+        String namaKasir = 'Kasir';
+        if (data['user'] != null && data['user']['name'] != null) {
+           namaKasir = data['user']['name'].toString(); 
+        }
+        String tokenAkses = data['token'] ?? '';
+
+        // Simpan ke SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('nama_kasir', namaKasir);
+        await prefs.setString('token', tokenAkses); 
+
+        isSuccess = true; 
       }
     } catch (e) {
-      print("Error gagal koneksi: $e");
+      debugPrint("Error API Login: $e");
       isSuccess = false;
     }
-    // 4. CEK HASILNYA
+
+    // 4. CEK HASIL LOGIN
     if (isSuccess) {
       // JIKA BENAR: Pindah ke halaman MainNavigationScaffold
       if (mounted) {

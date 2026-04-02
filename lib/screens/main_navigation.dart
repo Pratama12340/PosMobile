@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-// Karena main_navigation.dart sekarang SATU RUMAH (satu folder) dengan home dan history,
-// kita tinggal panggil nama filenya langsung tanpa embel-embel nama folder.
+// PASTIKAN IMPORT INI ADA
 import 'home_screen.dart'; 
 import 'history_screen.dart';
 
-// Karena hover_scale.dart ada di folder berbeda, 
-// kita pakai '../' untuk mundur satu langkah keluar dari folder screens, lalu masuk ke folder widgets.
+// Import widget tambahan
 import '../widgets/hover_scale.dart';
 
 class MainNavigationScaffold extends StatefulWidget {
@@ -21,6 +20,32 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   bool _isSidebarVisible = false;
   int _currentIndex = 0; // 0 untuk Home, 1 untuk History
 
+  // ==========================================
+  // STATE NAMA KASIR
+  // ==========================================
+  String _namaKasirAktif = 'Memuat...';
+
+  @override
+  void initState() {
+    super.initState();
+    _ambilNamaKasir();
+  }
+
+  Future<void> _ambilNamaKasir() async {
+    final prefs = await SharedPreferences.getInstance();
+    String namaTersimpan = prefs.getString('nama_kasir') ?? 'Data Tidak Terbaca';
+    
+    // CCTV Home (Bisa dihapus jika sudah yakin jalan)
+    print("=== CCTV HOME ===");
+    print("MEMBACA MEMORI: $namaTersimpan");
+
+    if (mounted) {
+      setState(() {
+        _namaKasirAktif = namaTersimpan;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -28,7 +53,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       body: Column(
         children: [
           // ==========================================
-          // PART A: TOP BAR (SEARCH POSISI TENGAH)
+          // PART A: TOP BAR
           // ==========================================
           Container(
             height: 75,
@@ -39,55 +64,31 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             ),
             child: Row(
               children: [
-                // --- BAGIAN KIRI: MENU & LOGO ---
+                // --- KIRI: MENU & LOGO ---
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(
-                        Icons.menu,
-                        size: 28,
-                        color: Colors.black87,
-                      ),
-                      onPressed: () => setState(
-                        () => _isSidebarVisible = !_isSidebarVisible,
-                      ),
+                      icon: const Icon(Icons.menu, size: 28, color: Colors.black87),
+                      onPressed: () => setState(() => _isSidebarVisible = !_isSidebarVisible),
                     ),
                     const SizedBox(width: 16),
                     const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          'ARANUS',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                            height: 1.0,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                        Text(
-                          'POS',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                            height: 1.0,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
+                        Text('ARANUS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, height: 1.0, fontFamily: 'Poppins')),
+                        Text('POS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, height: 1.0, fontFamily: 'Poppins')),
                       ],
                     ),
                   ],
                 ),
 
-                // --- BAGIAN TENGAH: SEARCH BAR (DI-CENTER) ---
+                // --- TENGAH: SEARCH BAR ---
                 Expanded(
                   child: Center(
                     child: Container(
-                      constraints: const BoxConstraints(
-                        maxWidth: 400,
-                      ), // Batas lebar agar tetap proporsional
+                      constraints: const BoxConstraints(maxWidth: 400),
                       height: 42,
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
@@ -97,19 +98,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       child: TextField(
                         textAlignVertical: TextAlignVertical.center,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: Colors.grey.shade600,
-                            size: 20,
-                          ),
+                          prefixIcon: Icon(Icons.search, color: Colors.grey.shade600, size: 20),
                           hintText: 'Cari menu atau pesanan...',
-                          hintStyle: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 14,
-                            fontFamily: 'Poppins',
-                          ),
+                          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14, fontFamily: 'Poppins'),
                           border: InputBorder.none,
-                          // Mengatur padding agar teks pas di tengah secara vertikal
                           contentPadding: const EdgeInsets.only(bottom: 12),
                         ),
                       ),
@@ -117,7 +109,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                   ),
                 ),
 
-                // --- BAGIAN KANAN: PROFIL KASIR ---
+                // --- KANAN: PROFIL KASIR ---
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -130,21 +122,13 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text(
-                          'Fatimah',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            fontFamily: 'Poppins',
-                          ),
+                        Text(
+                          _namaKasirAktif, // Variabel Nama Kasir Aktif
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Poppins'),
                         ),
                         Text(
                           'Cashier',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                            fontFamily: 'Poppins',
-                          ),
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontFamily: 'Poppins'),
                         ),
                       ],
                     ),
@@ -155,21 +139,18 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
           ),
 
           // ==========================================
-          // PART B: BODY (SIDEBAR + KONTEN DINAMIS)
+          // PART B: BODY (SIDEBAR + KONTEN)
           // ==========================================
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- SIDEBAR ---
                 if (_isSidebarVisible)
                   Container(
                     width: 220,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      border: Border(
-                        right: BorderSide(color: Colors.grey.shade100),
-                      ),
+                      border: Border(right: BorderSide(color: Colors.grey.shade100)),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Column(
@@ -178,23 +159,18 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                         _buildMenuItem(Icons.history, 'History', index: 1),
                         const Spacer(),
                         _buildMenuItem(Icons.settings, 'Setting', index: -1),
-                        _buildMenuItem(
-                          Icons.logout,
-                          'Logout',
-                          index: -2,
-                          isLogout: true,
-                        ),
+                        _buildMenuItem(Icons.logout, 'Logout', index: -2, isLogout: true),
                       ],
                     ),
                   ),
 
-                // --- AREA KONTEN (SMOOTH TRANSITION) ---
+                // --- AREA KONTEN (TANPA CONST) ---
                 Expanded(
                   child: IndexedStack(
                     index: _currentIndex,
-                    children: const [
+                    children: [
                       HomeScreen(),   
-                      HistoryScreenContent(), 
+                      const HistoryScreenContent(), // History biasanya statis, jadi boleh const
                     ],
                   ),
                 ),
@@ -206,23 +182,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
-  // ==========================================
-  // WIDGET BANTUAN UNTUK MENU SIDEBAR
-  // ==========================================
-  Widget _buildMenuItem(
-    IconData icon,
-    String title, {
-    required int index,
-    bool isLogout = false,
-  }) {
-    // Mengecek apakah menu ini yang sedang aktif
+  Widget _buildMenuItem(IconData icon, String title, {required int index, bool isLogout = false}) {
     bool isActive = _currentIndex == index;
+    Color color = isActive ? Colors.blue : (isLogout ? Colors.red : Colors.grey.shade700);
 
-    Color color = isActive
-        ? Colors.blue
-        : (isLogout ? Colors.red : Colors.grey.shade700);
-
-    // --- HOVER ANIMASI DITAMBAHKAN DI SINI ---
     return HoverScale(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -232,22 +195,12 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         ),
         child: ListTile(
           leading: Icon(icon, color: color),
-          title: Text(
-            title,
-            style: TextStyle(
-              color: color,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              fontFamily: 'Poppins',
-            ),
-          ),
+          title: Text(title, style: TextStyle(color: color, fontWeight: isActive ? FontWeight.bold : FontWeight.normal, fontFamily: 'Poppins')),
           onTap: () {
             if (index >= 0) {
-              // Berpindah halaman
               setState(() => _currentIndex = index);
             } else if (isLogout) {
-              // Kembali ke Login
               Navigator.pushReplacementNamed(context, '/');
-              // Catatan: Pastikan di main.dart rute '/' adalah LoginScreen
             }
           },
         ),

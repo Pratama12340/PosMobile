@@ -1,6 +1,9 @@
+import 'dart:convert'; // Wajib ditambahkan untuk mengolah JSON
+import 'package:http/http.dart' as http; // Wajib ditambahkan untuk memanggil API
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'main_navigation.dart'; // Pastikan file ini ada sesuai kode asli Anda
+import 'main_navigation.dart'; 
+// Hapus import api_service.dart karena logikanya langsung kita tanam di bawah
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,8 +15,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   // --- STATE UNTUK PIN ---
   String _pin = '';
-  final int _pinLength = 4;
-  final String _correctPin = '1234'; // PIN Dummy untuk testing
+  final int _pinLength = 6;
 
   void _onNumPadTap(String value) {
     setState(() {
@@ -31,35 +33,74 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  void _verifyPin() {
+  void _verifyPin() async {
+    // 1. Cek apakah PIN sudah lengkap 6 digit
     if (_pin.length < _pinLength) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Silakan masukkan 4 digit PIN', style: TextStyle(fontFamily: 'Poppins')),
+          content: Text('Silakan masukkan 6 digit PIN', style: TextStyle(fontFamily: 'Poppins')),
           backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
         ),
       );
-      return;
+      return; 
     }
 
-    if (_pin == _correctPin) {
-      // Masuk ke Main Navigation (Sesuai kode asli Anda)
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainNavigationScaffold()),
+    // 2. Tampilkan pesan "Loading"
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Mengecek PIN ke Server...', style: TextStyle(fontFamily: 'Poppins')),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+   // 3. MULAI TEMBAK API LANGSUNG DARI SINI!
+    bool isSuccess = false;
+    try {
+      final response = await http.post(
+        // ---> GANTI ALAMATNYA MENJADI LOGIN-PIN DI SINI <---
+        Uri.parse('https://api.etres.my.id/api/v1/login-pin'), 
+        headers: {
+          'Accept': 'application/json',       
+          'Content-Type': 'application/json', 
+        },
+        body: jsonEncode({
+          'pin': _pin, // Kita kirimkan 6 digit angka PIN-nya
+        }),
       );
+
+      print("STATUS LOGIN SAYA: ${response.statusCode}");
+      print("HASIL DARI SERVER: ${response.body}");
+
+      if (response.statusCode == 200) {
+        isSuccess = true; // Berhasil masuk!
+      }
+    } catch (e) {
+      print("Error gagal koneksi: $e");
+      isSuccess = false;
+    }
+    // 4. CEK HASILNYA
+    if (isSuccess) {
+      // JIKA BENAR: Pindah ke halaman MainNavigationScaffold
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainNavigationScaffold()), 
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('PIN Salah! Silakan coba lagi.', style: TextStyle(fontFamily: 'Poppins')),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      setState(() {
-        _pin = ''; // Reset PIN jika salah
-      });
+      // JIKA SALAH: Tampilkan pesan merah dan hapus PIN
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PIN Salah atau Tidak Terdaftar!', style: TextStyle(fontFamily: 'Poppins')),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        setState(() {
+          _pin = ''; 
+        });
+      }
     }
   }
 
@@ -87,15 +128,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildWebLayout(BoxConstraints constraints) {
     return Row(
       children: [
-        // Sisi Ilustrasi (Kiri)
         Expanded(
           flex: 1,
           child: SvgPicture.asset(
-            'assets/images/login.svg', // Pastikan asset ini sudah ada
+            'assets/images/login.svg', 
             height: constraints.maxHeight * 0.4,
           ),
         ),
-        // Sisi Form dengan Card (Kanan)
         Expanded(
           flex: 1,
           child: _buildPinForm(false),
@@ -129,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center, // Diubah ke center agar Numpad rapi
+        crossAxisAlignment: CrossAxisAlignment.center, 
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
@@ -149,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 30),
 
-          // --- INDIKATOR PIN (TITIK) ---
+          // --- INDIKATOR PIN ---
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(_pinLength, (index) {
@@ -180,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
             width: double.infinity,
             height: 54,
             child: ElevatedButton(
-              onPressed: _verifyPin, // Harus diklik untuk verifikasi
+              onPressed: _verifyPin,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue.shade700,
                 foregroundColor: Colors.white,
@@ -195,16 +234,15 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Desain Grid Angka (Numpad)
   Widget _buildNumPad() {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 300), // Membatasi lebar Numpad agar proporsional
+      constraints: const BoxConstraints(maxWidth: 300), 
       child: GridView.count(
         shrinkWrap: true,
         crossAxisCount: 3,
         mainAxisSpacing: 15,
         crossAxisSpacing: 15,
-        childAspectRatio: 1.3, // Menyesuaikan tinggi tombol
+        childAspectRatio: 1.3, 
         physics: const NeverScrollableScrollPhysics(),
         children: [
           _numButton('1'), _numButton('2'), _numButton('3'),

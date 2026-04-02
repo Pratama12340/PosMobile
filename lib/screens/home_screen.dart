@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart'; 
 import '../widgets/cart_panel.dart';    
-import '../widgets/hover_scale.dart';   
+import '../widgets/hover_scale.dart'; 
+import '../widgets/opening_cash_dialog.dart';  
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,6 +29,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadDataKategori();
     _loadDataProduk();
+
+    // TAMBAHKAN INI: Panggil popup setelah build selesai
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showOpeningCashDialog();
+    });
   }
 
   // ==========================================
@@ -280,6 +286,14 @@ class _HomeScreenState extends State<HomeScreen> {
           formatCurrency: (p) => _formatRupiah(p),
         ),
       ),
+    );
+  }
+  // Fungsi untuk memunculkan popup kas awal
+  void _showOpeningCashDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User tidak bisa menutup popup tanpa isi data
+      builder: (context) => const CashInitialDialog(),
     );
   }
 }

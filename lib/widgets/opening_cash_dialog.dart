@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Perlu untuk TextInputFormatter
+import 'package:flutter/services.dart';
 import '../style.dart';
 
 class CashInitialDialog extends StatefulWidget {
@@ -15,7 +15,7 @@ class _CashInitialDialogState extends State<CashInitialDialog> {
   // Daftar pecahan cepat yang sering digunakan
   final List<int> _quickAmounts = [50000, 100000, 200000, 500000];
 
-  // Fungsi untuk memformat angka ke ribuan (1.000.000)
+  // Fungsi format titik otomatis
   String _formatNumber(String s) {
     if (s.isEmpty) return "";
     return s.replaceAllMapped(
@@ -25,7 +25,7 @@ class _CashInitialDialogState extends State<CashInitialDialog> {
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
-    double dialogWidth = screenWidth > 600 ? 420 : screenWidth * 0.9;
+    double dialogWidth = screenWidth > 600 ? 400 : screenWidth * 0.9;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -35,34 +35,40 @@ class _CashInitialDialogState extends State<CashInitialDialog> {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: AppStyle.bgLightBlue,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(28),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          // Perubahan: Mengatur Column agar konten di dalamnya bisa di-center
+          crossAxisAlignment: CrossAxisAlignment.center, 
           children: [
-            // Judul yang ukurannya sudah disesuaikan (tidak kebesaran)
+            // Judul: Sekarang berada di tengah
             Text(
               "Kas Awal",
+              textAlign: TextAlign.center,
               style: AppStyle.titleText.copyWith(fontSize: 22),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              "Masukkan saldo awal laci kasir.",
-              style: AppStyle.hintText,
+            const SizedBox(height: 6),
+            // Sub-judul: Sekarang berada di tengah
+            Text(
+              "Masukkan saldo awal laci kasir untuk memulai transaksi hari ini.",
+              textAlign: TextAlign.center,
+              style: AppStyle.hintText.copyWith(fontSize: 13),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             
-            const Text("Jumlah Saldo", style: AppStyle.labelText),
+            // Label input tetap di kiri atau tengah sesuai selera (di sini saya buat kiri agar rapi dengan input)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text("Jumlah Saldo", style: AppStyle.labelText),
+            ),
             const SizedBox(height: 8),
             
-            // Input dengan Auto-Formatting Titik
             TextField(
               controller: _cashController,
               keyboardType: TextInputType.number,
               style: AppStyle.labelText.copyWith(fontSize: 18),
               onChanged: (value) {
-                // Hapus titik lama, lalu format ulang
                 String cleanValue = value.replaceAll('.', '');
                 if (cleanValue.isNotEmpty) {
                   String formatted = _formatNumber(cleanValue);
@@ -78,21 +84,31 @@ class _CashInitialDialogState extends State<CashInitialDialog> {
                 prefixText: "Rp ",
                 prefixStyle: AppStyle.labelText,
                 hintText: "0",
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(15),
                   borderSide: BorderSide.none,
                 ),
               ),
             ),
             
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             
-            // Pilihan Pecahan Cepat
-            const Text("Pecahan Cepat:", style: TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Poppins')),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            // Judul Pecahan Cepat di Tengah
+            const Text(
+              "Pilih Pecahan Cepat", 
+              style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500, fontFamily: 'Poppins')
+            ),
+            const SizedBox(height: 12),
+            
+            // Grid Pecahan Cepat: Disesuaikan jaraknya agar rapi (2 kolom)
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 2.8, // Mengatur tinggi-lebar tombol pecahan
               children: _quickAmounts.map((amount) {
                 return InkWell(
                   onTap: () {
@@ -103,32 +119,38 @@ class _CashInitialDialogState extends State<CashInitialDialog> {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF4285F4).withOpacity(0.2)),
                     ),
-                    child: Text(
-                      "Rp ${_formatNumber(amount.toString())}",
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4285F4)),
+                    child: Center(
+                      child: Text(
+                        "Rp ${_formatNumber(amount.toString())}",
+                        style: const TextStyle(
+                          fontSize: 13, 
+                          fontWeight: FontWeight.bold, 
+                          color: Color(0xFF4285F4),
+                          fontFamily: 'Poppins'
+                        ),
+                      ),
                     ),
                   ),
                 );
               }).toList(),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             
             // Tombol Submit
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 54,
               child: ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4285F4),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   elevation: 0,
                 ),
                 child: Text(

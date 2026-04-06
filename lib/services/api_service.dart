@@ -1,25 +1,20 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // Base URL server Anda
   static const String baseUrl = 'https://api.etres.my.id/api/v1';
 
-  // --- SESSION TOKEN (Variabel Sementara) ---
-  // Ini akan menyimpan "Kunci Akses" selama aplikasi terbuka.
-  // Begitu aplikasi ditutup total, token ini akan kembali jadi null (aman).
-  static String? sessionToken;
-
-  // Helper untuk Header (Otomatis menyisipkan Token jika sudah Login)
-  static Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        // Jika sessionToken ada isinya, masukkan ke Header Authorization
-        if (sessionToken != null) 'Authorization': 'Bearer $sessionToken',
-      };
+  // ==========================================
+  // FUNGSI HELPER: MENGAMBIL TOKEN DARI MEMORI
+  // ==========================================
+  static Future<String> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token') ?? '';
+  }
 
   // ==========================================
-  // 1. FUNGSI LOGIN (MENGGUNAKAN PIN)
+  // FUNGSI 1: LOGIN & SIMPAN TOKEN
   // ==========================================
   static Future<bool> loginWithPin(String pin) async {
     try {
@@ -29,93 +24,94 @@ class ApiService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: json.encode({
-          'pin': pin, // Mengirim PIN ke Laravel
-        }),
+        body: jsonEncode({'pin': pin}),
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = jsonDecode(response.body);
+        String token = data['token'] ?? data['data']?['token'] ?? '';
         
-        // Ambil token dari response Laravel
-        // (Biasanya data['token'] atau data['data']['token'])
-        sessionToken = data['token'] ?? data['data']?['token'];
-        
-        print("Login Berhasil! Token disimpan sementara.");
-        return true;
-      } else {
-        print("Login Gagal: ${response.statusCode}");
-        return false;
+        // Simpan token ke brankas HP
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', token);
+        return true; 
       }
+      return false;
     } catch (e) {
       print("Error Login: $e");
       return false;
     }
   }
 
-  // Fungsi Logout
-  static void logout() {
-    sessionToken = null;
-  }
-
   // ==========================================
-  // 2. FUNGSI AMBIL DATA (KATEGORI, PRODUK, HISTORY)
+  // FUNGSI 2: AMBIL KATEGORI
   // ==========================================
-
-  // Ambil Kategori
   static Future<List<dynamic>> fetchCategories() async {
     try {
+      String token = await _getToken();
       final response = await http.get(
         Uri.parse('$baseUrl/categories'),
-        headers: _headers, // Menggunakan header yang sudah ada tokennya
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
-
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['data'] ?? data;
+        final data = jsonDecode(response.body);
+        return data is List ? data : (data['data'] ?? []);
       } else {
-        throw Exception('Gagal mengambil kategori. Kode: ${response.statusCode}');
+        throw Exception('Kode: ${response.statusCode}');
       }
     } catch (e) {
-      throw Exception('Error Koneksi Kategori: $e');
+      throw Exception('Error Kategori: $e');
     }
   }
 
-  // Ambil Produk
+  // ==========================================
+  // FUNGSI 3: AMBIL PRODUK
+  // ==========================================
   static Future<List<dynamic>> fetchProducts() async {
     try {
+      String token = await _getToken();
       final response = await http.get(
         Uri.parse('$baseUrl/products'),
-        headers: _headers,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
-
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['data'] ?? data;
+        final data = jsonDecode(response.body);
+        return data is List ? data : (data['data'] ?? []);
       } else {
-        throw Exception('Gagal memuat produk. Kode: ${response.statusCode}');
+        throw Exception('Kode: ${response.statusCode}');
       }
     } catch (e) {
-      throw Exception('Error Koneksi Produk: $e');
+      throw Exception('Error Produk: $e');
     }
   }
 
-  // Ambil History Pesanan
+  // ==========================================
+  // FUNGSI 4: AMBIL HISTORY
+  // ==========================================
   static Future<List<dynamic>> fetchHistory() async {
     try {
+      String token = await _getToken();
       final response = await http.get(
-        Uri.parse('$baseUrl/orders'),
-        headers: _headers,
+        Uri.parse('$baseUrl/orders'), 
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
-
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['data'] ?? data;
+        final data = jsonDecode(response.body);
+        return data is List ? data : (data['data'] ?? []);
       } else {
-        throw Exception('Gagal memuat history. Kode: ${response.statusCode}');
+        throw Exception('Kode: ${response.statusCode}');
       }
     } catch (e) {
-      throw Exception('Error Koneksi History: $e');
+      throw Exception('Error History: $e');
     }
   }
 }

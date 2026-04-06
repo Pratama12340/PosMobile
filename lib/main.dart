@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart'; 
+import 'screens/login_screen.dart';
 
 void main() {
+  // BARIS INI WAJIB DITAMBAHKAN
+  // Sebagai jembatan agar SharedPreferences dan API bisa berjalan sebelum UI muncul
+  WidgetsFlutterBinding.ensureInitialized();
+
   runApp(const MyApp());
 }
 
@@ -19,8 +23,8 @@ class MyApp extends StatelessWidget {
       ),
       // --- PERHATIKAN DI SINI ---
       // Jika kamu pakai LoginScreen(), maka import main_navigation akan kuning (unused).
-      // Jika kamu pakai MainNavigationScaffold(), maka import login_screen akan kuning.
-      home: const LoginScreen(), 
+      // Biarkan saja kuning, itu wajar dan tidak menyebabkan error (hanya peringatan file tidak dipakai di halaman ini).
+      home: const LoginScreen(),
     );
   }
 }

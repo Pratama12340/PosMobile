@@ -1,26 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/hover_scale.dart';
-import '../widgets/checkout_dialog.dart'; // Pastikan path ini benar
-
-// --- 1. MODEL DATA ---
-class CategoryModel {
-  final String name;
-  final IconData icon;
-  CategoryModel(this.name, this.icon);
-}
-
-class ProductModel {
-  final String name;
-  final String desc;
-  final int price; // Gunakan int agar sinkron dengan CheckoutDialog
-  final String imageUrl;
-  ProductModel({
-    required this.name,
-    required this.desc,
-    required this.price,
-    required this.imageUrl,
-  });
-}
+import '../widgets/checkout_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,320 +11,276 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedCategoryIndex = 0;
-
-  // --- 2. STATE KERANJANG (CART) ---
   final Map<String, Map<String, dynamic>> _cart = {};
 
-  final List<CategoryModel> _categories = [
-    CategoryModel("All Menu", Icons.restaurant_menu),
-    CategoryModel("Sushi", Icons.view_module),
-    CategoryModel("Fried Rice", Icons.rice_bowl),
-    CategoryModel("Noodle", Icons.ramen_dining),
-    CategoryModel("Steak", Icons.kebab_dining),
+  // Data Produk Dummy
+  final List<Map<String, dynamic>> _products = [
+    {"name": "Nasi Goreng Ayam", "price": 5.0, "img": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?q=80&w=400"},
+    {"name": "Nasi Goreng Udang", "price": 5.0, "img": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?q=80&w=400"},
+    {"name": "Nasi Goreng Jawa", "price": 5.0, "img": "https://images.unsplash.com/photo-1585032226651-759b368d7246?q=80&w=400"},
+    {"name": "Nasi Goreng Ayam", "price": 5.0, "img": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?q=80&w=400"},
   ];
 
-  final List<ProductModel> _products = [
-    ProductModel(
-      name: "Nasi Goreng Ayam",
-      desc: "Special fried rice",
-      price: 50000,
-      imageUrl:
-          "https://images.unsplash.com/photo-1603133872878-684f208fb84b?q=80&w=400",
-    ),
-    ProductModel(
-      name: "Salmon Sushi",
-      desc: "Fresh salmon roll",
-      price: 85000,
-      imageUrl:
-          "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?q=80&w=400",
-    ),
-    ProductModel(
-      name: "Mie Goreng Jawa",
-      desc: "Spicy egg noodle",
-      price: 45000,
-      imageUrl:
-          "https://images.unsplash.com/photo-1585032226651-759b368d7246?q=80&w=400",
-    ),
-    ProductModel(
-      name: "Beef Sirloin",
-      desc: "Juicy steak 200gr",
-      price: 150000,
-      imageUrl:
-          "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400",
-    ),
-    ProductModel(
-      name: "French Fries",
-      desc: "Crispy fries",
-      price: 30000,
-      imageUrl:
-          "https://images.unsplash.com/photo-1518013034841-59b1b10d0508?q=80&w=400",
-    ),
-    ProductModel(
-      name: "Iga Bakar",
-      desc: "Sweet honey ribs",
-      price: 120000,
-      imageUrl:
-          "https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=400",
-    ),
-  ];
-
-  // --- 3. LOGIKA KERANJANG & CHECKOUT ---
-  void _addToCart(ProductModel product) {
+  void _addToCart(Map<String, dynamic> p) {
     setState(() {
-      if (_cart.containsKey(product.name)) {
-        _cart[product.name]!['qty']++;
+      if (_cart.containsKey(p['name'])) {
+        _cart[p['name']]!['qty']++;
       } else {
-        _cart[product.name] = {'price': product.price, 'qty': 1};
+        _cart[p['name']] = {'price': p['price'], 'qty': 1, 'notes': ''};
       }
     });
   }
 
-  int _calculateTotal() {
-    int total = 0;
-    _cart.forEach(
-      (key, value) => total += (value['price'] as int) * (value['qty'] as int),
-    );
+  void _updateQty(String name, int delta) {
+    setState(() {
+      _cart[name]!['qty'] += delta;
+      if (_cart[name]!['qty'] <= 0) _cart.remove(name);
+    });
+  }
+
+  double _calculateTotal() {
+    double total = 0;
+    _cart.forEach((k, v) => total += v['price'] * v['qty']);
     return total;
-  }
-
-  String _formatCurrency(int value) {
-    return "Rp ${value.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}";
-  }
-
-  void _showCheckout() {
-    if (_cart.isEmpty) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => CheckoutDialog(
-        cart: _cart,
-        totalAmount: _calculateTotal(),
-        orderId:
-            "ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
-        tableNumber: "Table 05",
-        formatCurrency: _formatCurrency,
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Responsivitas: Jika layar lebar (navbar tutup), pakai 6 kolom. Jika sempit, 5 kolom.
-    double width = MediaQuery.of(context).size.width;
-    int columns = width > 1150 ? 6 : 5;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      floatingActionButton: _cart.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: _showCheckout,
-              backgroundColor: Colors.blue,
-              icon: const Icon(
-                Icons.shopping_cart_checkout,
-                color: Colors.white,
-              ),
-              label: Text(
-                "Pay Bill (${_formatCurrency(_calculateTotal())})",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            )
-          : null,
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Categories",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Poppins',
-              ),
-            ),
-            const SizedBox(height: 15),
-            _buildCategoryList(),
-            const SizedBox(height: 25),
-            Expanded(
-              child: GridView.builder(
-                itemCount: _products.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  childAspectRatio: 0.85,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemBuilder: (context, index) =>
-                    _buildProductCard(_products[index]),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryList() {
-    return SizedBox(
-      height: 45,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          bool isActive = _selectedCategoryIndex == index;
-          return Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: HoverScale(
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedCategoryIndex = index),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  decoration: BoxDecoration(
-                    color: isActive ? Colors.blue : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isActive ? Colors.blue : Colors.grey.shade200,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _categories[index].name,
-                      style: TextStyle(
-                        color: isActive ? Colors.white : Colors.black87,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildProductCard(ProductModel product) {
-    int qty = _cart[product.name]?['qty'] ?? 0;
-
-    return HoverScale(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5),
-          ],
-        ),
-        child: Column(
-          children: [
-            // GAMBAR KONSISTEN
-            Expanded(
-              flex: 5,
-              child: Stack(
+      body: Row(
+        children: [
+          // ==========================================
+          // SISI KIRI: MENU & CATEGORIES
+          // ==========================================
+          Expanded(
+            // Jika keranjang kosong, flex akan mengambil seluruh layar
+            flex: 1, 
+            child: Padding(
+              padding: const EdgeInsets.all(25.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12),
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: double.infinity,
-                      child: Image.network(product.imageUrl, fit: BoxFit.cover),
+                  const Text("Categories", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  _buildCategoryList(),
+                  const SizedBox(height: 30),
+                  Expanded(
+                    child: GridView.builder(
+                      itemCount: 12, // Contoh jumlah item
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        // Jika sidebar muncul (keranjang isi), kolom jadi 4. Jika tutup, jadi 6.
+                        crossAxisCount: _cart.isNotEmpty ? 4 : 6,
+                        childAspectRatio: 0.75,
+                        crossAxisSpacing: 15,
+                        mainAxisSpacing: 15,
+                      ),
+                      itemBuilder: (context, index) => _buildProductCard(_products[index % 3]),
                     ),
                   ),
-                  if (qty > 0)
-                    Positioned(
-                      top: 5,
-                      right: 5,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: Colors.orange,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          "$qty",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
-            // INFO PRODUK
-            Expanded(
-              flex: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          product.desc,
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 9,
-                          ),
-                          maxLines: 1,
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _formatCurrency(product.price),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 10,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => _addToCart(product),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.blue,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Icon(
-                              Icons.add,
-                              color: Colors.white,
-                              size: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+          ),
+
+          // ==========================================
+          // SISI KANAN: SIDEBAR CHECKOUT (Hanya muncul jika ada pesanan)
+          // ==========================================
+          if (_cart.isNotEmpty) // <--- KUNCI PERUBAHAN DI SINI
+            Container(
+              width: 380,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)], // Tambah shadow agar tegas
+                border: Border(left: BorderSide(color: Color(0xFFEEEEEE))),
+              ),
+              child: Column(
+                children: [
+                  _buildCartHeader(),
+                  Expanded(child: _buildCartList()),
+                  _buildCartFooter(),
+                ],
               ),
             ),
-          ],
-        ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER SISI KIRI ---
+  Widget _buildCategoryList() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: ["All Menu", "Sushi", "Fried Rice", "Noodle", "Steak"].map((cat) {
+          bool isSelected = cat == "All Menu";
+          return Container(
+            margin: const EdgeInsets.only(right: 10),
+            child: FilterChip(
+              label: Text(cat),
+              selected: isSelected,
+              onSelected: (v) {},
+              backgroundColor: Colors.white,
+              selectedColor: const Color(0xFF4285F4).withOpacity(0.1),
+              labelStyle: TextStyle(color: isSelected ? Colors.blue : Colors.black),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildProductCard(Map<String, dynamic> p) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              child: Image.network(p['img'], fit: BoxFit.cover, width: double.infinity),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(p['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const Text("Comes with a Vegetable Sauce", style: TextStyle(color: Colors.grey, fontSize: 10)),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("\$${p['price']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                    GestureDetector(
+                      onTap: () => _addToCart(p),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+                        child: const Icon(Icons.add, color: Colors.white, size: 18),
+                      ),
+                    )
+                  ],
+                )
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET HELPER SIDEBAR KERANJANG ---
+  Widget _buildCartHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("#ORD-001", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+          const SizedBox(height: 15),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text("Cashier : Siti Fatimah", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              Text("27 Maret 2025, 14:12", style: TextStyle(fontSize: 10, color: Colors.grey)),
+            ],
+          ),
+          const Text("No. Table :", style: TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCartList() {
+    return ListView.builder(
+      itemCount: _cart.length,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      itemBuilder: (context, index) {
+        String name = _cart.keys.elementAt(index);
+        var item = _cart[name]!;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text("\$${item['price']}", style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      IconButton(onPressed: () => _updateQty(name, -1), icon: const Icon(Icons.remove_circle, color: Colors.blue)),
+                      Text("${item['qty']}"),
+                      IconButton(onPressed: () => _updateQty(name, 1), icon: const Icon(Icons.add_circle, color: Colors.blue)),
+                    ],
+                  )
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: "Notes",
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      ),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  IconButton(onPressed: () => setState(() => _cart.remove(name)), icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20)),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCartFooter() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey[200]!))),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Total", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              Text("\$${_calculateTotal().toStringAsFixed(1)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: () {
+                // Panggil Dialog Pembayaran yang lama di sini
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4285F4), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: const Text("Checkout", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          )
+        ],
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'history_screen.dart';
+import 'login_screen.dart'; // Pastikan import ini ada
+import '../services/storage_service.dart'; // Pastikan import ini ada
 import '../widgets/opening_cash_dialog.dart';
 
 class MainNavigationScaffold extends StatefulWidget {
@@ -13,47 +15,72 @@ class MainNavigationScaffold extends StatefulWidget {
 
 class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
-  bool _isSidebarVisible = false; 
+  bool _isSidebarVisible = false;
 
   @override
   void initState() {
     super.initState();
-    // Memunculkan dialog kas awal otomatis jika baru login
     if (widget.requireCashInput) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showDialog(
-          context: context, 
-          barrierDismissible: false, 
-          builder: (context) => const OpeningCashDialog()
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const OpeningCashDialog(),
         );
       });
     }
+  }
+
+  // --- FUNGSI LOGOUT (FIX) ---
+  void _handleLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Konfirmasi Keluar", 
+            style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
+        content: const Text("Apakah Anda yakin ingin keluar dari sesi kasir?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              // 1. Hapus data sesi (tapi simpan outlet_id)
+              await StorageService.logoutKasir();
+
+              // 2. Tendang ke Login dan hapus semua history halaman
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            child: const Text("Ya, Keluar", 
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      // --- KUNCI PERBAIKAN: SAFEAREA ---
-      // Ini akan memberikan jarak otomatis agar tidak menabrak jam/baterai
       body: SafeArea(
         child: Column(
           children: [
-            // BAGIAN ATAS (SEARCH & PROFIL)
             _buildTopBar(),
-            
-            // BAGIAN BAWAH (SIDEBAR & KONTEN)
             Expanded(
               child: Row(
                 children: [
-                  // Menampilkan Sidebar jika statusnya true
                   if (_isSidebarVisible) _buildSidebar(),
-                  
-                  // Garis pemisah yang ikut hilang jika sidebar ditutup
-                  if (_isSidebarVisible) 
+                  if (_isSidebarVisible)
                     VerticalDivider(width: 1, thickness: 1, color: Colors.grey[200]),
-
-                  // Area Konten Utama
                   Expanded(
                     child: IndexedStack(
                       index: _currentIndex,
@@ -74,32 +101,23 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
-  // --- WIDGET TOP BAR ---
   Widget _buildTopBar() {
     return Container(
       height: 70,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.white, 
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200))
-      ),
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
       child: Row(
         children: [
-          // Tombol Burger Menu (Buka/Tutup Sidebar)
           IconButton(
             icon: const Icon(Icons.menu, color: Colors.black87),
-            onPressed: () {
-              setState(() {
-                _isSidebarVisible = !_isSidebarVisible;
-              });
-            },
+            onPressed: () => setState(() => _isSidebarVisible = !_isSidebarVisible),
           ),
           const SizedBox(width: 10),
-          const Text("ARANUS POS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 0.5)),
-          
+          const Text("ARANUS POS", 
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 0.5)),
           const Spacer(),
-          
-          // SEARCH BAR (Tengah)
           Container(
             constraints: const BoxConstraints(maxWidth: 400),
             height: 42,
@@ -110,22 +128,19 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                 prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
                 filled: true,
                 fillColor: const Color(0xFFF1F3F4),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
           ),
-          
           const Spacer(),
-          
-          // AREA PROFIL (Kanan)
           const Row(
             children: [
               CircleAvatar(
-                radius: 18,
-                backgroundColor: Color(0xFF4285F4), 
-                child: Icon(Icons.person, color: Colors.white, size: 20)
-              ),
+                  radius: 18,
+                  backgroundColor: Color(0xFF4285F4),
+                  child: Icon(Icons.person, color: Colors.white, size: 20)),
               SizedBox(width: 12),
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -142,7 +157,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
-  // --- WIDGET SIDEBAR ---
   Widget _buildSidebar() {
     return Container(
       width: 220,
@@ -163,28 +177,30 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
-  // WIDGET ITEM MENU SIDEBAR
   Widget _buildMenuItem(IconData icon, String title, int index, {bool isLogout = false}) {
     bool isActive = _currentIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: ListTile(
         onTap: () {
-          if (!isLogout) {
+          if (isLogout) {
+            _handleLogout(context); // Panggil fungsi logout jika diklik
+          } else {
             setState(() => _currentIndex = index);
           }
         },
         dense: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         tileColor: isActive ? const Color(0xFFE3F2FD) : Colors.transparent,
-        leading: Icon(icon, color: isActive ? Colors.blue : (isLogout ? Colors.red : Colors.grey[700]), size: 22),
+        leading: Icon(icon, 
+            color: isActive ? Colors.blue : (isLogout ? Colors.red : Colors.grey[700]), 
+            size: 22),
         title: Text(
-          title, 
+          title,
           style: TextStyle(
-            color: isActive ? Colors.blue : (isLogout ? Colors.red : Colors.black87), 
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            fontFamily: 'Poppins'
-          )
+              color: isActive ? Colors.blue : (isLogout ? Colors.red : Colors.black87),
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              fontFamily: 'Poppins'),
         ),
       ),
     );

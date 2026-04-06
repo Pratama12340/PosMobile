@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'main_navigation.dart';
 
+// --- IMPORT SERVICE YANG DIBUTUHKAN ---
+import '../services/storage_service.dart';
+import '../services/api_service.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -31,47 +35,80 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+ // --- LOGIKA UTAMA LOGIN API (VERSI FIX) ---
   void _verifyPin() async {
+    // 1. Validasi awal: Pastikan PIN sudah 6 digit
     if (_pin.length < _pinLength) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Masukkan 6 digit PIN'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text('Masukkan 6 digit PIN secara lengkap'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
 
-    // PIN DEMO: 123456
-    if (_pin == '123456') {
-      if (mounted) {
+    try {
+      // --- BARIS DARURAT UNTUK TESTING ---
+      // Karena belum ada menu Manager, kita paksa simpan Outlet ID = 1 ke memori HP
+      await StorageService.saveOutletId(1); 
+
+      // 2. Ambil Outlet ID dari memori
+      final int? outletId = await StorageService.getOutletId();
+      print("DEBUG: Menjalankan Login untuk Outlet ID: $outletId");
+
+      if (outletId == null) {
+        throw Exception("Outlet ID tidak ditemukan di memori perangkat.");
+      }
+
+      // 3. Panggil API ke api.etres.my.id
+      final result = await ApiService.loginPin(_pin, outletId);
+
+      if (!mounted) return;
+
+      // 4. Cek Hasil Respon API
+      if (result['success'] == true) {
+        print("DEBUG: Login Berhasil!");
+        
+        // Pindah ke halaman utama
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            // FIX: Tidak menggunakan 'const' agar tidak error
-            builder: (context) => MainNavigationScaffold(requireCashInput: true),
+            builder: (context) => const MainNavigationScaffold(requireCashInput: true),
           ),
         );
+      } else {
+        // Jika PIN Salah atau Error dari Server
+        print("DEBUG: Login Gagal -> ${result['message']}");
+        _handleLoginError(result['message']);
       }
-    } else {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _pin = '';
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PIN Salah! Gunakan 123456'), 
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+    } catch (e) {
+      print("DEBUG: Terjadi Error System -> $e");
+      _handleLoginError("Terjadi kesalahan sistem atau koneksi: $e");
     }
+  }
+
+  // Helper untuk reset UI saat error
+  void _handleLoginError(String message) {
+    setState(() {
+      _isLoading = false;
+      _pin = ''; // Reset PIN agar kasir bisa input ulang
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // UI TETAP SAMA (Hanya bagian loading button yang sedikit diubah logicnya)
     return Scaffold(
       backgroundColor: const Color(0xFFF3F8FE),
       body: Center(
@@ -115,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         _buildPinDots(),
                         const SizedBox(height: 35),
 
-                        // NUMPAD (INI YANG TADI HILANG)
+                        // NUMPAD
                         _buildNumPad(),
                         const SizedBox(height: 35),
 
@@ -148,6 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // (Helper Widgets: _buildPinDots, _buildNumPad, dll, tetap dibiarkan seperti aslinya karena UI-nya sudah pas)
   Widget _buildPinDots() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,

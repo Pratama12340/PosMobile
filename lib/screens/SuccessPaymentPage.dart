@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../style.dart'; // Pastikan path style benar
+// Pastikan path style benar
 
 class SuccessPaymentPage extends StatelessWidget {
   final String orderId;
@@ -18,7 +18,9 @@ class SuccessPaymentPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String currentDateTime = DateFormat('dd/MM/yyyy HH:mm a').format(DateTime.now());
+    String currentDateTime = DateFormat(
+      'dd/MM/yyyy HH:mm a',
+    ).format(DateTime.now());
 
     return Scaffold(
       backgroundColor: const Color(0xFFE9ECEF), // Background abu-abu lembut
@@ -78,9 +80,13 @@ class SuccessPaymentPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 30),
-                  const Divider(height: 1, thickness: 1, color: Color(0xFFF1F3F5)),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Color(0xFFF1F3F5),
+                  ),
                   const SizedBox(height: 25),
-                  
+
                   // Detail Info
                   _buildDetailRow("Order ID", orderId),
                   const SizedBox(height: 16),
@@ -90,9 +96,9 @@ class SuccessPaymentPage extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 30),
-            
+
             // --- TOMBOL ACTIONS (Sejajar di bawah) ---
             SizedBox(
               width: 400,
@@ -113,7 +119,9 @@ class SuccessPaymentPage extends StatelessWidget {
                       ),
                       onPressed: () {
                         // Logika untuk reset order / kembali ke home
-                        Navigator.of(context).popUntil((route) => route.isFirst);
+                        Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst);
                       },
                       child: const Text(
                         "New Order",
@@ -140,7 +148,10 @@ class SuccessPaymentPage extends StatelessWidget {
                       onPressed: () {
                         // Logika Print
                       },
-                      icon: const Icon(Icons.print_outlined, color: Color(0xFF495057)),
+                      icon: const Icon(
+                        Icons.print_outlined,
+                        color: Color(0xFF495057),
+                      ),
                       label: const Text(
                         "Print",
                         style: TextStyle(

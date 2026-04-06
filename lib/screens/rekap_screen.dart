@@ -115,7 +115,7 @@ class RekapScreen extends StatelessWidget {
           Expanded(
             child: ListView.separated(
               itemCount: 5,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 List<Map<String, dynamic>> topProducts = [
                   {"name": "Kopi Susu Aranus", "qty": 24, "total": "480.000"},

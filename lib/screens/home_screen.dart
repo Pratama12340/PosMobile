@@ -5,7 +5,8 @@ import '../services/storage_service.dart';
 import '../services/api_service.dart';
 import '../models/product_models.dart'; 
 import '../models/order_model.dart'; 
-import '../widgets/checkout_dialog.dart'; // Pastikan import ini ada
+import '../widgets/checkout_dialog.dart';
+import 'SuccessPaymentPage.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -299,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-          _buildSidebarFooter(), // Tombol Checkout sudah ada di dalam fungsi ini
+          _buildSidebarFooter(),
         ],
       ),
     );
@@ -433,7 +434,8 @@ class _HomeScreenState extends State<HomeScreen> {
             height: 55,
             child: ElevatedButton(
               onPressed: _cart.isEmpty ? null : () async {
-                bool? isSuccess = await showDialog<bool>(
+                // MODIFIKASI DISINI: Menangkap data dari dialog
+                final result = await showDialog<Map<String, dynamic>>(
                   context: context,
                   barrierDismissible: false,
                   builder: (context) => CheckoutDialog(
@@ -446,15 +448,29 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 );
 
-                if (isSuccess == true) {
+                // Cek jika data dikembalikan (berarti klik PROSES PEMBAYARAN)
+                if (result != null && result['status'] == 'success') {
+                  if (!mounted) return;
+
+                  // 1. PINDAH KE HALAMAN SUKSES
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SuccessPaymentPage(
+                        orderId: result['orderId'],
+                        paymentMethod: result['paymentMethod'],
+                        grandTotal: result['grandTotal'],
+                        formatCurrency: formatHarga,
+                      ),
+                    ),
+                  );
+
+                  // 2. RESET STATE KERANJANG
                   setState(() {
                     _cart.clear();
                     _generateOrderId();
                     _tableNumber = "";
                   });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Transaksi Berhasil!"), backgroundColor: Colors.green),
-                  );
                 }
               },
               style: ElevatedButton.styleFrom(

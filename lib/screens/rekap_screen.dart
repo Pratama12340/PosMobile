@@ -1,19 +1,31 @@
 import 'package:flutter/material.dart';
-import '../style.dart'; // Pastikan path import benar
+import '../style.dart'; 
 
 class RekapScreen extends StatelessWidget {
-  const RekapScreen({super.key});
+  // Tambahkan variabel untuk menampung modal awal dari inputan dialog
+  final int openingCash;
+
+  const RekapScreen({
+    super.key, 
+    this.openingCash = 0, // Default 0 jika tidak ada inputan
+  });
+
+  // Fungsi helper untuk format ribuan
+  String _formatNumber(int number) {
+    return number.toString().replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppStyle.bgLightBlue, // Menggunakan Style
+      backgroundColor: AppStyle.bgLightBlue,
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-            // Row kartu ringkasan di paling atas
+          children: [
+            // Row kartu ringkasan
             _buildSummaryCards(),
             const SizedBox(height: 24),
             Expanded(
@@ -23,7 +35,7 @@ class RekapScreen extends StatelessWidget {
                   // Sisi Kiri: Produk Terlaris
                   Expanded(flex: 2, child: _buildTopProducts()),
                   const SizedBox(width: 24),
-                  // Sisi Kanan: Breakdown Pembayaran
+                  // Sisi Kanan: Breakdown Jumlah Orang Per Metode Bayar
                   Expanded(flex: 1, child: _buildPaymentMethodBreakdown()),
                 ],
               ),
@@ -37,7 +49,8 @@ class RekapScreen extends StatelessWidget {
   Widget _buildSummaryCards() {
     return Row(
       children: [
-        _cardItem("Modal Awal", "500.000", Icons.wallet, Colors.blue),
+        // Menggunakan data dari openingCash yang diinput sebelumnya
+        _cardItem("Modal Awal", _formatNumber(openingCash), Icons.wallet, Colors.blue),
         _cardItem("Total Jual", "3.400.000", Icons.shopping_cart, Colors.orange),
         _cardItem("Total Tunai", "1.200.000", Icons.payments, Colors.green),
         _cardItem("Total Transaksi", "42", Icons.receipt, Colors.purple),
@@ -46,6 +59,7 @@ class RekapScreen extends StatelessWidget {
   }
 
   Widget _cardItem(String label, String value, IconData icon, Color color) {
+    bool isPrice = label != "Total Transaksi";
     return Expanded(
       child: Container(
         margin: const EdgeInsets.only(right: 12),
@@ -70,14 +84,11 @@ class RekapScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    label, 
-                    style: AppStyle.subTitleText.copyWith(fontSize: 10), // Poppins
-                  ),
+                  Text(label, style: AppStyle.subTitleText.copyWith(fontSize: 11)),
                   const SizedBox(height: 2),
                   Text(
-                    label == "Total Transaksi" ? value : "Rp $value", 
-                    style: AppStyle.priceText.copyWith(fontSize: 16, color: AppStyle.textMain), // JetBrains
+                    isPrice ? "Rp $value" : value, 
+                    style: AppStyle.numPadText.copyWith(fontSize: 18, color: AppStyle.textMain), // Menggunakan JetBrains
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
@@ -91,20 +102,20 @@ class RekapScreen extends StatelessWidget {
 
   Widget _buildTopProducts() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppStyle.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Produk Terlaris (Shift Ini)", style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
+          Text("Produk Terlaris", style: AppStyle.titleText.copyWith(fontSize: 20)),
+          const SizedBox(height: 20),
           Expanded(
             child: ListView.separated(
               itemCount: 5,
-              separatorBuilder: (_, __) => Divider(color: Colors.grey.shade100),
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 List<Map<String, dynamic>> topProducts = [
                   {"name": "Kopi Susu Aranus", "qty": 24, "total": "480.000"},
@@ -114,26 +125,21 @@ class RekapScreen extends StatelessWidget {
                   {"name": "Espresso Double", "qty": 8, "total": "120.000"},
                 ];
 
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    width: 32, height: 32,
-                    decoration: BoxDecoration(
-                      color: index == 0 ? Colors.amber.withOpacity(0.2) : AppStyle.bgLightBlue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        "${index + 1}",
-                        style: AppStyle.numPadText.copyWith(fontSize: 14, color: index == 0 ? Colors.orange : AppStyle.primaryBlue), // JetBrains
-                      ),
-                    ),
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppStyle.bgLightBlue.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  title: Text(topProducts[index]["name"], style: AppStyle.menuText.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
-                  subtitle: Text("${topProducts[index]["qty"]} Terjual", style: AppStyle.subTitleText),
-                  trailing: Text(
-                    "Rp ${topProducts[index]["total"]}", 
-                    style: AppStyle.priceText.copyWith(fontSize: 14, color: AppStyle.textMain) // JetBrains
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: AppStyle.primaryBlue,
+                      child: Text("${index + 1}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                    title: Text(topProducts[index]["name"], style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold)),
+                    subtitle: Text("${topProducts[index]["qty"]} Terjual", style: AppStyle.subTitleText),
+                    trailing: Text("Rp ${topProducts[index]["total"]}", style: AppStyle.numPadText.copyWith(fontSize: 14)),
                   ),
                 );
               },
@@ -146,42 +152,44 @@ class RekapScreen extends StatelessWidget {
 
   Widget _buildPaymentMethodBreakdown() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppStyle.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Metode Bayar", style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 24),
-          _paymentRow("Tunai", "750.000", 0.4, Colors.blue),
-          _paymentRow("QRIS", "2.100.000", 0.7, Colors.orange),
-          _paymentRow("Transfer", "600.000", 0.2, Colors.purple),
+          Text("Metode Bayar", style: AppStyle.titleText.copyWith(fontSize: 20)),
+          Text("Jumlah orang/transaksi", style: AppStyle.subTitleText),
+          const SizedBox(height: 32),
+          // Data diganti menjadi jumlah orang (Qty)
+          _paymentRow("Tunai", "15 Orang", 0.4, Colors.green),
+          _paymentRow("QRIS", "22 Orang", 0.7, Colors.blue),
+          _paymentRow("Transfer", "5 Orang", 0.2, Colors.orange),
         ],
       ),
     );
   }
 
-  Widget _paymentRow(String label, String amount, double progress, Color color) {
+  Widget _paymentRow(String label, String count, double progress, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.only(bottom: 24.0),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: AppStyle.subTitleText),
-              Text("Rp $amount", style: AppStyle.priceText.copyWith(fontSize: 13, color: AppStyle.textMain)), // JetBrains
+              Text(label, style: AppStyle.menuText),
+              Text(count, style: AppStyle.numPadText.copyWith(fontSize: 14)), // JetBrains
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           LinearProgressIndicator(
             value: progress,
-            backgroundColor: Colors.grey.shade100,
+            backgroundColor: AppStyle.bgLightBlue,
             color: color,
-            minHeight: 6,
+            minHeight: 10,
             borderRadius: BorderRadius.circular(10),
           ),
         ],

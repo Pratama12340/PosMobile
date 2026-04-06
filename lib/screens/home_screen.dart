@@ -54,22 +54,19 @@ class _HomeScreenState extends State<HomeScreen> {
           // SISI KIRI: MENU & CATEGORIES
           // ==========================================
           Expanded(
-            // Jika keranjang kosong, flex akan mengambil seluruh layar
             flex: 1, 
             child: Padding(
               padding: const EdgeInsets.all(25.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Categories", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 20),
+                  // Judul "Categories" dan SizedBox(height: 20) telah dihapus
                   _buildCategoryList(),
                   const SizedBox(height: 30),
                   Expanded(
                     child: GridView.builder(
-                      itemCount: 12, // Contoh jumlah item
+                      itemCount: 12,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        // Jika sidebar muncul (keranjang isi), kolom jadi 4. Jika tutup, jadi 6.
                         crossAxisCount: _cart.isNotEmpty ? 4 : 6,
                         childAspectRatio: 0.75,
                         crossAxisSpacing: 15,
@@ -84,14 +81,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           // ==========================================
-          // SISI KANAN: SIDEBAR CHECKOUT (Hanya muncul jika ada pesanan)
+          // SISI KANAN: SIDEBAR CHECKOUT
           // ==========================================
-          if (_cart.isNotEmpty) // <--- KUNCI PERUBAHAN DI SINI
+          if (_cart.isNotEmpty) 
             Container(
               width: 380,
               decoration: const BoxDecoration(
                 color: Colors.white,
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)], // Tambah shadow agar tegas
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
                 border: Border(left: BorderSide(color: Color(0xFFEEEEEE))),
               ),
               child: Column(
@@ -122,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onSelected: (v) {},
               backgroundColor: Colors.white,
               selectedColor: const Color(0xFF4285F4).withOpacity(0.1),
-              labelStyle: TextStyle(color: isSelected ? Colors.blue : Colors.black),
+              labelStyle: TextStyle(color: isSelected ? const Color(0xFF4285F4) : Colors.black, fontFamily: 'Poppins'),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
           );
@@ -152,18 +149,18 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(p['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                const Text("Comes with a Vegetable Sauce", style: TextStyle(color: Colors.grey, fontSize: 10)),
+                Text(p['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Poppins')),
+                const Text("Comes with a Vegetable Sauce", style: TextStyle(color: Colors.grey, fontSize: 10, fontFamily: 'Poppins')),
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("\$${p['price']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                    Text("\$${p['price']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontFamily: 'Poppins')),
                     GestureDetector(
                       onTap: () => _addToCart(p),
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+                        decoration: const BoxDecoration(color: Color(0xFF4285F4), shape: BoxShape.circle),
                         child: const Icon(Icons.add, color: Colors.white, size: 18),
                       ),
                     )
@@ -184,16 +181,16 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("#ORD-001", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+          const Text("#ORD-001", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontFamily: 'Poppins')),
           const SizedBox(height: 15),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
-              Text("Cashier : Siti Fatimah", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              Text("27 Maret 2025, 14:12", style: TextStyle(fontSize: 10, color: Colors.grey)),
+              Text("Cashier : Siti Fatimah", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
+              Text("27 Maret 2025, 14:12", style: TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Poppins')),
             ],
           ),
-          const Text("No. Table :", style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const Text("No. Table :", style: TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Poppins')),
         ],
       ),
     );
@@ -216,16 +213,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text("\$${item['price']}", style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Poppins')),
+                        Text("\$${item['price']}", style: const TextStyle(color: Colors.grey, fontSize: 11, fontFamily: 'Poppins')),
                       ],
                     ),
                   ),
                   Row(
                     children: [
-                      IconButton(onPressed: () => _updateQty(name, -1), icon: const Icon(Icons.remove_circle, color: Colors.blue)),
-                      Text("${item['qty']}"),
-                      IconButton(onPressed: () => _updateQty(name, 1), icon: const Icon(Icons.add_circle, color: Colors.blue)),
+                      IconButton(onPressed: () => _updateQty(name, -1), icon: const Icon(Icons.remove_circle, color: Color(0xFF4285F4))),
+                      Text("${item['qty']}", style: const TextStyle(fontFamily: 'Poppins')),
+                      IconButton(onPressed: () => _updateQty(name, 1), icon: const Icon(Icons.add_circle, color: Color(0xFF4285F4))),
                     ],
                   )
                 ],
@@ -241,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       ),
-                      style: const TextStyle(fontSize: 11),
+                      style: const TextStyle(fontSize: 11, fontFamily: 'Poppins'),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -264,8 +261,8 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Total", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-              Text("\$${_calculateTotal().toStringAsFixed(1)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const Text("Total", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontFamily: 'Poppins')),
+              Text("\$${_calculateTotal().toStringAsFixed(1)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Poppins')),
             ],
           ),
           const SizedBox(height: 20),
@@ -273,11 +270,9 @@ class _HomeScreenState extends State<HomeScreen> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: () {
-                // Panggil Dialog Pembayaran yang lama di sini
-              },
+              onPressed: () {},
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4285F4), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text("Checkout", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text("Checkout", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
             ),
           )
         ],

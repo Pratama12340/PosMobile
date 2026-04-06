@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'history_screen.dart';
-import 'login_screen.dart'; // Pastikan import ini ada
-import '../services/storage_service.dart'; // Pastikan import ini ada
+import 'login_screen.dart'; 
+import '../services/storage_service.dart'; 
 import '../widgets/opening_cash_dialog.dart';
+import 'rekap_screen.dart';
+import 'setting_screen.dart'; 
 
 class MainNavigationScaffold extends StatefulWidget {
   final bool requireCashInput;
@@ -79,16 +81,16 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               child: Row(
                 children: [
                   if (_isSidebarVisible) _buildSidebar(),
-                  if (_isSidebarVisible)
-                    VerticalDivider(width: 1, thickness: 1, color: Colors.grey[200]),
+                  if (_isSidebarVisible) VerticalDivider(width: 1, thickness: 1, color: Colors.grey[200]),
                   Expanded(
                     child: IndexedStack(
                       index: _currentIndex,
                       children: const [
                         HomeScreen(),
                         HistoryScreenContent(),
-                        Center(child: Text("Halaman Rekapitulasi")),
-                        Center(child: Text("Halaman Pengaturan")),
+                        RekapScreen(),
+                        // --- GANTI BARIS INI ---
+                        SettingScreen(), 
                       ],
                     ),
                   ),

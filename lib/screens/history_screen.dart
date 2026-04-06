@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import '../models/order_model.dart'; // Import cetakan data dari folder models
+import '../models/order_model.dart';
 
 class HistoryScreenContent extends StatefulWidget {
   const HistoryScreenContent({super.key});
@@ -45,11 +45,7 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'History',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, fontFamily: 'Poppins'),
-            ),
-            const SizedBox(height: 20),
+            // Judul 'History' telah dihapus dari sini
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
@@ -142,6 +138,7 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
     );
   }
 
+  // Fungsi _showReceiptDialog tetap sama seperti sebelumnya
   void _showReceiptDialog(Order order) {
     showDialog(
       context: context,

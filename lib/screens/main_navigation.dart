@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'history_screen.dart';
 import 'login_screen.dart'; 
-import '../services/storage_service.dart'; 
-import '../widgets/opening_cash_dialog.dart';
 import 'rekap_screen.dart';
 import 'setting_screen.dart'; 
+import '../style.dart'; // IMPORT STYLE ANDA
+import '../services/storage_service.dart'; 
+import '../widgets/opening_cash_dialog.dart';
 
 class MainNavigationScaffold extends StatefulWidget {
   final bool requireCashInput;
@@ -18,10 +19,13 @@ class MainNavigationScaffold extends StatefulWidget {
 class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   bool _isSidebarVisible = false;
+  String _cashierName = "Loading..."; 
 
   @override
   void initState() {
     super.initState();
+    _loadDataKasir();
+
     if (widget.requireCashInput) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showDialog(
@@ -33,26 +37,30 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
-  // --- FUNGSI LOGOUT (FIX) ---
+  Future<void> _loadDataKasir() async {
+    String name = await StorageService.getCashierName();
+    setState(() {
+      _cashierName = name;
+    });
+  }
+
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Konfirmasi Keluar", 
-            style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
-        content: const Text("Apakah Anda yakin ingin keluar dari sesi kasir?"),
+        title: Text("Konfirmasi Keluar", 
+          style: AppStyle.titleText.copyWith(fontSize: 18)), // Poppins ExtraBold
+        content: Text("Apakah Anda yakin ingin keluar dari sesi kasir?", 
+          style: AppStyle.subTitleText.copyWith(fontSize: 14)), // Poppins Regular
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Batal", style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(context), 
+            child: Text("Batal", style: TextStyle(color: AppStyle.textGrey, fontFamily: AppStyle.fontPoppins)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: AppStyle.errorRed),
             onPressed: () async {
-              // 1. Hapus data sesi (tapi simpan outlet_id)
               await StorageService.logoutKasir();
-
-              // 2. Tendang ke Login dan hapus semua history halaman
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
@@ -61,8 +69,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                 );
               }
             },
-            child: const Text("Ya, Keluar", 
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text("Ya, Keluar", 
+              style: AppStyle.buttonText.copyWith(fontSize: 14)), // Poppins Bold
           ),
         ],
       ),
@@ -72,16 +80,17 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: AppStyle.bgLightBlue, // PAKAI STYLE
       body: SafeArea(
         child: Column(
           children: [
-            _buildTopBar(),
+            _buildTopBar(), 
             Expanded(
               child: Row(
                 children: [
                   if (_isSidebarVisible) _buildSidebar(),
-                  if (_isSidebarVisible) VerticalDivider(width: 1, thickness: 1, color: Colors.grey[200]),
+                  if (_isSidebarVisible) 
+                    VerticalDivider(width: 1, thickness: 1, color: Colors.grey[200]),
                   Expanded(
                     child: IndexedStack(
                       index: _currentIndex,
@@ -89,7 +98,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                         HomeScreen(),
                         HistoryScreenContent(),
                         RekapScreen(),
-                        // --- GANTI BARIS INI ---
                         SettingScreen(), 
                       ],
                     ),
@@ -108,48 +116,34 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       height: 70,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppStyle.white,
           border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black87),
+            icon: const Icon(Icons.menu, color: AppStyle.textMain),
             onPressed: () => setState(() => _isSidebarVisible = !_isSidebarVisible),
           ),
           const SizedBox(width: 10),
-          const Text("ARANUS POS", 
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 0.5)),
+          Text("ARANUS POS", 
+            style: AppStyle.titleText.copyWith(fontSize: 18, letterSpacing: 0.5)), // Poppins ExtraBold
           const Spacer(),
-          Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            height: 42,
-            child: TextField(
-              textAlignVertical: TextAlignVertical.center,
-              decoration: InputDecoration(
-                hintText: 'Search menu...',
-                prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
-                filled: true,
-                fillColor: const Color(0xFFF1F3F4),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-          const Spacer(),
-          const Row(
+          
+          Row(
             children: [
               CircleAvatar(
                   radius: 18,
-                  backgroundColor: Color(0xFF4285F4),
-                  child: Icon(Icons.person, color: Colors.white, size: 20)),
-              SizedBox(width: 12),
+                  backgroundColor: AppStyle.primaryBlue,
+                  child: const Icon(Icons.person, color: Colors.white, size: 20)),
+              const SizedBox(width: 12),
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Fatimah", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text("Cashier", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text(_cashierName, 
+                    style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold)), // Poppins Bold
+                  Text("Cashier", 
+                    style: AppStyle.subTitleText.copyWith(fontSize: 11)), // Poppins Regular
                 ],
               )
             ],
@@ -162,7 +156,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   Widget _buildSidebar() {
     return Container(
       width: 220,
-      color: Colors.white,
+      color: AppStyle.white,
       child: Column(
         children: [
           const SizedBox(height: 10),
@@ -186,24 +180,21 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       child: ListTile(
         onTap: () {
           if (isLogout) {
-            _handleLogout(context); // Panggil fungsi logout jika diklik
+            _handleLogout(context);
           } else {
             setState(() => _currentIndex = index);
           }
         },
         dense: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        tileColor: isActive ? const Color(0xFFE3F2FD) : Colors.transparent,
+        tileColor: isActive ? AppStyle.primaryBlue.withOpacity(0.1) : Colors.transparent,
         leading: Icon(icon, 
-            color: isActive ? Colors.blue : (isLogout ? Colors.red : Colors.grey[700]), 
-            size: 22),
-        title: Text(
-          title,
-          style: TextStyle(
-              color: isActive ? Colors.blue : (isLogout ? Colors.red : Colors.black87),
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              fontFamily: 'Poppins'),
-        ),
+          color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textGrey)),
+        title: Text(title, 
+          style: AppStyle.menuText.copyWith(
+            color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textMain),
+            fontWeight: isActive || isLogout ? FontWeight.bold : FontWeight.normal,
+          )), // SEMUA PAKAI POPPINS
       ),
     );
   }

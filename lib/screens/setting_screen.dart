@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../style.dart'; // Import file style
+import '../style.dart'; // Import file style Anda
 import 'printer_screen.dart';
 
 class SettingScreen extends StatelessWidget {
@@ -13,15 +13,16 @@ class SettingScreen extends StatelessWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Bagian judul "Pengaturan" telah dihapus
-          const SizedBox(height: 16), // Memberikan sedikit jarak di bagian atas
+          const SizedBox(height: 20), // Jarak atas agar rapi
           Expanded(
             child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 10),
               children: [
                 _buildSettingItem(
                   context,
                   icon: Icons.print_outlined,
                   title: "Koneksi Printer",
+                  subtitle: "Atur printer struk via Bluetooth",
                   onTap: () {
                     Navigator.push(
                       context,
@@ -29,7 +30,24 @@ class SettingScreen extends StatelessWidget {
                     );
                   },
                 ),
-                // Anda bisa menambahkan item pengaturan lain di sini
+                _buildSettingItem(
+                  context,
+                  icon: Icons.storefront_outlined,
+                  title: "Informasi Outlet",
+                  subtitle: "Lihat detail lokasi cabang Anda",
+                  onTap: () {
+                    // Logic untuk info outlet
+                  },
+                ),
+                _buildSettingItem(
+                  context,
+                  icon: Icons.info_outline,
+                  title: "Tentang Aplikasi",
+                  subtitle: "Versi 1.0.0 - Aranus POS",
+                  onTap: () {
+                    // Logic untuk info aplikasi
+                  },
+                ),
               ],
             ),
           ),
@@ -41,13 +59,14 @@ class SettingScreen extends StatelessWidget {
   Widget _buildSettingItem(BuildContext context, {
     required IconData icon, 
     required String title, 
+    String? subtitle,
     required VoidCallback onTap
   }) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        color: AppStyle.white,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -58,21 +77,28 @@ class SettingScreen extends StatelessWidget {
       ),
       child: ListTile(
         onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         leading: Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF4285F4).withOpacity(0.1),
+            color: AppStyle.primaryBlue.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, color: const Color(0xFF4285F4)), // Menggunakan parameter icon
+          child: Icon(icon, color: AppStyle.primaryBlue, size: 24),
         ),
         title: Text(
           title,
-          // Menggunakan gaya label dari AppStyle
-          style: AppStyle.labelText.copyWith(fontSize: 16, fontFamily: 'Poppins'),
+          // Menggunakan gaya menuText dari AppStyle (Poppins)
+          style: AppStyle.menuText.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
         ),
-        trailing: const Icon(Icons.chevron_right, color: AppStyle.textHint),
+        subtitle: subtitle != null 
+          ? Text(subtitle, style: AppStyle.subTitleText.copyWith(fontSize: 11))
+          : null,
+        trailing: const Icon(Icons.chevron_right, color: AppStyle.textGrey, size: 20),
       ),
     );
   }

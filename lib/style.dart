@@ -1,51 +1,65 @@
 import 'package:flutter/material.dart';
 
 class AppStyle {
-  // --- KUMPULAN WARNA (COLORS) ---
+  // --- WARNA UTAMA ---
+  static const Color primaryBlue = Color(0xFF4285F4); 
+  
+  // Tambahkan baris ini (Penting! Agar error di baris 101 hilang)
+  static const Color bgLightBlue = Color(0xFFF3F8FE); 
+  
+  // Tambahkan baris ini (Penting! Agar error di baris 92 hilang)
+  static const Color errorRed    = Colors.redAccent; 
 
-  // Warna background halaman (biru sangat muda)
-  static const Color bgLightBlue = Color.fromARGB(255, 227, 240, 245);
+  static const Color textMain    = Color(0xFF1A1C1E);   
+  static const Color textGrey     = Color(0xFF757575);    
+  static const Color white        = Colors.white;
 
-  // Warna kotak input email/password dan tombol (abu-abu muda)
-  static const Color formGrey = Color(0xFFE2E2E2);
+  // --- FONT FAMILY ---
+  static const String fontPoppins = 'Poppins';
+  static const String fontNumbers = 'JetBrains';
 
-  // Warna teks utama
-  static const Color textBlack = Color(0xFF111111);
-
-  // Warna teks placeholder (seperti "Enter your email")
-  static const Color textHint = Color(0xFF757575);
-
-  // --- KUMPULAN GAYA TEKS (TEXT STYLES) ---
-
-  // Gaya untuk judul "Welcome to Aranus PoS"
+  // --- TEXT STYLES ---
   static const TextStyle titleText = TextStyle(
-    fontFamily: 'Poppins',
+    fontFamily: fontPoppins,
     fontSize: 28,
-    fontWeight: FontWeight.w800, // ExtraBold
-    color: textBlack,
+    fontWeight: FontWeight.w800,
+    color: textMain,
   );
 
-  // Gaya untuk teks "Email" dan "Password"
-  static const TextStyle labelText = TextStyle(
-    fontFamily: 'Poppins',
-    fontSize: 16,
-    fontWeight: FontWeight.w600, // SemiBold
-    color: textBlack,
+  static const TextStyle subTitleText = TextStyle(
+    fontFamily: fontPoppins,
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    color: textGrey,
   );
 
-  // Gaya untuk teks di dalam kotak input
-  static const TextStyle hintText = TextStyle(
-    fontFamily: 'Poppins',
-    fontSize: 14,
-    fontWeight: FontWeight.w400, // Regular
-    color: textHint,
+  static const TextStyle numPadText = TextStyle(
+    fontFamily: fontNumbers,
+    fontSize: 24,
+    fontWeight: FontWeight.w700,
+    color: textMain,
   );
 
-  // Gaya untuk teks di dalam tombol "Login"
   static const TextStyle buttonText = TextStyle(
-    fontFamily: 'Poppins',
+    fontFamily: fontPoppins,
     fontSize: 16,
-    fontWeight: FontWeight.w700, // Bold
-    color: textBlack,
+    fontWeight: FontWeight.w700,
+    color: white,
+  );
+
+  // Tambahkan ini di dalam class AppStyle di file style.dart
+  static const TextStyle menuText = TextStyle(
+    fontFamily: fontPoppins,
+    fontSize: 14,
+    fontWeight: FontWeight.w500, // Medium
+    color: textMain,
+  );
+
+  // Tambahkan ini di dalam class AppStyle (di file style.dart)
+  static const TextStyle priceText = TextStyle(
+    fontFamily: fontNumbers, // Menggunakan JetBrains
+    fontSize: 14,
+    fontWeight: FontWeight.w800, // ExtraBold
+    color: primaryBlue,
   );
 }

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'main_navigation.dart';
-
-// --- IMPORT SERVICE YANG DIBUTUHKAN ---
+import '../style.dart'; // Import Style yang baru dibuat
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
 
@@ -35,9 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
- // --- LOGIKA UTAMA LOGIN API (VERSI FIX) ---
   void _verifyPin() async {
-    // 1. Validasi awal: Pastikan PIN sudah 6 digit
     if (_pin.length < _pinLength) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -51,28 +48,24 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // --- BARIS DARURAT UNTUK TESTING ---
-      // Karena belum ada menu Manager, kita paksa simpan Outlet ID = 1 ke memori HP
+      // Inisialisasi awal outlet (Testing)
       await StorageService.saveOutletId(1); 
 
-      // 2. Ambil Outlet ID dari memori
       final int? outletId = await StorageService.getOutletId();
-      print("DEBUG: Menjalankan Login untuk Outlet ID: $outletId");
+      if (outletId == null) throw Exception("Outlet ID tidak ditemukan.");
 
-      if (outletId == null) {
-        throw Exception("Outlet ID tidak ditemukan di memori perangkat.");
-      }
-
-      // 3. Panggil API ke api.etres.my.id
       final result = await ApiService.loginPin(_pin, outletId);
 
       if (!mounted) return;
 
-      // 4. Cek Hasil Respon API
       if (result['success'] == true) {
-        print("DEBUG: Login Berhasil!");
+        // --- SINKRONISASI NAMA KASIR ---
+        // Ambil nama dari response API dan simpan ke StorageService
+        String nameFromServer = result['data']['user']['name'] ?? "Cashier";
+        await StorageService.saveCashierName(nameFromServer);
+
+        print("DEBUG: Login Berhasil sebagai $nameFromServer");
         
-        // Pindah ke halaman utama
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -80,27 +73,23 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       } else {
-        // Jika PIN Salah atau Error dari Server
-        print("DEBUG: Login Gagal -> ${result['message']}");
         _handleLoginError(result['message']);
       }
     } catch (e) {
-      print("DEBUG: Terjadi Error System -> $e");
-      _handleLoginError("Terjadi kesalahan sistem atau koneksi: $e");
+      _handleLoginError("Koneksi bermasalah: $e");
     }
   }
 
-  // Helper untuk reset UI saat error
   void _handleLoginError(String message) {
     setState(() {
       _isLoading = false;
-      _pin = ''; // Reset PIN agar kasir bisa input ulang
+      _pin = ''; 
     });
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.redAccent,
+        backgroundColor: AppStyle.errorRed, // Menggunakan warna dari style
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -108,19 +97,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // UI TETAP SAMA (Hanya bagian loading button yang sedikit diubah logicnya)
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F8FE),
+      backgroundColor: AppStyle.bgLightBlue, // Menggunakan Style
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 850),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppStyle.white,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
-                BoxShadow(color: Colors.blue.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
+                BoxShadow(color: AppStyle.primaryBlue.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
               ],
             ),
             child: Row(
@@ -143,16 +131,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text("Sign In", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, fontFamily: 'Poppins')),
+                        Text("Sign In", style: AppStyle.titleText), // Poppins ExtraBold
                         const SizedBox(height: 5),
-                        const Text("Masukkan 6 digit PIN akses", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                        Text("Masukkan 6 digit PIN akses", style: AppStyle.subTitleText), // Poppins Regular
                         const SizedBox(height: 35),
 
-                        // INDIKATOR PIN (DOTS)
                         _buildPinDots(),
                         const SizedBox(height: 35),
 
-                        // NUMPAD
                         _buildNumPad(),
                         const SizedBox(height: 35),
 
@@ -163,14 +149,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _verifyPin,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4285F4),
-                              foregroundColor: Colors.white,
+                              backgroundColor: AppStyle.primaryBlue,
+                              foregroundColor: AppStyle.white,
                               elevation: 0,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                             ),
                             child: _isLoading 
                               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Text('LOGIN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Poppins')),
+                              : Text('LOGIN', style: AppStyle.buttonText), // Poppins Bold
                           ),
                         ),
                       ],
@@ -185,7 +171,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // (Helper Widgets: _buildPinDots, _buildNumPad, dll, tetap dibiarkan seperti aslinya karena UI-nya sudah pas)
   Widget _buildPinDots() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -196,8 +181,8 @@ class _LoginScreenState extends State<LoginScreen> {
           width: 14, height: 14,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isFilled ? const Color(0xFF4285F4) : Colors.grey.shade100,
-            border: Border.all(color: isFilled ? const Color(0xFF4285F4) : Colors.grey.shade300, width: 2),
+            color: isFilled ? AppStyle.primaryBlue : Colors.grey.shade100,
+            border: Border.all(color: isFilled ? AppStyle.primaryBlue : Colors.grey.shade300, width: 2),
           ),
         );
       }),
@@ -220,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
           _numButton('7'), _numButton('8'), _numButton('9'),
           _actionButton('C', 'clear', const Color(0xFFFFEBEE), Colors.redAccent),
           _numButton('0'),
-          _actionButton('<', 'delete', const Color(0xFFE3F2FD), const Color(0xFF4285F4)),
+          _actionButton('<', 'delete', const Color(0xFFE3F2FD), AppStyle.primaryBlue),
         ],
       ),
     );
@@ -237,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
           border: Border.all(color: Colors.grey.shade200),
         ),
         child: Center(
-          child: Text(number, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1A1C1E))),
+          child: Text(number, style: AppStyle.numPadText), // JetBrains Bold
         ),
       ),
     );
@@ -252,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Center(
           child: label == '<' 
             ? Icon(Icons.backspace_outlined, color: textColor, size: 22)
-            : Text(label, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
+            : Text(label, style: AppStyle.numPadText.copyWith(color: textColor)), // JetBrains Bold
         ),
       ),
     );

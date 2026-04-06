@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/hover_scale.dart';
 import '../widgets/checkout_dialog.dart';
+import '../style.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,14 +13,35 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedCategoryIndex = 0;
   final Map<String, Map<String, dynamic>> _cart = {};
+  
+  // 1. TAMBAHKAN CONTROLLER DAN LIST HASIL FILTER
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _filteredProducts = [];
 
   // Data Produk Dummy
   final List<Map<String, dynamic>> _products = [
-    {"name": "Nasi Goreng Ayam", "price": 5.0, "img": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?q=80&w=400"},
-    {"name": "Nasi Goreng Udang", "price": 5.0, "img": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?q=80&w=400"},
-    {"name": "Nasi Goreng Jawa", "price": 5.0, "img": "https://images.unsplash.com/photo-1585032226651-759b368d7246?q=80&w=400"},
-    {"name": "Nasi Goreng Ayam", "price": 5.0, "img": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?q=80&w=400"},
+    {"name": "Nasi Goreng Ayam", "price": 25000.0, "img": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?q=80&w=400"},
+    {"name": "Nasi Goreng Udang", "price": 30000.0, "img": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?q=80&w=400"},
+    {"name": "Nasi Goreng Jawa", "price": 22000.0, "img": "https://images.unsplash.com/photo-1585032226651-759b368d7246?q=80&w=400"},
+    {"name": "Mie Goreng Spesial", "price": 20000.0, "img": "https://images.unsplash.com/photo-1585032226651-759b368d7246?q=80&w=400"},
+    {"name": "Es Teh Manis", "price": 5000.0, "img": "https://images.unsplash.com/photo-1556679343-c7306c1976bc?q=80&w=400"},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Set awal: tampilkan semua produk
+    _filteredProducts = _products;
+  }
+
+  // 2. FUNGSI LOGIKA PENCARIAN
+  void _filterSearch(String query) {
+    setState(() {
+      _filteredProducts = _products
+          .where((product) => product['name'].toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
+  }
 
   void _addToCart(Map<String, dynamic> p) {
     setState(() {
@@ -47,12 +69,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: AppStyle.bgLightBlue,
       body: Row(
         children: [
-          // ==========================================
-          // SISI KIRI: MENU & CATEGORIES
-          // ==========================================
           Expanded(
             flex: 1, 
             child: Padding(
@@ -60,36 +79,39 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Judul "Categories" dan SizedBox(height: 20) telah dihapus
+                  // 3. UI SEARCH BAR
+                  _buildSearchBar(),
+                  const SizedBox(height: 20),
                   _buildCategoryList(),
                   const SizedBox(height: 30),
+                  
+                  // TAMPILKAN PRODUK HASIL FILTER
                   Expanded(
-                    child: GridView.builder(
-                      itemCount: 12,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: _cart.isNotEmpty ? 4 : 6,
-                        childAspectRatio: 0.75,
-                        crossAxisSpacing: 15,
-                        mainAxisSpacing: 15,
+                    child: _filteredProducts.isEmpty 
+                    ? _buildEmptySearch()
+                    : GridView.builder(
+                        itemCount: _filteredProducts.length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: _cart.isNotEmpty ? 4 : 5,
+                          childAspectRatio: 0.72,
+                          crossAxisSpacing: 15,
+                          mainAxisSpacing: 15,
+                        ),
+                        itemBuilder: (context, index) => _buildProductCard(_filteredProducts[index]),
                       ),
-                      itemBuilder: (context, index) => _buildProductCard(_products[index % 3]),
-                    ),
                   ),
                 ],
               ),
             ),
           ),
 
-          // ==========================================
-          // SISI KANAN: SIDEBAR CHECKOUT
-          // ==========================================
           if (_cart.isNotEmpty) 
             Container(
               width: 380,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-                border: Border(left: BorderSide(color: Color(0xFFEEEEEE))),
+              decoration: BoxDecoration(
+                color: AppStyle.white,
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                border: const Border(left: BorderSide(color: Color(0xFFEEEEEE))),
               ),
               child: Column(
                 children: [
@@ -104,36 +126,59 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- WIDGET HELPER SISI KIRI ---
-  Widget _buildCategoryList() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: ["All Menu", "Sushi", "Fried Rice", "Noodle", "Steak"].map((cat) {
-          bool isSelected = cat == "All Menu";
-          return Container(
-            margin: const EdgeInsets.only(right: 10),
-            child: FilterChip(
-              label: Text(cat),
-              selected: isSelected,
-              onSelected: (v) {},
-              backgroundColor: Colors.white,
-              selectedColor: const Color(0xFF4285F4).withOpacity(0.1),
-              labelStyle: TextStyle(color: isSelected ? const Color(0xFF4285F4) : Colors.black, fontFamily: 'Poppins'),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            ),
-          );
-        }).toList(),
+  // --- WIDGET SEARCH BAR ---
+  Widget _buildSearchBar() {
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        color: AppStyle.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: _filterSearch, // PANGGIL FUNGSI FILTER SAAT MENGETIK
+        style: AppStyle.menuText,
+        decoration: InputDecoration(
+          hintText: "Cari menu makanan atau minuman...",
+          hintStyle: AppStyle.subTitleText,
+          prefixIcon: const Icon(Icons.search, color: AppStyle.primaryBlue),
+          suffixIcon: _searchController.text.isNotEmpty 
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 20), 
+                onPressed: () {
+                  _searchController.clear();
+                  _filterSearch('');
+                }
+              ) 
+            : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+        ),
       ),
     );
   }
 
+  Widget _buildEmptySearch() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off, size: 80, color: Colors.grey.shade300),
+          const SizedBox(height: 10),
+          Text("Menu tidak ditemukan", style: AppStyle.subTitleText),
+        ],
+      ),
+    );
+  }
+
+  // (Widget helper lainnya seperti _buildCategoryList, _buildProductCard, dll tetap sama)
+  // Pastikan di _buildProductCard menggunakan data p['name'] dan p['price']
   Widget _buildProductCard(Map<String, dynamic> p) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppStyle.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,18 +194,17 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(p['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Poppins')),
-                const Text("Comes with a Vegetable Sauce", style: TextStyle(color: Colors.grey, fontSize: 10, fontFamily: 'Poppins')),
-                const SizedBox(height: 10),
+                Text(p['name'], style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("\$${p['price']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontFamily: 'Poppins')),
+                    Text("Rp ${p['price'].toInt()}", style: AppStyle.priceText.copyWith(fontSize: 14)),
                     GestureDetector(
                       onTap: () => _addToCart(p),
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: Color(0xFF4285F4), shape: BoxShape.circle),
+                        decoration: const BoxDecoration(color: AppStyle.primaryBlue, shape: BoxShape.circle),
                         child: const Icon(Icons.add, color: Colors.white, size: 18),
                       ),
                     )
@@ -174,23 +218,49 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- WIDGET HELPER SIDEBAR KERANJANG ---
+  // (Sisa widget _buildCartHeader, _buildCartList, _buildCartFooter tetap sama seperti sebelumnya)
+  Widget _buildCategoryList() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: ["All Menu", "Sushi", "Fried Rice", "Noodle", "Steak"].map((cat) {
+          bool isSelected = cat == "All Menu";
+          return Container(
+            margin: const EdgeInsets.only(right: 10),
+            child: FilterChip(
+              label: Text(cat),
+              selected: isSelected,
+              onSelected: (v) {},
+              backgroundColor: AppStyle.white,
+              selectedColor: AppStyle.primaryBlue.withOpacity(0.1),
+              labelStyle: TextStyle(
+                color: isSelected ? AppStyle.primaryBlue : AppStyle.textMain, 
+                fontFamily: AppStyle.fontPoppins,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? AppStyle.primaryBlue : Colors.grey.shade300)),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildCartHeader() {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("#ORD-001", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontFamily: 'Poppins')),
+          Text("#ORD-001", style: AppStyle.subTitleText.copyWith(fontWeight: FontWeight.bold, color: AppStyle.primaryBlue)),
           const SizedBox(height: 15),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text("Cashier : Siti Fatimah", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
-              Text("27 Maret 2025, 14:12", style: TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Poppins')),
+            children: [
+              Text("Cashier : Siti Fatimah", style: AppStyle.menuText.copyWith(fontSize: 12, fontWeight: FontWeight.bold)),
+              Text("06 April 2026", style: AppStyle.subTitleText.copyWith(fontSize: 10)),
             ],
           ),
-          const Text("No. Table :", style: TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Poppins')),
         ],
       ),
     );
@@ -213,37 +283,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Poppins')),
-                        Text("\$${item['price']}", style: const TextStyle(color: Colors.grey, fontSize: 11, fontFamily: 'Poppins')),
+                        Text(name, style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text("Rp ${item['price'].toInt()}", style: AppStyle.priceText.copyWith(fontSize: 11, color: AppStyle.textGrey)),
                       ],
                     ),
                   ),
                   Row(
                     children: [
-                      IconButton(onPressed: () => _updateQty(name, -1), icon: const Icon(Icons.remove_circle, color: Color(0xFF4285F4))),
-                      Text("${item['qty']}", style: const TextStyle(fontFamily: 'Poppins')),
-                      IconButton(onPressed: () => _updateQty(name, 1), icon: const Icon(Icons.add_circle, color: Color(0xFF4285F4))),
+                      IconButton(onPressed: () => _updateQty(name, -1), icon: const Icon(Icons.remove_circle, color: AppStyle.primaryBlue)),
+                      Text("${item['qty']}", style: AppStyle.numPadText.copyWith(fontSize: 16)),
+                      IconButton(onPressed: () => _updateQty(name, 1), icon: const Icon(Icons.add_circle, color: AppStyle.primaryBlue)),
                     ],
                   )
                 ],
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: "Notes",
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      ),
-                      style: const TextStyle(fontSize: 11, fontFamily: 'Poppins'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton(onPressed: () => setState(() => _cart.remove(name)), icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20)),
-                ],
+              TextField(
+                decoration: InputDecoration(
+                  hintText: "Notes",
+                  hintStyle: AppStyle.subTitleText,
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                ),
+                style: AppStyle.menuText.copyWith(fontSize: 11),
               ),
             ],
           ),
@@ -255,14 +318,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCartFooter() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey[200]!))),
+      decoration: BoxDecoration(color: AppStyle.white, border: Border(top: BorderSide(color: Colors.grey[200]!))),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Total", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontFamily: 'Poppins')),
-              Text("\$${_calculateTotal().toStringAsFixed(1)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Poppins')),
+              Text("Total", style: AppStyle.menuText.copyWith(color: AppStyle.textGrey)),
+              Text("Rp ${_calculateTotal().toInt()}", style: AppStyle.priceText.copyWith(fontSize: 22)),
             ],
           ),
           const SizedBox(height: 20),
@@ -271,8 +334,8 @@ class _HomeScreenState extends State<HomeScreen> {
             height: 50,
             child: ElevatedButton(
               onPressed: () {},
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4285F4), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: const Text("Checkout", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
+              style: ElevatedButton.styleFrom(backgroundColor: AppStyle.primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: Text("Checkout", style: AppStyle.buttonText),
             ),
           )
         ],

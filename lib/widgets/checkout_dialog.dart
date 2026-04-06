@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import '../models/order_model.dart';
+import '../style.dart';
 
 class CheckoutDialog extends StatefulWidget {
-  final Map<String, Map<String, dynamic>> cart;
-  final int totalAmount;
+  final Map<int, OrderItem> cart;
+  final double totalAmount; // Ini adalah Subtotal (Harga murni item)
   final String orderId;
   final String tableNumber;
-  final String Function(int) formatCurrency;
+  final String cashierName;
+  final String Function(double) formatCurrency;
 
   const CheckoutDialog({
     super.key,
@@ -13,6 +18,7 @@ class CheckoutDialog extends StatefulWidget {
     required this.totalAmount,
     required this.orderId,
     required this.tableNumber,
+    required this.cashierName,
     required this.formatCurrency,
   });
 
@@ -21,121 +27,300 @@ class CheckoutDialog extends StatefulWidget {
 }
 
 class _CheckoutDialogState extends State<CheckoutDialog> {
-  String _paymentMethod = 'Cash'; 
-  int _amountTendered = 0;
+  String _paymentMethod = 'Cash';
+  double _amountTendered = 0;
   final TextEditingController _manualTenderController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _amountTendered = widget.totalAmount;
-    _manualTenderController.text = widget.totalAmount.toString();
+    // Diubah menjadi 0 dan string kosong agar kasir input manual
+    _amountTendered = 0;
+    _manualTenderController.text = "";
   }
 
   @override
   Widget build(BuildContext context) {
-    int tax = (widget.totalAmount * 0.1).toInt();
-    int subTotal = widget.totalAmount - tax;
+    // LOGIKA HITUNGAN PAJAK (Exclusive: Harga + Pajak)
+    double subTotal = widget.totalAmount;
+    double tax = subTotal * 0.1;
+    double grandTotal = subTotal + tax;
+    double change = _amountTendered - grandTotal;
+
+    String currentTime = DateFormat('HH:mm').format(DateTime.now());
+    String currentDate = DateFormat('dd MMM yyyy').format(DateTime.now());
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        width: 1000, height: 650,
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        width: 1000,
+        height: 680,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Row(
           children: [
-            // SISI KIRI (PAYMENT)
+            // --- SISI KIRI: METODE PEMBAYARAN & INPUT ---
             Expanded(
               flex: 5,
               child: Padding(
                 padding: const EdgeInsets.all(40),
                 child: Column(
                   children: [
-                    const Text("Amount Tendered", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
-                    const SizedBox(height: 20),
-                    Container(
-                      width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 25),
-                      decoration: BoxDecoration(color: const Color(0xFFF1F2F6), borderRadius: BorderRadius.circular(15)),
-                      child: Center(child: Text(widget.formatCurrency(_amountTendered), style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w800, fontFamily: 'JetBrains'))),
+                    const Center(
+                      child: Text(
+                        "Payment Method",
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 30),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _payBtn('Card', Icons.credit_card),
+                        _payBtn('Cash', Icons.payments_outlined),
                         const SizedBox(width: 15),
-                        _payBtn('Cash', Icons.wallet),
+                        _payBtn('Card', Icons.credit_card_outlined),
                         const SizedBox(width: 15),
-                        _payBtn('Qris', Icons.qr_code),
+                        _payBtn('Qris', Icons.qr_code_scanner),
                       ],
                     ),
+                    const SizedBox(height: 50),
+
+                    // KONTEN DINAMIS BERDASARKAN METODE PEMBAYARAN
                     if (_paymentMethod == 'Cash') ...[
-                      const SizedBox(height: 30),
-                      Wrap(
-                        spacing: 10, runSpacing: 10, alignment: WrapAlignment.center,
-                        children: [50000, 100000, 150000, 200000].map((v) => _quickBtn(v)).toList(),
-                      ),
-                      const SizedBox(height: 20),
+                      // INPUT MANUAL (Besar & Di Tengah)
                       TextField(
-                        controller: _manualTenderController, textAlign: TextAlign.center,
-                        decoration: InputDecoration(hintText: "Input Manual", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                        onChanged: (v) => setState(() => _amountTendered = int.tryParse(v) ?? 0),
+                        controller: _manualTenderController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          CurrencyInputFormatter(),
+                        ],
+                        style: AppStyle.numPadText.copyWith(
+                          fontSize: 35,
+                          color: AppStyle.primaryBlue,
+                        ),
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          hintText: "0",
+                          labelText: "Isi Uang Manual",
+                          labelStyle: const TextStyle(fontFamily: 'Poppins'),
+                          prefixIcon: const Icon(Icons.edit_note, size: 30),
+                          filled: true,
+                          fillColor: const Color(0xFFF8F9FA),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(15),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onChanged: (v) {
+                          setState(() {
+                            // Jika kosong, set ke 0
+                            _amountTendered = v.isEmpty
+                                ? 0
+                                : double.tryParse(v.replaceAll('.', '')) ?? 0;
+                          });
+                        },
                       ),
+                      const SizedBox(height: 30),
+                      // PILIHAN UANG CEPAT
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.center,
+                        children: [20000, 50000, 100000, 150000, 200000]
+                            .map((v) => _quickBtn(v.toDouble()))
+                            .toList(),
+                      ),
+                      const Spacer(),
+                      if (change > 0) _buildChangeDisplay(change),
+                    ] else if (_paymentMethod == 'Card') ...[
+                      const Spacer(),
+                      const Icon(Icons.credit_card,
+                          size: 120, color: Colors.grey),
+                      const SizedBox(height: 20),
+                      const Text(
+                        "Silahkan Swipe atau Insert Kartu",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const Spacer(),
+                    ] else if (_paymentMethod == 'Qris') ...[
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.qr_code_2,
+                                size: 180, color: Colors.black),
+                            const SizedBox(height: 10),
+                            Text(
+                              "SCAN QRIS DISINI",
+                              style: AppStyle.titleText.copyWith(fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
                     ]
                   ],
                 ),
               ),
             ),
-            // SISI KANAN (SUMMARY)
+
+            // --- SISI KANAN: RINGKASAN STRUK ---
             Expanded(
               flex: 4,
               child: Container(
-                padding: const EdgeInsets.all(35), color: const Color(0xFFFAFAFA),
+                padding: const EdgeInsets.all(35),
+                color: const Color(0xFFFBFBFB),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(widget.orderId, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, fontFamily: 'Poppins')),
-                        GestureDetector(onTap: () => Navigator.pop(context), child: const Icon(Icons.close, color: Colors.grey)),
+                        Text(
+                          widget.orderId,
+                          style: AppStyle.priceText.copyWith(fontSize: 18),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Icon(Icons.close, color: Colors.grey),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
-                    const Text("Cashier : Siti Fatimah", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, fontFamily: 'Poppins')),
-                    Text("No. Table : ${widget.tableNumber.isEmpty ? '...' : widget.tableNumber}", style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, fontFamily: 'Poppins')),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Date : $currentDate",
+                          style: AppStyle.subTitleText.copyWith(fontSize: 12),
+                        ),
+                        Text(
+                          "Time : $currentTime",
+                          style: AppStyle.subTitleText.copyWith(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Cashier : ${widget.cashierName}",
+                          style: AppStyle.subTitleText.copyWith(fontSize: 12),
+                        ),
+                        Text(
+                          "Table : ${widget.tableNumber.isEmpty ? '-' : widget.tableNumber}",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                      ],
+                    ),
                     const Divider(height: 30),
+                    // LIST ITEM PESANAN
                     Expanded(
                       child: ListView.builder(
                         itemCount: widget.cart.length,
                         itemBuilder: (context, index) {
-                          var entry = widget.cart.entries.elementAt(index);
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(entry.key, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Poppins')),
-                              Text(widget.formatCurrency(entry.value['qty'] * entry.value['price']), style: const TextStyle(fontFamily: 'JetBrains', fontWeight: FontWeight.bold)),
-                            ],
+                          var item = widget.cart.values.elementAt(index);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 15),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.itemName,
+                                  style: AppStyle.menuText.copyWith(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "${item.quantity} x ${widget.formatCurrency(item.unitPrice)}",
+                                      style: AppStyle.subTitleText.copyWith(fontSize: 12),
+                                    ),
+                                    Text(
+                                      widget.formatCurrency(item.subtotal),
+                                      style: AppStyle.priceText.copyWith(
+                                        fontSize: 13,
+                                        color: AppStyle.textMain,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           );
                         },
                       ),
                     ),
-                    const Divider(),
+                    const Divider(height: 30),
+                    // HITUNGAN TOTAL (Murni)
                     _rowInf("Sub Total", subTotal),
                     _rowInf("Tax (10%)", tax),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 15),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("Total", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, fontFamily: 'Poppins')),
-                        Text(widget.formatCurrency(widget.totalAmount), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.blue, fontFamily: 'JetBrains')),
+                        const Text(
+                          "Total",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        Text(
+                          widget.formatCurrency(grandTotal),
+                          style: AppStyle.priceText.copyWith(
+                            fontSize: 22,
+                            color: AppStyle.primaryBlue,
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 25),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, minimumSize: const Size(double.infinity, 55)),
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Pay Bills", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppStyle.primaryBlue,
+                        minimumSize: const Size(double.infinity, 60),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      onPressed: (_paymentMethod == 'Cash' && _amountTendered < grandTotal)
+                          ? null
+                          : () => Navigator.pop(context, true),
+                      child: const Text(
+                        "PROSES PEMBAYARAN",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
                     )
                   ],
                 ),
@@ -147,19 +332,146 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  Widget _rowInf(String l, int v) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(l, style: const TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Poppins')), Text(widget.formatCurrency(v), style: const TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'JetBrains'))]));
-  
-  Widget _payBtn(String l, IconData i) {
-    bool s = _paymentMethod == l;
-    return GestureDetector(
-      onTap: () => setState(() => _paymentMethod = l),
-      child: Container(
-        width: 80, height: 80,
-        decoration: BoxDecoration(color: s ? Colors.blue : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: s ? Colors.blue : Colors.grey.shade300)),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(i, color: s ? Colors.white : Colors.black), Text(l, style: TextStyle(color: s ? Colors.white : Colors.black, fontSize: 10, fontFamily: 'Poppins'))]),
+  Widget _rowInf(String l, double v) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(l, style: AppStyle.subTitleText.copyWith(fontSize: 13)),
+          Text(
+            widget.formatCurrency(v),
+            style: AppStyle.priceText.copyWith(
+              fontSize: 13,
+              color: AppStyle.textGrey,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _quickBtn(int v) => GestureDetector(onTap: () { setState(() { _amountTendered = v; _manualTenderController.text = v.toString(); }); }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(20)), child: Text(widget.formatCurrency(v), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'JetBrains'))));
+  Widget _buildChangeDisplay(double change) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.green.shade100),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            "Kembalian",
+            style: TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              fontFamily: 'Poppins',
+            ),
+          ),
+          Text(
+            widget.formatCurrency(change),
+            style: AppStyle.priceText.copyWith(
+              color: Colors.green,
+              fontSize: 22,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _payBtn(String l, IconData i) {
+    bool isSelected = _paymentMethod == l;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _paymentMethod = l),
+        child: Container(
+          height: 100,
+          decoration: BoxDecoration(
+            color: isSelected ? AppStyle.primaryBlue : Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: isSelected ? AppStyle.primaryBlue : const Color(0xFFEEEEEE),
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppStyle.primaryBlue.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ]
+                : [],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                i,
+                color: isSelected ? Colors.white : AppStyle.textMain,
+                size: 32,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l,
+                style: AppStyle.menuText.copyWith(
+                  color: isSelected ? Colors.white : AppStyle.textMain,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _quickBtn(double v) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _amountTendered = v;
+          _manualTenderController.text =
+              NumberFormat.decimalPattern('id').format(v.toInt());
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFEEEEEE)),
+        ),
+        child: Text(
+          widget.formatCurrency(v),
+          style: AppStyle.priceText.copyWith(
+            fontSize: 14,
+            color: AppStyle.textMain,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// FORMATTER UNTUK TITIK RIBUAN SECARA REALTIME
+class CurrencyInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) return newValue.copyWith(text: '');
+    if (newValue.selection.baseOffset == 0) return newValue;
+    
+    double value = double.parse(newValue.text.replaceAll('.', ''));
+    final formatter = NumberFormat.decimalPattern('id');
+    String newText = formatter.format(value);
+    
+    return newValue.copyWith(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+  }
 }

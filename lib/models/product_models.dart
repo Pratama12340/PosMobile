@@ -18,8 +18,8 @@ class Product {
       id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
       name: json['name'] ?? 'No Name',
       description: json['description'] ?? '',
-      // Konversi decimal dari API ke int Flutter
-      price: double.parse(json['price']?.toString() ?? '0').toInt(),
+      // Mengonversi harga dari API (yang mungkin string/double) ke int
+      price: double.parse(json['price'].toString()).toInt(),
       image: json['image'] ?? '',
     );
   }

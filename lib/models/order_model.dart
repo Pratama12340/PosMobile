@@ -1,23 +1,41 @@
 // ==========================================
 // MODEL DATA TRANSAKSI
 // ==========================================
-class OrderItem {
-  final int quantity;
-  final String itemName;
-  final double unitPrice;
-  final String notes;
 
-  OrderItem({required this.quantity, required this.itemName, required this.unitPrice, this.notes = ""});
+class OrderItem {
+  int quantity;          // DIHAPUS 'final' agar bisa ditambah/kurang
+  final String itemName; // Tetap 'final' karena nama barang tidak berubah
+  final double unitPrice;// Tetap 'final' karena harga satuan tetap
+  String notes;          // DIHAPUS 'final' agar bisa diisi notes dari TextField
+
+  OrderItem({
+    required this.quantity, 
+    required this.itemName, 
+    required this.unitPrice, 
+    this.notes = ""
+  });
   
   double get subtotal => quantity * unitPrice; 
 
+  // Fungsi untuk mengubah Map dari API menjadi Objek OrderItem
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     return OrderItem(
       quantity: int.tryParse(json['quantity']?.toString() ?? '1') ?? 1,
+      // Menangani berbagai kemungkinan key dari API (product_name atau name)
       itemName: json['product_name'] ?? json['name'] ?? 'Tanpa Nama',
       unitPrice: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
-      notes: json['notes'] ?? "-",
+      notes: json['notes'] ?? "",
     );
+  }
+
+  // Fungsi untuk mengubah Objek menjadi Map (Berguna saat POST/Checkout ke API)
+  Map<String, dynamic> toJson() {
+    return {
+      'quantity': quantity,
+      'product_name': itemName,
+      'price': unitPrice,
+      'notes': notes,
+    };
   }
 }
 
@@ -30,12 +48,21 @@ class Order {
   final String status;
   final List<OrderItem> items;
 
-  Order({required this.orderNo, required this.date, required this.cashierName, required this.tableNo, required this.paymentMethod, required this.status, required this.items});
+  Order({
+    required this.orderNo, 
+    required this.date, 
+    required this.cashierName, 
+    required this.tableNo, 
+    required this.paymentMethod, 
+    required this.status, 
+    required this.items
+  });
   
   double get totalAmount => items.fold(0, (sum, item) => sum + item.subtotal);
 
   factory Order.fromJson(Map<String, dynamic> json) {
-    var itemsList = json['items'] ?? json['details'] as List? ?? [];
+    // Perbaikan logika pengambilan list agar lebih aman dari error null
+    var itemsList = (json['items'] as List?) ?? (json['details'] as List?) ?? [];
     List<OrderItem> parsedItems = itemsList.map((i) => OrderItem.fromJson(i)).toList();
 
     return Order(

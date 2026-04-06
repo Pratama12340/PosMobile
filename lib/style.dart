@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // <--- Tambahkan ini agar NumberFormat terbaca
 
 class AppStyle {
   // --- WARNA UTAMA ---
-  static const Color primaryBlue = Color(0xFF4285F4); 
-  
-  // Tambahkan baris ini (Penting! Agar error di baris 101 hilang)
-  static const Color bgLightBlue = Color(0xFFF3F8FE); 
-  
-  // Tambahkan baris ini (Penting! Agar error di baris 92 hilang)
-  static const Color errorRed    = Colors.redAccent; 
+  static const Color primaryBlue = Color(0xFF4285F4);
 
-  static const Color textMain    = Color(0xFF1A1C1E);   
-  static const Color textGrey     = Color(0xFF757575);    
-  static const Color white        = Colors.white;
+  // Tambahkan baris ini (Penting! Agar error di baris 101 hilang)
+  static const Color bgLightBlue = Color(0xFFF3F8FE);
+
+  // Tambahkan baris ini (Penting! Agar error di baris 92 hilang)
+  static const Color errorRed = Colors.redAccent;
+
+  static const Color textMain = Color(0xFF1A1C1E);
+  static const Color textGrey = Color(0xFF757575);
+  static const Color white = Colors.white;
 
   // --- FONT FAMILY ---
   static const String fontPoppins = 'Poppins';
@@ -62,4 +63,14 @@ class AppStyle {
     fontWeight: FontWeight.w800, // ExtraBold
     color: primaryBlue,
   );
+
+  // Fungsi untuk memformat angka ke Rupiah dengan titik
+  String formatHarga(double price) {
+    final formatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+    return formatter.format(price);
+  }
 }

@@ -248,12 +248,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       onPressed: (_paymentMethod == 'Cash' && _amountTendered < grandTotal)
                           ? null
                           : () {
-                              // MODIFIKASI: Mengirim Map Data saat Pop
                               Navigator.pop(context, {
                                 'status': 'success',
                                 'paymentMethod': _paymentMethod,
                                 'grandTotal': grandTotal,
                                 'orderId': widget.orderId,
+                                'amountPaid': _amountTendered, 
+                                'change': change,
                               });
                             },
                       child: const Text("PROSES PEMBAYARAN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Poppins')),

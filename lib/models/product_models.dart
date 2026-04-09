@@ -4,8 +4,7 @@ class Product {
   final String? description;
   final int price;
   final String image;
-  final String category; // Field wajib untuk filter di UI
-
+  final String category; 
   Product({
     required this.id,
     required this.name,
@@ -22,7 +21,6 @@ class Product {
       description: json['description'] ?? '',
       price: double.parse(json['price'].toString()).toInt(),
       image: json['image'] ?? '',
-      // Logika Fallback: Mencari nama kategori dari berbagai kemungkinan field API
       category: (json['category_name'] ?? 
                  json['category'] ?? 
                  json['category_id'] ?? 

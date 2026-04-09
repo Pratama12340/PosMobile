@@ -6,7 +6,7 @@ import '../style.dart';
 
 class CheckoutDialog extends StatefulWidget {
   final Map<int, OrderItem> cart;
-  final double totalAmount; 
+  final double totalAmount;
   final String orderId;
   final String tableNumber;
   final String cashierName;
@@ -128,17 +128,31 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         spacing: 12,
                         runSpacing: 12,
                         alignment: WrapAlignment.center,
-                        children: [20000, 50000, 100000, 150000, 200000]
-                            .map((v) => _quickBtn(v.toDouble()))
-                            .toList(),
+                        children: [
+                          20000,
+                          50000,
+                          100000,
+                          150000,
+                          200000,
+                        ].map((v) => _quickBtn(v.toDouble())).toList(),
                       ),
                       const Spacer(),
                       if (change > 0) _buildChangeDisplay(change),
                     ] else if (_paymentMethod == 'Card') ...[
                       const Spacer(),
-                      const Icon(Icons.credit_card, size: 120, color: Colors.grey),
+                      const Icon(
+                        Icons.credit_card,
+                        size: 120,
+                        color: Colors.grey,
+                      ),
                       const SizedBox(height: 20),
-                      const Text("Silahkan Swipe atau Insert Kartu", style: TextStyle(fontFamily: 'Poppins', color: Colors.grey)),
+                      const Text(
+                        "Silahkan Swipe atau Insert Kartu",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.grey,
+                        ),
+                      ),
                       const Spacer(),
                     ] else if (_paymentMethod == 'Qris') ...[
                       const Spacer(),
@@ -150,14 +164,21 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         ),
                         child: Column(
                           children: [
-                            const Icon(Icons.qr_code_2, size: 180, color: Colors.black),
+                            const Icon(
+                              Icons.qr_code_2,
+                              size: 180,
+                              color: Colors.black,
+                            ),
                             const SizedBox(height: 10),
-                            Text("SCAN QRIS DISINI", style: AppStyle.titleText.copyWith(fontSize: 14)),
+                            Text(
+                              "SCAN QRIS DISINI",
+                              style: AppStyle.titleText.copyWith(fontSize: 14),
+                            ),
                           ],
                         ),
                       ),
                       const Spacer(),
-                    ]
+                    ],
                   ],
                 ),
               ),
@@ -175,7 +196,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(widget.orderId, style: AppStyle.priceText.copyWith(fontSize: 18)),
+                        Text(
+                          widget.orderId,
+                          style: AppStyle.priceText.copyWith(fontSize: 18),
+                        ),
                         GestureDetector(
                           onTap: () => Navigator.pop(context),
                           child: const Icon(Icons.close, color: Colors.grey),
@@ -186,17 +210,32 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Date : $currentDate", style: AppStyle.subTitleText.copyWith(fontSize: 12)),
-                        Text("Time : $currentTime", style: AppStyle.subTitleText.copyWith(fontSize: 12)),
+                        Text(
+                          "Date : $currentDate",
+                          style: AppStyle.subTitleText.copyWith(fontSize: 12),
+                        ),
+                        Text(
+                          "Time : $currentTime",
+                          style: AppStyle.subTitleText.copyWith(fontSize: 12),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Cashier : ${widget.cashierName}", style: AppStyle.subTitleText.copyWith(fontSize: 12)),
-                        Text("Table : ${widget.tableNumber.isEmpty ? '-' : widget.tableNumber}", 
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'Poppins')),
+                        Text(
+                          "Cashier : ${widget.cashierName}",
+                          style: AppStyle.subTitleText.copyWith(fontSize: 12),
+                        ),
+                        Text(
+                          "Table : ${widget.tableNumber.isEmpty ? '-' : widget.tableNumber}",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
                       ],
                     ),
                     const Divider(height: 30),
@@ -210,12 +249,30 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(item.itemName, style: AppStyle.menuText.copyWith(fontSize: 13, fontWeight: FontWeight.bold)),
+                                Text(
+                                  item.itemName,
+                                  style: AppStyle.menuText.copyWith(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text("${item.quantity} x ${widget.formatCurrency(item.unitPrice)}", style: AppStyle.subTitleText.copyWith(fontSize: 12)),
-                                    Text(widget.formatCurrency(item.subtotal), style: AppStyle.priceText.copyWith(fontSize: 13, color: AppStyle.textMain)),
+                                    Text(
+                                      "${item.quantity} x ${widget.formatCurrency(item.unitPrice)}",
+                                      style: AppStyle.subTitleText.copyWith(
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    Text(
+                                      widget.formatCurrency(item.subtotal),
+                                      style: AppStyle.priceText.copyWith(
+                                        fontSize: 13,
+                                        color: AppStyle.textMain,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ],
@@ -231,33 +288,60 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("Total", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, fontFamily: 'Poppins')),
-                        Text(widget.formatCurrency(grandTotal), style: AppStyle.priceText.copyWith(fontSize: 22, color: const Color(0xFF4285F4))),
+                        const Text(
+                          "Total",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        Text(
+                          widget.formatCurrency(grandTotal),
+                          style: AppStyle.priceText.copyWith(
+                            fontSize: 22,
+                            color: const Color(0xFF4285F4),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 25),
-                    
+
                     // --- TOMBOL PROSES PEMBAYARAN ---
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF4285F4),
                         disabledBackgroundColor: Colors.grey.shade300,
                         minimumSize: const Size(double.infinity, 60),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
                       ),
-                      onPressed: (_paymentMethod == 'Cash' && _amountTendered < grandTotal)
+                      onPressed:
+                          (_paymentMethod == 'Cash' &&
+                              _amountTendered < grandTotal)
                           ? null
                           : () {
-                              // MODIFIKASI: Mengirim Map Data saat Pop
                               Navigator.pop(context, {
                                 'status': 'success',
                                 'paymentMethod': _paymentMethod,
                                 'grandTotal': grandTotal,
                                 'orderId': widget.orderId,
+                                'amountPaid': _amountTendered,
+                                'change': change,
+                                'tableNumber': widget.tableNumber,
                               });
                             },
-                      child: const Text("PROSES PEMBAYARAN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Poppins')),
-                    )
+                      child: const Text(
+                        "PROSES PEMBAYARAN",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -276,7 +360,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(l, style: AppStyle.subTitleText.copyWith(fontSize: 13)),
-          Text(widget.formatCurrency(v), style: AppStyle.priceText.copyWith(fontSize: 13, color: AppStyle.textGrey)),
+          Text(
+            widget.formatCurrency(v),
+            style: AppStyle.priceText.copyWith(
+              fontSize: 13,
+              color: AppStyle.textGrey,
+            ),
+          ),
         ],
       ),
     );
@@ -293,8 +383,22 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Poppins')),
-          Text(widget.formatCurrency(change), style: AppStyle.priceText.copyWith(color: Colors.green, fontSize: 22)),
+          const Text(
+            "Kembalian",
+            style: TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              fontFamily: 'Poppins',
+            ),
+          ),
+          Text(
+            widget.formatCurrency(change),
+            style: AppStyle.priceText.copyWith(
+              color: Colors.green,
+              fontSize: 22,
+            ),
+          ),
         ],
       ),
     );
@@ -310,14 +414,28 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           decoration: BoxDecoration(
             color: isSelected ? const Color(0xFF4285F4) : Colors.white,
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: isSelected ? const Color(0xFF4285F4) : const Color(0xFFEEEEEE)),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFF4285F4)
+                  : const Color(0xFFEEEEEE),
+            ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(i, color: isSelected ? Colors.white : AppStyle.textMain, size: 32),
+              Icon(
+                i,
+                color: isSelected ? Colors.white : AppStyle.textMain,
+                size: 32,
+              ),
               const SizedBox(height: 8),
-              Text(l, style: AppStyle.menuText.copyWith(color: isSelected ? Colors.white : AppStyle.textMain, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+              Text(
+                l,
+                style: AppStyle.menuText.copyWith(
+                  color: isSelected ? Colors.white : AppStyle.textMain,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
             ],
           ),
         ),
@@ -330,7 +448,9 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       onTap: () {
         setState(() {
           _amountTendered = v;
-          _manualTenderController.text = NumberFormat.decimalPattern('id').format(v.toInt());
+          _manualTenderController.text = NumberFormat.decimalPattern(
+            'id',
+          ).format(v.toInt());
         });
       },
       child: Container(
@@ -340,7 +460,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFEEEEEE)),
         ),
-        child: Text(widget.formatCurrency(v), style: AppStyle.priceText.copyWith(fontSize: 14, color: AppStyle.textMain)),
+        child: Text(
+          widget.formatCurrency(v),
+          style: AppStyle.priceText.copyWith(
+            fontSize: 14,
+            color: AppStyle.textMain,
+          ),
+        ),
       ),
     );
   }
@@ -348,11 +474,17 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
 class CurrencyInputFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     if (newValue.text.isEmpty) return newValue.copyWith(text: '');
     double value = double.parse(newValue.text.replaceAll('.', ''));
     final formatter = NumberFormat.decimalPattern('id');
     String newText = formatter.format(value);
-    return newValue.copyWith(text: newText, selection: TextSelection.collapsed(offset: newText.length));
+    return newValue.copyWith(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
   }
 }

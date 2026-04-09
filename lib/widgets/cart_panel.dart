@@ -1,28 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/order_model.dart';
+import '../style.dart'; 
 import 'checkout_dialog.dart';
 
 class CartPanel extends StatefulWidget {
-  // 1. UPDATE TIPE DATA CART MENJADI MODEL ORDERITEM
   final Map<int, OrderItem> cart;
-  
-  // 2. UPDATE FUNGSI AGAR MENERIMA MODEL DAN TIPE DATA YANG BENAR
-  final Function(OrderItem) onAdd;
-  final Function(int) onRemove;
-  final Function(int) onDelete;
-  final String Function(double) formatCurrency; // Update int menjadi double
-  
-  // 3. TAMBAHAN VARIABEL YANG DIBUTUHKAN OLEH CHECKOUT DIALOG
   final String cashierName;
+  final String Function(double) formatCurrency;
+  final Function(OrderItem) onIncrease;
+  final Function(int) onDecrease;
+  final Function(int) onDelete;
+  final Function(Map<String, dynamic>) onCheckoutSuccess; 
 
   const CartPanel({
     super.key,
     required this.cart,
-    required this.onAdd,
-    required this.onRemove,
-    required this.onDelete,
-    required this.formatCurrency,
     required this.cashierName,
+    required this.formatCurrency,
+    required this.onIncrease,
+    required this.onDecrease,
+    required this.onDelete,
+    required this.onCheckoutSuccess,
   });
 
   @override
@@ -31,179 +30,205 @@ class CartPanel extends StatefulWidget {
 
 class _CartPanelState extends State<CartPanel> {
   final TextEditingController _tableController = TextEditingController();
-  // Generate Order ID sederhana
-  final String _orderId = "ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}";
+  String _currentTime = "";
+  String _currentDate = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _updateTime();
+  }
+
+  void _updateTime() {
+    final now = DateTime.now();
+    setState(() {
+      _currentDate = DateFormat('dd MMM yyyy').format(now);
+      _currentTime = DateFormat('HH:mm').format(now);
+    });
+  }
+
+  @override
+  void dispose() {
+    _tableController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // 4. PERHITUNGAN TOTAL MENGGUNAKAN GETTER MODEL (subtotal)
     double total = widget.cart.values.fold(0, (sum, item) => sum + item.subtotal);
 
     return Container(
-      width: 400,
-      padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
+      width: 350,
+      // 1. PERBAIKAN: Menambahkan margin agar tidak mepet dengan bezel layar
+      margin: const EdgeInsets.only(top: 20, right: 20, bottom: 20, left: 10),
+      decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(left: BorderSide(color: Color(0xFFEEEEEE))),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15)],
       ),
       child: Column(
         children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _orderId,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Poppins'),
-              ),
-              const Icon(Icons.receipt_long, color: Colors.blue),
-            ],
-          ),
-          const SizedBox(height: 20),
-          
-          // Field Meja
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FA),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFEEEEEE)),
-            ),
-            child: Row(
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.table_restaurant, size: 16, color: Colors.grey),
-                const SizedBox(width: 8),
-                const Text("Table No : ", style: TextStyle(fontSize: 12, fontFamily: 'Poppins')),
-                Expanded(
-                  child: TextField(
-                    controller: _tableController,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'JetBrains'),
-                    decoration: const InputDecoration(
-                      hintText: "...",
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("ORD-${DateFormat('yyyyMMdd-HHmm').format(DateTime.now())}", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppStyle.primaryBlue)),
+                    // 2. PERBAIKAN: Ikon Print dihapus dari sini
+                  ],
                 ),
+                const SizedBox(height: 10),
+                Text("Cashier : ${widget.cashierName}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text("$_currentDate, $_currentTime", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 15),
+                _buildTableInput(), 
               ],
             ),
           ),
-          const SizedBox(height: 15),
-
-          // List Pesanan
+          const Divider(height: 1),
           Expanded(
-            child: widget.cart.isEmpty
-                ? const Center(
-                    child: Text(
-                      "Keranjang Masih Kosong",
-                      style: TextStyle(color: Colors.grey, fontFamily: 'Poppins'),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: widget.cart.length,
-                    itemBuilder: (context, index) {
-                      int productId = widget.cart.keys.elementAt(index);
-                      OrderItem item = widget.cart[productId]!;
-                      return _itemCart(productId, item);
-                    },
-                  ),
+            child: ListView.builder(
+              itemCount: widget.cart.length,
+              padding: const EdgeInsets.all(15),
+              itemBuilder: (context, index) {
+                int id = widget.cart.keys.elementAt(index);
+                return _buildCartItem(id, widget.cart[id]!);
+              },
+            ),
           ),
-          const Divider(),
-          
-          // Total & Button Checkout
+          _buildFooter(total),
+        ],
+      ),
+    );
+  }
+
+  // 3. PERBAIKAN: Membuat input tabel lebih kecil dan proporsional
+  Widget _buildTableInput() {
+    return Container(
+      height: 45, // Menentukan tinggi yang tetap agar lebih proporsional
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA), 
+        borderRadius: BorderRadius.circular(10)
+      ),
+      alignment: Alignment.center, // Memastikan textfield berada di tengah secara vertikal
+      child: TextField(
+        controller: _tableController,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        decoration: const InputDecoration(
+          hintText: "Table No : ...",
+          hintStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.normal, color: Colors.grey),
+          border: InputBorder.none, 
+          isDense: true, // Mengurangi padding bawaan TextField
+          contentPadding: EdgeInsets.zero,
+          icon: Icon(Icons.table_bar, size: 18, color: Colors.grey), // Ukuran icon sedikit dikecilkan
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCartItem(int id, OrderItem item) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "Total",
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontFamily: 'Poppins'),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(widget.formatCurrency(item.unitPrice), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  ],
+                ),
               ),
-              Text(
-                widget.formatCurrency(total),
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, fontFamily: 'JetBrains', color: Colors.blue),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => widget.onDecrease(id),
+                    child: Container(decoration: BoxDecoration(color: const Color(0xFFE8F0FE), borderRadius: BorderRadius.circular(5)), child: const Icon(Icons.remove, size: 18, color: AppStyle.primaryBlue)),
+                  ),
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text("${item.quantity}", style: const TextStyle(fontWeight: FontWeight.bold))),
+                  GestureDetector(
+                    onTap: () => widget.onIncrease(item),
+                    child: Container(decoration: BoxDecoration(color: AppStyle.primaryBlue, borderRadius: BorderRadius.circular(5)), child: const Icon(Icons.add, size: 18, color: Colors.white)),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 55,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => item.notes = v,
+                  style: const TextStyle(fontSize: 11),
+                  decoration: InputDecoration(
+                    hintText: "Notes",
+                    filled: true,
+                    fillColor: const Color(0xFFF8F9FA),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  ),
+                ),
               ),
-              onPressed: widget.cart.isEmpty
-                  ? null
-                  : () {
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (context) => CheckoutDialog(
-                          cart: widget.cart,
-                          totalAmount: total,
-                          orderId: _orderId,
-                          tableNumber: _tableController.text,
-                          cashierName: widget.cashierName,
-                          formatCurrency: widget.formatCurrency,
-                        ),
-                      );
-                    },
-              child: const Text(
-                "Checkout",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Poppins'),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => widget.onDelete(id),
+                child: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
               ),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // 5. UPDATE WIDGET ITEM MENGGUNAKAN MODEL
-  Widget _itemCart(int productId, OrderItem item) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildFooter(double total) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFEEEEEE)))),
+      child: Column(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.itemName,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Poppins'),
-                ),
-                Text(
-                  widget.formatCurrency(item.unitPrice),
-                  style: const TextStyle(color: Colors.grey, fontSize: 11, fontFamily: 'JetBrains'),
-                ),
-              ],
-            ),
-          ),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Tombol Minus
-              GestureDetector(
-                onTap: () => widget.onRemove(productId),
-                child: const Icon(Icons.remove_circle_outline, color: Colors.blue, size: 22),
-              ),
-              // Jumlah Barang
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  "${item.quantity}",
-                  style: const TextStyle(fontFamily: 'JetBrains', fontSize: 14, fontWeight: FontWeight.bold),
-                ),
-              ),
-              // Tombol Plus
-              GestureDetector(
-                onTap: () => widget.onAdd(item),
-                child: const Icon(Icons.add_circle_outline, color: Colors.blue, size: 22),
-              ),
+              const Text("Total", style: TextStyle(color: Colors.grey)),
+              Text(widget.formatCurrency(total), style: AppStyle.priceText.copyWith(fontSize: 22, color: AppStyle.primaryBlue)),
             ],
+          ),
+          const SizedBox(height: 15),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppStyle.primaryBlue, 
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              onPressed: widget.cart.isEmpty ? null : () async {
+                final result = await showDialog<Map<String, dynamic>>(
+                  context: context,
+                  builder: (context) => CheckoutDialog(
+                    cart: widget.cart,
+                    totalAmount: total,
+                    orderId: "ORD-${DateFormat('yyyyMMdd-HHmm').format(DateTime.now())}",
+                    tableNumber: _tableController.text,
+                    cashierName: widget.cashierName,
+                    formatCurrency: widget.formatCurrency,
+                  ),
+                );
+                if (result != null) widget.onCheckoutSuccess(result);
+              },
+              child: const Text("Checkout", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
           )
         ],
       ),

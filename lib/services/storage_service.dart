@@ -49,4 +49,11 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
   }
+
+  // Tambahkan fungsi ini jika belum ada
+  static Future<String> getOutletName() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Jika tidak ada di storage, default-nya 'Aranus Resto & Bar'
+    return prefs.getString('outlet_name') ?? "Aranus PoS R&B"; 
+  }
 }

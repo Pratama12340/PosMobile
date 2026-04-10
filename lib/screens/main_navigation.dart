@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'login_screen.dart';
 import 'home_screen.dart';
 import 'history_screen.dart';
 import 'rekap_screen.dart';
@@ -19,8 +20,12 @@ class MainNavigationScaffold extends StatefulWidget {
 class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   bool _isSidebarVisible = false;
+  
+  // Variabel untuk data profil & outlet
   String _cashierName = "Loading...";
-  String _outletName = "Loading..."; // Untuk Nama Outlet Otomatis
+  String _outletName = "Loading...";
+  String _profilePhoto = "";
+  String _userRole = "Cashier";
   
   final TextEditingController _globalSearchController = TextEditingController();
 
@@ -40,13 +45,21 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
+  // Mengambil data profil dari StorageService
   Future<void> _loadInitialData() async {
     final name = await StorageService.getCashierName();
     final outlet = await StorageService.getOutletName();
-    setState(() {
-      _cashierName = name;
-      _outletName = outlet;
-    });
+    final photo = await StorageService.getProfilePhoto();
+    final role = await StorageService.getUserRole();
+    
+    if (mounted) {
+      setState(() {
+        _cashierName = name;
+        _outletName = outlet;
+        _profilePhoto = photo;
+        _userRole = role;
+      });
+    }
   }
 
   @override
@@ -59,18 +72,28 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text("Konfirmasi Keluar", style: AppStyle.titleText.copyWith(fontSize: 18)),
-        content: Text("Apakah Anda yakin ingin keluar dari sesi kasir?", style: AppStyle.subTitleText.copyWith(fontSize: 14)),
+        content: const Text("Apakah Anda yakin ingin keluar dari sesi kasir?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
+          TextButton(
+            onPressed: () => Navigator.pop(context), 
+            child: const Text("Batal"),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppStyle.errorRed),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppStyle.errorRed,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+            ),
             onPressed: () async {
+              // Menghapus sesi kasir (ID Outlet tetap aman)
               await StorageService.logoutKasir();
+              
               if (context.mounted) {
+                // Kembali ke halaman Login PIN
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(builder: (context) => const OutletSelectionScreen()),
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
                   (route) => false,
                 );
               }
@@ -99,10 +122,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       index: _currentIndex,
                       children: [
                         HomeScreen(searchController: _globalSearchController),
-                        const Center(child: Text("Shift Screen")), // Indeks 1: Shift
-                        const RekapScreen(),                       // Indeks 2: Rekap
-                        const HistoryScreenContent(),              // Indeks 3: History
-                        const SettingScreen(),                     // Indeks 4: Setting
+                        const Center(child: Text("Shift Screen")), 
+                        const RekapScreen(),                       
+                        const HistoryScreenContent(),              
+                        const SettingScreen(),                     
                       ],
                     ),
                   ),
@@ -115,7 +138,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
- Widget _buildTopBar() {
+  Widget _buildTopBar() {
     return Container(
       height: 85,
       padding: const EdgeInsets.symmetric(horizontal: 25),
@@ -164,26 +187,29 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
 
           const Spacer(flex: 1),
 
-          // --- KANAN: Profil Karyawan (Foto di Kiri Tulisan) ---
+          // --- KANAN: Profil Karyawan (Foto & Info) ---
           Row(
             children: [
-              // 1. Foto Profil sekarang di Kiri
+              // CircleAvatar Menampilkan Foto Karyawan
               CircleAvatar(
-                radius: 22,
+                radius: 24,
                 backgroundColor: AppStyle.primaryBlue.withOpacity(0.1),
-                child: const Icon(Icons.person, color: AppStyle.primaryBlue, size: 26),
+                backgroundImage: _profilePhoto.isNotEmpty 
+                    ? NetworkImage("https://api.etres.my.id/storage/$_profilePhoto")
+                    : null,
+                child: _profilePhoto.isEmpty 
+                    ? const Icon(Icons.person, color: AppStyle.primaryBlue, size: 28)
+                    : null,
               ),
-              const SizedBox(width: 15), // Jarak antara foto dan teks
-              
-              // 2. Tulisan Karyawan sekarang di Kanan
+              const SizedBox(width: 15),
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start, // Rata kiri agar rapi
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(_cashierName, 
                     style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const Text("Cashier", 
-                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(_userRole, 
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ],
@@ -196,7 +222,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   Widget _buildSidebar() {
     return Container(
       width: 240,
-      color: AppStyle.white,
+      decoration: BoxDecoration(
+        color: AppStyle.white,
+        border: Border(right: BorderSide(color: Colors.grey.shade100))
+      ),
       child: Column(
         children: [
           const SizedBox(height: 20),
@@ -233,7 +262,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         tileColor: isActive ? AppStyle.primaryBlue.withOpacity(0.1) : Colors.transparent,
         leading: Icon(icon, color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textGrey)),
-        title: Text(title, style: AppStyle.menuText.copyWith(color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textMain), fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
+        title: Text(title, style: AppStyle.menuText.copyWith(
+          color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textMain), 
+          fontWeight: isActive ? FontWeight.bold : FontWeight.normal
+        )),
       ),
     );
   }

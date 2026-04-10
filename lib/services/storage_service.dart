@@ -1,28 +1,26 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StorageService {
-  // Key untuk penyimpanan
+  // --- KUMPULAN KEY (Agar rapi dan tidak typo) ---
   static const String _keyToken = 'token';
   static const String _keyOutletId = 'outlet_id';
   static const String _keyCashierName = 'cashier_name';
   static const String _keyOutletName = 'outlet_name';
+  static const String _keyUserRole = 'user_role';
+  static const String _keyProfilePhoto = 'profile_photo';
 
-  // --- 1. FUNGSI TOKEN (PENTING UNTUK API) ---
-  
-  // Simpan Token
+  // --- 1. FUNGSI TOKEN ---
   static Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyToken, token);
   }
 
-  // Ambil Token (Diperbaiki agar tidak return null)
   static Future<String> getToken() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyToken) ?? ''; // Kembalikan string kosong jika tidak ada
+    return prefs.getString(_keyToken) ?? '';
   }
 
-  // --- 2. FUNGSI OUTLET ID ---
-
+  // --- 2. FUNGSI OUTLET DATA (Tetap Ada Saat Logout) ---
   static Future<void> saveOutletId(int id) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyOutletId, id);
@@ -33,8 +31,19 @@ class StorageService {
     return prefs.getInt(_keyOutletId);
   }
 
-  // --- 3. FUNGSI NAMA KASIR ---
+  static Future<void> saveOutletName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyOutletName, name);
+  }
 
+  static Future<String> getOutletName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyOutletName) ?? "Aranus PoS R&B";
+  }
+
+  // --- 3. FUNGSI DATA KARYAWAN (Dihapus Saat Logout) ---
+  
+  // Nama Kasir
   static Future<void> saveCashierName(String name) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyCashierName, name);
@@ -45,28 +54,39 @@ class StorageService {
     return prefs.getString(_keyCashierName) ?? "Cashier";
   }
 
-  // --- 4. FUNGSI NAMA OUTLET (UNTUK STRUK) ---
-
-  // Tambahan fungsi untuk menyimpan nama outlet dari API (jika ada)
-  static Future<void> saveOutletName(String name) async {
+  // Role User
+  static Future<void> saveUserRole(String role) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyOutletName, name);
+    await prefs.setString(_keyUserRole, role);
   }
 
-  static Future<String> getOutletName() async {
+  static Future<String> getUserRole() async {
     final prefs = await SharedPreferences.getInstance();
-    // Jika tidak ada di storage, default-nya 'Aranus PoS R&B'
-    return prefs.getString(_keyOutletName) ?? "Aranus PoS R&B"; 
+    return prefs.getString(_keyUserRole) ?? "Cashier";
   }
 
-  // --- 5. LOGOUT (HAPUS SESI KASIR SAJA, OUTLET TETAP AMAN) ---
+  // Foto Profil (HANYA SATU FUNGSI)
+  static Future<void> saveProfilePhoto(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyProfilePhoto, url);
+  }
+
+  static Future<String> getProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyProfilePhoto) ?? "";
+  }
+
+  // --- 4. PROSES LOGOUT KASIR ---
   static Future<void> logoutKasir() async {
     final prefs = await SharedPreferences.getInstance();
-    
-    // HANYA menghapus token akses dan nama kasir yang sedang shift
+
+    // Menghapus SEMUA data yang berkaitan dengan personil/karyawan
     await prefs.remove(_keyToken);
     await prefs.remove(_keyCashierName);
-    
-    // _keyOutletId dan _keyOutletName tetap aman di dalam memori HP
+    await prefs.remove(_keyUserRole);
+    await prefs.remove(_keyProfilePhoto);
+
+    // Data Outlet ID & Name TIDAK DIHAPUS agar HP tetap terkunci ke cabang tsb
+    print("Logout Berhasil: Sesi karyawan dibersihkan, Identitas Outlet dipertahankan.");
   }
 }

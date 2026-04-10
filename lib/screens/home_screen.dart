@@ -48,12 +48,21 @@ class _HomeScreenState extends State<HomeScreen> {
           _allProducts = results[1] as List<Product>;
           _isLoading = false;
         });
+
+        // 👇 TAMBAHKAN LOG INI UNTUK MENGECEK JUMLAH DATA
+        print("================ DATA OUTLET ================");
+        print("TOTAL KATEGORI TERBACA : ${_categories.length}");
+        print("TOTAL PRODUK TERBACA   : ${_allProducts.length}");
+        print("=============================================");
+        
         _applyFilters();
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  
 
   void _applyFilters() {
     String query = widget.searchController.text.toLowerCase();

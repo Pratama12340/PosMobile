@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'storage_service.dart';
-import '../models/product_models.dart'; // Import Model Product
-import '../models/order_model.dart';   // Import Model Order
+import '../models/product_models.dart'; 
+import '../models/order_model.dart';   
 
 class ApiService {
   static const String baseUrl = 'https://api.etres.my.id/api/v1';
 
-  // --- 1. LOGIN PIN ---
+  // --- 1. LOGIN PIN (DENGAN FETCH PROFIL) ---
   static Future<Map<String, dynamic>> loginPin(String pin, int outletId) async {
     try {
       final response = await http.post(
@@ -22,12 +22,25 @@ class ApiService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        // Simpan data penting ke Storage
-        final token = data['token'];
-        final name = data['user']['name'];
-        await StorageService.saveToken(token);
-        await StorageService.saveCashierName(name);
+        // Ambil objek user agar lebih rapi
+        final user = data['user']; 
+        
+        // --- SIMPAN KE STORAGE ---
+        await StorageService.saveToken(data['token']);
+        await StorageService.saveCashierName(user['name']);
         await StorageService.saveOutletId(outletId);
+        
+        // Simpan Foto Profil (Jika ada di database Laravel-mu)
+        // Gunakan .toString() atau ?? "" untuk menghindari error null
+        if (user['image'] != null) {
+          await StorageService.saveProfilePhoto(user['image'].toString());
+        } else {
+          await StorageService.saveProfilePhoto(""); // Kosongkan jika tidak ada
+        }
+
+        // Simpan Role (Misal: Kasir, Admin, atau Manager)
+        final role = user['role'] ?? "Cashier";
+        await StorageService.saveUserRole(role.toString());
 
         return {'success': true, 'data': data};
       } else {
@@ -38,16 +51,15 @@ class ApiService {
     }
   }
 
-  // --- 2. GET CATEGORIES (PER OUTLET) ---
+  // --- 2. GET CATEGORIES (FIXED PER PAGE 100) ---
   static Future<List<dynamic>> getCategories() async {
     try {
       final token = await StorageService.getToken();
-      // 👇 1. Ambil ID Outlet dari penyimpanan HP kasir
       final int? outletId = await StorageService.getOutletId(); 
 
-      // 👇 2. Tambahkan ?outlet_id= ke link API
+      // TAMBAHKAN &per_page=100 agar Laravel mengirim semua kategori sekaligus
       final response = await http.get(
-        Uri.parse('$baseUrl/categories?outlet_id=$outletId'), 
+        Uri.parse('$baseUrl/categories?outlet_id=$outletId&per_page=100'), 
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
@@ -57,6 +69,7 @@ class ApiService {
       final result = jsonDecode(response.body);
 
       if (result['data'] != null) {
+        // Logika fleksibel: Bisa baca list langsung (->get()) atau terbungkus (->paginate())
         if (result['data'] is List) {
           return result['data'];
         } else if (result['data']['data'] is List) {
@@ -70,21 +83,23 @@ class ApiService {
     }
   }
 
-  // --- 3. GET PRODUCTS (PER OUTLET) ---
+  // --- 3. GET PRODUCTS (FIXED PER PAGE 100) ---
   static Future<List<Product>> getProducts() async {
     try {
       final token = await StorageService.getToken();
-      // 👇 1. Ambil ID Outlet dari penyimpanan HP kasir
       final int? outletId = await StorageService.getOutletId();
 
-      // 👇 2. Tambahkan ?outlet_id= ke link API
+      // Tambahkan per_page=100 untuk mengambil semua menu outlet sekaligus
       final response = await http.get(
-        Uri.parse('$baseUrl/products?outlet_id=$outletId'),
+        Uri.parse('$baseUrl/products?outlet_id=$outletId&per_page=100'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
+
+      // 👇 TAMBAHKAN BARIS INI UNTUK MENGETES
+      print("HASIL MENTAH DARI SERVER: ${response.body}");
 
       final result = jsonDecode(response.body);
 
@@ -99,7 +114,6 @@ class ApiService {
 
         return productList.map((json) => Product.fromJson(json)).toList();
       } else {
-        print("Struktur API tidak sesuai atau data kosong");
         return [];
       }
     } catch (e) {
@@ -108,47 +122,15 @@ class ApiService {
     }
   }
 
-  // --- GET ALL OUTLETS ---
-  static Future<List<dynamic>> getOutlets() async {
-    try {
-      final response = await http.get(
-        // Pastikan endpoint '/outlets' ini sudah kamu buat di backend Laravel-mu
-        Uri.parse('$baseUrl/outlets'), 
-        headers: {
-          'Accept': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        
-        // Menangani format "data" dari Laravel dengan aman
-        if (result['data'] != null) {
-          if (result['data'] is List) {
-            return result['data'];
-          } else if (result['data']['data'] is List) {
-            return result['data']['data'];
-          }
-        }
-        return [];
-      } else {
-        print("Error Ambil Outlet: ${response.statusCode}");
-        return [];
-      }
-    } catch (e) {
-      print("Exception Ambil Outlet: $e");
-      return [];
-    }
-  }
-
-  // --- 4. FETCH HISTORY (MENGGUNAKAN MODEL ORDER) ---
+  // --- 4. FETCH HISTORY (FIXED PER PAGE 100) ---
   static Future<List<Order>> fetchHistory() async {
     try {
       final token = await StorageService.getToken();
       final int? outletId = await StorageService.getOutletId();
       
+      // History juga ditambahkan per_page agar rekap transaksi yang muncul lebih lengkap
       final response = await http.get(
-        Uri.parse('$baseUrl/history?outlet_id=$outletId'),
+        Uri.parse('$baseUrl/history?outlet_id=$outletId&per_page=100'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
@@ -158,7 +140,6 @@ class ApiService {
       if (response.statusCode == 200) {
         final Map<String, dynamic> result = jsonDecode(response.body);
         
-        // PERBAIKAN: Menangani pagination juga di history jika ada
         List<dynamic> data = [];
         if (result['data'] != null) {
           if (result['data'] is List) {
@@ -168,7 +149,6 @@ class ApiService {
           }
         }
         
-        // MENGUBAH LIST JSON MENJADI LIST OBJEK ORDER
         return data.map((json) => Order.fromJson(json)).toList();
       }
       return [];
@@ -211,6 +191,27 @@ class ApiService {
       }
     } catch (e) {
       return {'success': false, 'message': 'Koneksi error: $e'};
+    }
+  }
+
+  // --- GET ALL OUTLETS (UNTUK LAYAR AWAL) ---
+  static Future<List<dynamic>> getOutlets() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/outlets'), 
+        headers: {'Accept': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        if (result['data'] != null) {
+          if (result['data'] is List) return result['data'];
+          if (result['data']['data'] is List) return result['data']['data'];
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
     }
   }
 }

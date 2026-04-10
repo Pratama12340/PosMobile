@@ -5,6 +5,8 @@ class Product {
   final int price;
   final String image;
   final String category; 
+  final int stock;
+
   Product({
     required this.id,
     required this.name,
@@ -12,6 +14,7 @@ class Product {
     required this.price,
     required this.image,
     required this.category,
+    required this.stock,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -25,6 +28,8 @@ class Product {
                  json['category'] ?? 
                  json['category_id'] ?? 
                  'Uncategorized').toString(),
+      // 👇 PERBAIKAN: Tambahkan baris ini untuk mengambil nilai stok dari JSON 👇
+      stock: json['stock'] != null ? int.tryParse(json['stock'].toString()) ?? 0 : 0,
     );
   }
 }

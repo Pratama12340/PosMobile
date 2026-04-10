@@ -38,39 +38,16 @@ class ApiService {
     }
   }
 
-  // --- 2. GET CATEGORIES ---
+  // --- 2. GET CATEGORIES (PER OUTLET) ---
   static Future<List<dynamic>> getCategories() async {
-  try {
-    final token = await StorageService.getToken();
-    final response = await http.get(
-      Uri.parse('$baseUrl/categories'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
-
-    final result = jsonDecode(response.body);
-
-    // PERBAIKAN: Masuk ke result['data']['data'] jika API pakai pagination
-    if (result['data'] != null) {
-      if (result['data'] is List) {
-        return result['data'];
-      } else if (result['data']['data'] is List) {
-        return result['data']['data'];
-      }
-    }
-    return [];
-  } catch (e) {
-    return [];
-  }
-}
-
- static Future<List<Product>> getProducts() async {
     try {
       final token = await StorageService.getToken();
+      // 👇 1. Ambil ID Outlet dari penyimpanan HP kasir
+      final int? outletId = await StorageService.getOutletId(); 
+
+      // 👇 2. Tambahkan ?outlet_id= ke link API
       final response = await http.get(
-        Uri.parse('$baseUrl/products'),
+        Uri.parse('$baseUrl/categories?outlet_id=$outletId'), 
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
@@ -79,10 +56,47 @@ class ApiService {
 
       final result = jsonDecode(response.body);
 
-      // PERBAIKAN: Masuk ke result['data']['data']
-      if (result['data'] != null && result['data']['data'] is List) {
-        List<dynamic> productList = result['data']['data'];
+      if (result['data'] != null) {
+        if (result['data'] is List) {
+          return result['data'];
+        } else if (result['data']['data'] is List) {
+          return result['data']['data'];
+        }
+      }
+      return [];
+    } catch (e) {
+      print("Error Categories: $e");
+      return [];
+    }
+  }
+
+  // --- 3. GET PRODUCTS (PER OUTLET) ---
+  static Future<List<Product>> getProducts() async {
+    try {
+      final token = await StorageService.getToken();
+      // 👇 1. Ambil ID Outlet dari penyimpanan HP kasir
+      final int? outletId = await StorageService.getOutletId();
+
+      // 👇 2. Tambahkan ?outlet_id= ke link API
+      final response = await http.get(
+        Uri.parse('$baseUrl/products?outlet_id=$outletId'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final result = jsonDecode(response.body);
+
+      if (result['data'] != null) {
+        List<dynamic> productList = [];
         
+        if (result['data'] is List) {
+          productList = result['data'];
+        } else if (result['data']['data'] is List) {
+          productList = result['data']['data'];
+        }
+
         return productList.map((json) => Product.fromJson(json)).toList();
       } else {
         print("Struktur API tidak sesuai atau data kosong");
@@ -94,8 +108,40 @@ class ApiService {
     }
   }
 
+  // --- GET ALL OUTLETS ---
+  static Future<List<dynamic>> getOutlets() async {
+    try {
+      final response = await http.get(
+        // Pastikan endpoint '/outlets' ini sudah kamu buat di backend Laravel-mu
+        Uri.parse('$baseUrl/outlets'), 
+        headers: {
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        
+        // Menangani format "data" dari Laravel dengan aman
+        if (result['data'] != null) {
+          if (result['data'] is List) {
+            return result['data'];
+          } else if (result['data']['data'] is List) {
+            return result['data']['data'];
+          }
+        }
+        return [];
+      } else {
+        print("Error Ambil Outlet: ${response.statusCode}");
+        return [];
+      }
+    } catch (e) {
+      print("Exception Ambil Outlet: $e");
+      return [];
+    }
+  }
+
   // --- 4. FETCH HISTORY (MENGGUNAKAN MODEL ORDER) ---
-  // Perbaikan: Sekarang mengembalikan List<Order> agar sinkron dengan HistoryScreen
   static Future<List<Order>> fetchHistory() async {
     try {
       final token = await StorageService.getToken();
@@ -111,7 +157,16 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> result = jsonDecode(response.body);
-        List<dynamic> data = result['data'] ?? [];
+        
+        // PERBAIKAN: Menangani pagination juga di history jika ada
+        List<dynamic> data = [];
+        if (result['data'] != null) {
+          if (result['data'] is List) {
+            data = result['data'];
+          } else if (result['data']['data'] is List) {
+            data = result['data']['data'];
+          }
+        }
         
         // MENGUBAH LIST JSON MENJADI LIST OBJEK ORDER
         return data.map((json) => Order.fromJson(json)).toList();

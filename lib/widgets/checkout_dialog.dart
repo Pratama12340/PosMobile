@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/order_model.dart';
 import '../style.dart';
-import '../screens/SuccessPaymentPage.dart'; // Import halaman sukses
+import '../screens/SuccessPaymentPage.dart';
+import '../services/api_service.dart'; // Pastikan import ini benar
 
 class CheckoutDialog extends StatefulWidget {
   final Map<int, OrderItem> cart;
@@ -31,6 +32,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   String _paymentMethod = 'Cash';
   double _amountTendered = 0;
   final TextEditingController _manualTenderController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -42,7 +44,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   @override
   Widget build(BuildContext context) {
     double subTotal = widget.totalAmount;
-    double tax = 0; 
+    double tax = 0;
     double grandTotal = subTotal + tax;
     double change = _amountTendered - grandTotal;
 
@@ -58,6 +60,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
         child: Row(
           children: [
+            // SISI KIRI: PEMBAYARAN
             Expanded(
               flex: 5,
               child: Padding(
@@ -68,13 +71,14 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                     const SizedBox(height: 30),
                     Row(
                       children: [
-                        _payBtn('Cash', Icons.payments_outlined), const SizedBox(width: 15),
-                        _payBtn('Card', Icons.credit_card_outlined), const SizedBox(width: 15),
+                        _payBtn('Cash', Icons.payments_outlined),
+                        const SizedBox(width: 15),
+                        _payBtn('Card', Icons.credit_card_outlined),
+                        const SizedBox(width: 15),
                         _payBtn('Qris', Icons.qr_code_scanner),
                       ],
                     ),
                     const SizedBox(height: 50),
-
                     if (_paymentMethod == 'Cash') ...[
                       TextField(
                         controller: _manualTenderController,
@@ -83,15 +87,20 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         style: AppStyle.numPadText.copyWith(fontSize: 35, color: AppStyle.primaryBlue),
                         textAlign: TextAlign.center,
                         decoration: InputDecoration(
-                          hintText: "0", labelText: "Isi Uang Manual", prefixIcon: const Icon(Icons.edit_note, size: 30),
-                          filled: true, fillColor: const Color(0xFFF8F9FA),
+                          hintText: "0",
+                          labelText: "Isi Uang Manual",
+                          prefixIcon: const Icon(Icons.edit_note, size: 30),
+                          filled: true,
+                          fillColor: const Color(0xFFF8F9FA),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                         ),
                         onChanged: (v) => setState(() => _amountTendered = v.isEmpty ? 0 : double.tryParse(v.replaceAll('.', '')) ?? 0),
                       ),
                       const SizedBox(height: 30),
                       Wrap(
-                        spacing: 12, runSpacing: 12, alignment: WrapAlignment.center,
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.center,
                         children: [20000, 50000, 100000, 150000, 200000].map((v) => _quickBtn(v.toDouble())).toList(),
                       ),
                       const Spacer(),
@@ -108,6 +117,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               ),
             ),
 
+            // SISI KANAN: RINGKASAN STRUK
             Expanded(
               flex: 4,
               child: Container(
@@ -129,9 +139,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                     Row(children: [const Icon(Icons.person_outline_rounded, size: 14, color: Colors.black45), const SizedBox(width: 8), const Text("Cashier: ", style: TextStyle(fontSize: 12, color: Colors.black45)), Text(widget.cashierName, style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w600))]),
                     const SizedBox(height: 8),
                     Row(children: [const Icon(Icons.table_bar_rounded, size: 14, color: Colors.black45), const SizedBox(width: 8), const Text("Table: ", style: TextStyle(fontSize: 12, color: Colors.black45)), Text(widget.tableNumber.isEmpty ? '-' : widget.tableNumber, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppStyle.primaryBlue))]),
-                    
                     const Divider(height: 40, thickness: 1),
-                    
                     Expanded(
                       child: ListView.builder(
                         itemCount: widget.cart.length,
@@ -157,39 +165,78 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         },
                       ),
                     ),
-                    
                     const Divider(height: 30, thickness: 1),
-                    
-                    _rowInf("Sub Total", subTotal), _rowInf("Tax (0%)", tax), const SizedBox(height: 15),
+                    _rowInf("Sub Total", subTotal),
+                    _rowInf("Tax (0%)", tax),
+                    const SizedBox(height: 15),
                     Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Total", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)), Text(widget.formatCurrency(grandTotal), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppStyle.primaryBlue))]),
                     const SizedBox(height: 25),
 
+                    // TOMBOL PROSES PEMBAYARAN
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppStyle.primaryBlue, minimumSize: const Size(double.infinity, 60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                      onPressed: (_paymentMethod == 'Cash' && _amountTendered < grandTotal)
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppStyle.primaryBlue,
+                          minimumSize: const Size(double.infinity, 60),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                      onPressed: (_paymentMethod == 'Cash' && _amountTendered < grandTotal) || _isLoading
                           ? null
-                          : () {
-                              Navigator.pop(context, {'status': 'success', 'orderId': widget.orderId, 'total': grandTotal, 'paymentMethod': _paymentMethod, 'change': _paymentMethod == 'Cash' ? change : 0.0});
-                              
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => SuccessPaymentPage(
-                                    orderId: widget.orderId,
-                                    paymentMethod: _paymentMethod,
-                                    grandTotal: grandTotal,
-                                    amountPaid: _amountTendered,
-                                    change: change,
-                                    cart: widget.cart,
-                                    tableNumber: widget.tableNumber,
-                                    cashierName: widget.cashierName,
-                                    outletName: "ARANUS POS", 
-                                    formatCurrency: widget.formatCurrency,
-                                  ),
-                                ),
-                              );
+                          : () async {
+                              setState(() {
+                                _isLoading = true;
+                              });
+
+                              try {
+                                Map<String, dynamic> payloadData = {
+                                'table_id': widget.tableNumber.isEmpty ? '1' : widget.tableNumber, 
+                                'total_price': grandTotal,
+                                'payment_method': _paymentMethod, // Wajib ada
+                                'amount_paid': _amountTendered,   // Wajib ada
+                                'items': widget.cart.values.map((item) => {
+                                  'product_id': item.id,
+                                  'qty': item.quantity, 
+                                  'price': item.unitPrice,
+                                }).toList(),
+                              };
+
+                                final result = await ApiService.submitOrder(payloadData);
+
+                                if (result['success']) {
+                                  if (context.mounted) {
+                                    Navigator.pop(context, {'status': 'success'});
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => SuccessPaymentPage(
+                                          orderId: widget.orderId,
+                                          paymentMethod: _paymentMethod,
+                                          grandTotal: grandTotal,
+                                          amountPaid: _amountTendered,
+                                          change: change,
+                                          cart: widget.cart,
+                                          tableNumber: widget.tableNumber,
+                                          cashierName: widget.cashierName,
+                                          outletName: "ARANUS POS",
+                                          formatCurrency: widget.formatCurrency,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } else {
+                                  throw Exception(result['message']);
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text("Gagal Simpan: $e"), backgroundColor: Colors.red),
+                                  );
+                                }
+                              } finally {
+                                if (mounted) setState(() { _isLoading = false; });
+                              }
                             },
-                      child: const Text("PROSES PEMBAYARAN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: _isLoading
+                          ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                          : const Text("PROSES PEMBAYARAN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ],
                 ),
@@ -201,10 +248,54 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  Widget _rowInf(String l, double v) { return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(l, style: const TextStyle(color: Colors.black45, fontSize: 13)), Text(widget.formatCurrency(v), style: const TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.bold))])); }
-  Widget _payBtn(String l, IconData i) { bool isSel = _paymentMethod == l; return Expanded(child: GestureDetector(onTap: () => setState(() => _paymentMethod = l), child: Container(height: 100, decoration: BoxDecoration(color: isSel ? AppStyle.primaryBlue : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: isSel ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(i, color: isSel ? Colors.white : AppStyle.textMain, size: 32), const SizedBox(height: 8), Text(l, style: TextStyle(color: isSel ? Colors.white : AppStyle.textMain, fontWeight: isSel ? FontWeight.bold : FontWeight.normal))])))); }
-  Widget _quickBtn(double v) { return GestureDetector(onTap: () => setState(() { _amountTendered = v; _manualTenderController.text = NumberFormat.decimalPattern('id').format(v.toInt()); }), child: Container(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEEEEEE))), child: Text(widget.formatCurrency(v), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)))); }
-  Widget _buildChangeDisplay(double change) { return Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.shade100)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)), Text(widget.formatCurrency(change), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 22))])); }
+  Widget _rowInf(String l, double v) {
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(l, style: const TextStyle(color: Colors.black45, fontSize: 13)),
+          Text(widget.formatCurrency(v), style: const TextStyle(color: Colors.black87, fontSize: 13, fontWeight: FontWeight.bold))
+        ]));
+  }
+
+  Widget _payBtn(String l, IconData i) {
+    bool isSel = _paymentMethod == l;
+    return Expanded(
+        child: GestureDetector(
+            onTap: () => setState(() => _paymentMethod = l),
+            child: Container(
+                height: 100,
+                decoration: BoxDecoration(
+                    color: isSel ? AppStyle.primaryBlue : Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: isSel ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))),
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(i, color: isSel ? Colors.white : AppStyle.textMain, size: 32),
+                  const SizedBox(height: 8),
+                  Text(l, style: TextStyle(color: isSel ? Colors.white : AppStyle.textMain, fontWeight: isSel ? FontWeight.bold : FontWeight.normal))
+                ]))));
+  }
+
+  Widget _quickBtn(double v) {
+    return GestureDetector(
+        onTap: () => setState(() {
+              _amountTendered = v;
+              _manualTenderController.text = NumberFormat.decimalPattern('id').format(v.toInt());
+            }),
+        child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEEEEEE))),
+            child: Text(widget.formatCurrency(v), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold))));
+  }
+
+  Widget _buildChangeDisplay(double change) {
+    return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.shade100)),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(widget.formatCurrency(change), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 22))
+        ]));
+  }
 }
 
 class CurrencyInputFormatter extends TextInputFormatter {

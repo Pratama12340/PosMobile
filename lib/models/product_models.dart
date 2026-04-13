@@ -5,7 +5,7 @@ class Product {
   final int price;
   final String image;
   final String category; 
-  final int stock;
+  int stock;
 
   Product({
     required this.id,

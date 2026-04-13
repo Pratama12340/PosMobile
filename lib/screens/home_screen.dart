@@ -18,8 +18,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final Map<int, OrderItem> _cart = {};
-  
-  // Variabel untuk menyimpan draft keranjang
   final List<Map<int, OrderItem>> _drafts = [];
 
   List<Product> _allProducts = [];
@@ -52,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _allProducts = results[1] as List<Product>;
           _isLoading = false;
         });
-        
         _applyFilters();
       }
     } catch (e) {
@@ -72,7 +69,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Fungsi untuk menyimpan ke draft saat disilang di CartPanel
   void _saveToDraft() {
     setState(() {
       if (_cart.isNotEmpty) {
@@ -86,8 +82,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
-      // FloatingActionButton DIHAPUS, dipindah ke atas
-      
       body: _isLoading
         ? const Center(child: CircularProgressIndicator())
         : Row(
@@ -97,24 +91,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.all(20.0),
                   child: Column(
                     children: [
-                      // 👇 BARIS ATAS: KATEGORI & TOMBOL DRAFT
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // Kategori bisa di-scroll ke samping
                           Expanded(child: _buildCategoryChips()), 
-                          
                           const SizedBox(width: 15),
-                          
-                          // 👇 TOMBOL DROPDOWN DRAFT MUNCUL DI SUDUT KANAN ATAS JIKA ADA DRAFT
                           if (_cart.isEmpty && _drafts.isNotEmpty)
                             _buildDraftDropdownButton(),
                         ],
                       ),
-                      
                       const SizedBox(height: 15),
-                      
-                      // GRID PRODUK BAWAH (Tidak akan berubah ukurannya)
                       Expanded(
                         child: LayoutBuilder(builder: (context, constraints) {
                           double spacing = 18.0;
@@ -149,7 +135,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                   }),
                   onDelete: (id) => setState(() => _cart.remove(id)),
-                  onCheckoutSuccess: (res) => setState(() => _cart.clear()), 
+                  
+                  // FIX: LOGIKA UPDATE STOK SETELAH BAYAR
+                  onCheckoutSuccess: (res) {
+                    setState(() {
+                      _cart.forEach((productId, cartItem) {
+                        int productIndex = _allProducts.indexWhere((p) => p.id == productId);
+                        if (productIndex != -1) {
+                          _allProducts[productIndex].stock -= cartItem.quantity;
+                          if (_allProducts[productIndex].stock < 0) _allProducts[productIndex].stock = 0;
+                        }
+                      });
+                      _cart.clear();
+                      _applyFilters();
+                    });
+                  },
                   onSaveDraft: _saveToDraft, 
                 ),
             ],
@@ -157,69 +157,30 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 👇 FUNGSI BARU: MEMBUAT TOMBOL DRAFT DENGAN DROPDOWN KE BAWAH
+  // --- WIDGET HELPERS ---
+
   Widget _buildDraftDropdownButton() {
     return PopupMenuButton<int>(
-      tooltip: "Pilih Draft Keranjang",
-      offset: const Offset(0, 50), // Agar dropdown muncul di bawah tombol
+      tooltip: "Pilih Draft",
+      offset: const Offset(0, 50),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       onSelected: (int index) {
         setState(() {
-          _cart.addAll(_drafts[index]); // Pindahkan draft yang dipilih ke Cart aktif
-          _drafts.removeAt(index);      // Hapus dari list draft
+          _cart.addAll(_drafts[index]);
+          _drafts.removeAt(index);
         });
       },
-      itemBuilder: (context) {
-        // Tampilkan daftar pilihan draft ke bawah
-        return List.generate(_drafts.length, (index) {
-          int totalItems = _drafts[index].values.fold(0, (sum, item) => sum + item.quantity);
-          return PopupMenuItem<int>(
-            value: index,
-            child: Row(
-              children: [
-                const Icon(Icons.receipt_long_rounded, color: AppStyle.primaryBlue, size: 20),
-                const SizedBox(width: 10),
-                Text("Draft ${index + 1} ($totalItems Item)", style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-          );
-        });
-      },
+      itemBuilder: (context) => List.generate(_drafts.length, (index) {
+        int totalItems = _drafts[index].values.fold(0, (sum, item) => sum + item.quantity);
+        return PopupMenuItem<int>(
+          value: index,
+          child: Text("Draft ${index + 1} ($totalItems Item)"),
+        );
+      }),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppStyle.primaryBlue,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
-        ),
-        child: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 22),
-                Positioned(
-                  right: -6,
-                  top: -6,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppStyle.primaryBlue, width: 1.5),
-                    ),
-                    child: Text(
-                      '${_drafts.length}',
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
-          ],
-        ),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: AppStyle.primaryBlue, borderRadius: BorderRadius.circular(12)),
+        child: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
       ),
     );
   }
@@ -239,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildChip(String label) {
     bool isSelected = _selectedCategory == label;
     return Padding(
-      padding: const EdgeInsets.only(right: 12), // Jarak antar kategori sedikit dilebarkan
+      padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
         label: Text(label),
         selected: isSelected,
@@ -248,21 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         selectedColor: const Color(0xFFE8F0FE),
         backgroundColor: Colors.white,
-        
-        // 👇 FONT DIBESARKAN SEDIKIT (fontSize: 14)
-        labelStyle: TextStyle(
-          color: isSelected ? AppStyle.primaryBlue : AppStyle.textMain, 
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 14, 
-        ),
-        
-        // 👇 PADDING DALAM CHIP DITAMBAH AGAR LEBIH BESAR
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(50), 
-          side: BorderSide(color: isSelected ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         showCheckmark: false,
       ),
     );
@@ -270,116 +217,68 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildProductCard(Product p) {
     bool isOutOfStock = p.stock <= 0;
-    
-    // Logika gambar fleksibel
     String imageUrl = p.image.trim();
     if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
       imageUrl = "https://api.etres.my.id/storage/${imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl}";
-    } else if (imageUrl.isEmpty) {
-      imageUrl = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1000&auto=format&fit=crop";
     }
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white, 
-        borderRadius: BorderRadius.circular(25), 
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))]
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
             Positioned.fill(
               child: Image.network(
                 imageUrl, 
                 fit: BoxFit.cover,
-                errorBuilder: (c, e, s) => Container(color: Colors.grey.shade100, child: const Icon(Icons.fastfood, color: Colors.grey, size: 50)),
+                errorBuilder: (c, e, s) => const Icon(Icons.fastfood, size: 50, color: Colors.grey),
               ),
             ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.1),
-                      Colors.black.withOpacity(0.85),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            Positioned.fill(child: Container(color: Colors.black.withOpacity(0.3))),
             Positioned(
-              top: 15,
-              right: 15,
+              top: 10, right: 10,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isOutOfStock ? Colors.red : AppStyle.primaryBlue,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8)],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.inventory_2_rounded, color: Colors.white, size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      isOutOfStock ? "HABIS" : "STOK: ${p.stock}",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
-                    ),
-                  ],
-                ),
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(color: isOutOfStock ? Colors.red : AppStyle.primaryBlue, borderRadius: BorderRadius.circular(8)),
+                child: Text(isOutOfStock ? "HABIS" : "STOK: ${p.stock}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
               ),
             ),
             Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(18.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            p.name,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 20, shadows: [Shadow(color: Colors.black, blurRadius: 10)]),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            formatHarga(p.price.toDouble()),
-                            style: const TextStyle(color: Color.fromARGB(255, 66, 133, 244), fontWeight: FontWeight.w900, fontSize: 18, shadows: [Shadow(color: Colors.black, blurRadius: 10)]),
-                          ),
-                        ],
-                      ),
+              bottom: 15, left: 15, right: 15,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1),
+                        Text(formatHarga(p.price.toDouble()), style: const TextStyle(color: Colors.white)),
+                      ],
                     ),
-                    GestureDetector(
-                      onTap: isOutOfStock ? null : () => setState(() {
-                        if (_cart.containsKey(p.id)) _cart[p.id]!.quantity++;
-                        else _cart[p.id] = OrderItem(itemName: p.name, quantity: 1, unitPrice: p.price.toDouble());
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isOutOfStock ? Colors.grey : AppStyle.primaryBlue,
-                          shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: const Color.fromRGBO(66, 133, 244, 1).withOpacity(0.4), blurRadius: 10, spreadRadius: 1)],
-                        ),
-                        child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
-                      ),
+                  ),
+                  GestureDetector(
+                    onTap: isOutOfStock ? null : () => setState(() {
+                      if (_cart.containsKey(p.id)) {
+                        _cart[p.id]!.quantity++;
+                      } else {
+                        // FIX: ADDED ID PARAMETER
+                        _cart[p.id] = OrderItem(
+                          id: p.id,
+                          itemName: p.name, 
+                          quantity: 1, 
+                          unitPrice: p.price.toDouble()
+                        );
+                      }
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                      child: Icon(Icons.add, color: isOutOfStock ? Colors.grey : AppStyle.primaryBlue),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],

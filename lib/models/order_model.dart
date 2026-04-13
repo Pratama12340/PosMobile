@@ -3,12 +3,14 @@
 // ==========================================
 
 class OrderItem {
+  final int id;
   int quantity;          // DIHAPUS 'final' agar bisa ditambah/kurang
   final String itemName; // Tetap 'final' karena nama barang tidak berubah
   final double unitPrice;// Tetap 'final' karena harga satuan tetap
   String notes;          // DIHAPUS 'final' agar bisa diisi notes dari TextField
 
   OrderItem({
+    required this.id,
     required this.quantity, 
     required this.itemName, 
     required this.unitPrice, 
@@ -20,6 +22,7 @@ class OrderItem {
   // Fungsi untuk mengubah Map dari API menjadi Objek OrderItem
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     return OrderItem(
+      id: int.tryParse(json['product_id']?.toString() ?? json['id']?.toString() ?? '0') ?? 0,
       quantity: int.tryParse(json['quantity']?.toString() ?? '1') ?? 1,
       // Menangani berbagai kemungkinan key dari API (product_name atau name)
       itemName: json['product_name'] ?? json['name'] ?? 'Tanpa Nama',

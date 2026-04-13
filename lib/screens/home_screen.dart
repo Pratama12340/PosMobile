@@ -18,6 +18,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final Map<int, OrderItem> _cart = {};
+  
+  // Variabel untuk menyimpan draft keranjang
+  final List<Map<int, OrderItem>> _drafts = [];
+
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
   List<dynamic> _categories = [];
@@ -48,12 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _allProducts = results[1] as List<Product>;
           _isLoading = false;
         });
-
-        // 👇 TAMBAHKAN LOG INI UNTUK MENGECEK JUMLAH DATA
-        print("================ DATA OUTLET ================");
-        print("TOTAL KATEGORI TERBACA : ${_categories.length}");
-        print("TOTAL PRODUK TERBACA   : ${_allProducts.length}");
-        print("=============================================");
         
         _applyFilters();
       }
@@ -61,8 +59,6 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  
 
   void _applyFilters() {
     String query = widget.searchController.text.toLowerCase();
@@ -76,57 +72,155 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // Fungsi untuk menyimpan ke draft saat disilang di CartPanel
+  void _saveToDraft() {
+    setState(() {
+      if (_cart.isNotEmpty) {
+        _drafts.add(Map.from(_cart));
+        _cart.clear(); 
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
+      // FloatingActionButton DIHAPUS, dipindah ke atas
+      
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Row(
+        ? const Center(child: CircularProgressIndicator())
+        : Row(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    children: [
+                      // 👇 BARIS ATAS: KATEGORI & TOMBOL DRAFT
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Kategori bisa di-scroll ke samping
+                          Expanded(child: _buildCategoryChips()), 
+                          
+                          const SizedBox(width: 15),
+                          
+                          // 👇 TOMBOL DROPDOWN DRAFT MUNCUL DI SUDUT KANAN ATAS JIKA ADA DRAFT
+                          if (_cart.isEmpty && _drafts.isNotEmpty)
+                            _buildDraftDropdownButton(),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 15),
+                      
+                      // GRID PRODUK BAWAH (Tidak akan berubah ukurannya)
+                      Expanded(
+                        child: LayoutBuilder(builder: (context, constraints) {
+                          double spacing = 18.0;
+                          double itemHeight = (constraints.maxHeight - spacing) / 2;
+                          double itemWidth = (constraints.maxWidth - (spacing * 3)) / 4;
+                          return GridView.builder(
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 4,
+                              childAspectRatio: itemWidth / itemHeight,
+                              crossAxisSpacing: spacing,
+                              mainAxisSpacing: spacing,
+                            ),
+                            itemCount: _filteredProducts.length,
+                            itemBuilder: (context, index) => _buildProductCard(_filteredProducts[index]),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_cart.isNotEmpty)
+                CartPanel(
+                  cart: _cart,
+                  formatCurrency: formatHarga,
+                  onIncrease: (item) => setState(() => item.quantity++),
+                  onDecrease: (id) => setState(() {
+                    if (_cart[id]!.quantity > 1) {
+                      _cart[id]!.quantity--;
+                    } else {
+                      _cart.remove(id);
+                    }
+                  }),
+                  onDelete: (id) => setState(() => _cart.remove(id)),
+                  onCheckoutSuccess: (res) => setState(() => _cart.clear()), 
+                  onSaveDraft: _saveToDraft, 
+                ),
+            ],
+          ),
+    );
+  }
+
+  // 👇 FUNGSI BARU: MEMBUAT TOMBOL DRAFT DENGAN DROPDOWN KE BAWAH
+  Widget _buildDraftDropdownButton() {
+    return PopupMenuButton<int>(
+      tooltip: "Pilih Draft Keranjang",
+      offset: const Offset(0, 50), // Agar dropdown muncul di bawah tombol
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      onSelected: (int index) {
+        setState(() {
+          _cart.addAll(_drafts[index]); // Pindahkan draft yang dipilih ke Cart aktif
+          _drafts.removeAt(index);      // Hapus dari list draft
+        });
+      },
+      itemBuilder: (context) {
+        // Tampilkan daftar pilihan draft ke bawah
+        return List.generate(_drafts.length, (index) {
+          int totalItems = _drafts[index].values.fold(0, (sum, item) => sum + item.quantity);
+          return PopupMenuItem<int>(
+            value: index,
+            child: Row(
               children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      children: [
-                        _buildCategoryChips(),
-                        const SizedBox(height: 15),
-                        Expanded(
-                          child: LayoutBuilder(builder: (context, constraints) {
-                            double spacing = 18.0;
-                            double itemHeight = (constraints.maxHeight - spacing) / 2;
-                            double itemWidth = (constraints.maxWidth - (spacing * 3)) / 4;
-                            return GridView.builder(
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 4,
-                                childAspectRatio: itemWidth / itemHeight,
-                                crossAxisSpacing: spacing,
-                                mainAxisSpacing: spacing,
-                              ),
-                              itemCount: _filteredProducts.length,
-                              itemBuilder: (context, index) => _buildProductCard(_filteredProducts[index]),
-                            );
-                          }),
-                        ),
-                      ],
+                const Icon(Icons.receipt_long_rounded, color: AppStyle.primaryBlue, size: 20),
+                const SizedBox(width: 10),
+                Text("Draft ${index + 1} ($totalItems Item)", style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          );
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppStyle.primaryBlue,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+        ),
+        child: Row(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 22),
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppStyle.primaryBlue, width: 1.5),
+                    ),
+                    child: Text(
+                      '${_drafts.length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
-                if (_cart.isNotEmpty)
-                  CartPanel(
-                    cart: _cart,
-                    cashierName: "", 
-                    formatCurrency: formatHarga,
-                    onIncrease: (item) => setState(() => item.quantity++),
-                    onDecrease: (id) => setState(() {
-                      if (_cart[id]!.quantity > 1) _cart[id]!.quantity--;
-                      else _cart.remove(id);
-                    }),
-                    onDelete: (id) => setState(() => _cart.remove(id)),
-                    onCheckoutSuccess: (res) => setState(() => _cart.clear()), 
-                  ),
               ],
             ),
+            const SizedBox(width: 8),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
+          ],
+        ),
+      ),
     );
   }
 
@@ -145,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildChip(String label) {
     bool isSelected = _selectedCategory == label;
     return Padding(
-      padding: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.only(right: 12), // Jarak antar kategori sedikit dilebarkan
       child: ChoiceChip(
         label: Text(label),
         selected: isSelected,
@@ -154,8 +248,21 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         selectedColor: const Color(0xFFE8F0FE),
         backgroundColor: Colors.white,
-        labelStyle: TextStyle(color: isSelected ? AppStyle.primaryBlue : AppStyle.textMain, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50), side: BorderSide(color: isSelected ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))),
+        
+        // 👇 FONT DIBESARKAN SEDIKIT (fontSize: 14)
+        labelStyle: TextStyle(
+          color: isSelected ? AppStyle.primaryBlue : AppStyle.textMain, 
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          fontSize: 14, 
+        ),
+        
+        // 👇 PADDING DALAM CHIP DITAMBAH AGAR LEBIH BESAR
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(50), 
+          side: BorderSide(color: isSelected ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))
+        ),
         showCheckmark: false,
       ),
     );
@@ -182,7 +289,6 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(25),
         child: Stack(
           children: [
-            // 1. GAMBAR PRODUK (Full Card agar Proposional)
             Positioned.fill(
               child: Image.network(
                 imageUrl, 
@@ -190,8 +296,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 errorBuilder: (c, e, s) => Container(color: Colors.grey.shade100, child: const Icon(Icons.fastfood, color: Colors.grey, size: 50)),
               ),
             ),
-
-            // 2. GRADASI (Transparan ke Gelap)
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -202,14 +306,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       Colors.transparent,
                       Colors.transparent,
                       Colors.black.withOpacity(0.1),
-                      Colors.black.withOpacity(0.85), // Gelap di bawah
+                      Colors.black.withOpacity(0.85),
                     ],
                   ),
                 ),
               ),
             ),
-
-            // 3. LABEL STOK (Dibuat Lebih Terlihat & Tegas)
             Positioned(
               top: 15,
               right: 15,
@@ -233,8 +335,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-
-            // 4. INFO PRODUK (Nama & Harga di Atas Gradasi)
             Positioned(
               bottom: 0,
               left: 0,
@@ -263,8 +363,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    
-                    // TOMBOL TAMBAH (+)
                     GestureDetector(
                       onTap: isOutOfStock ? null : () => setState(() {
                         if (_cart.containsKey(p.id)) _cart[p.id]!.quantity++;

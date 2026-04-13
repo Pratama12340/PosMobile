@@ -1,12 +1,22 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'storage_service.dart';
-import 'package:flutter/foundation.dart'; // Tambahkan ini
+import 'package:flutter/foundation.dart'; 
 import '../models/product_models.dart'; 
-import '../models/order_model.dart';   
+import '../models/order_model.dart';    
 
 class ApiService {
   static const String baseUrl = 'https://api.etres.my.id/api/v1';
+
+  // Helper untuk mendapatkan header secara otomatis
+  static Future<Map<String, String>> _getHeaders() async {
+    final token = await StorageService.getToken();
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
 
   // --- 1. LOGIN PIN (DENGAN FETCH PROFIL) ---
   static Future<Map<String, dynamic>> loginPin(String pin, int outletId) async {
@@ -50,15 +60,12 @@ class ApiService {
   // --- 2. GET CATEGORIES ---
   static Future<List<dynamic>> getCategories() async {
     try {
-      final token = await StorageService.getToken();
+      final headers = await _getHeaders();
       final int? outletId = await StorageService.getOutletId(); 
 
       final response = await http.get(
         Uri.parse('$baseUrl/categories?outlet_id=$outletId&per_page=100'), 
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: headers,
       );
 
       final result = jsonDecode(response.body);
@@ -75,15 +82,12 @@ class ApiService {
   // --- 3. GET PRODUCTS ---
   static Future<List<Product>> getProducts() async {
     try {
-      final token = await StorageService.getToken();
+      final headers = await _getHeaders();
       final int? outletId = await StorageService.getOutletId();
 
       final response = await http.get(
         Uri.parse('$baseUrl/products?outlet_id=$outletId&per_page=100'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: headers,
       );
 
       final result = jsonDecode(response.body);
@@ -100,27 +104,18 @@ class ApiService {
   }
 
   // --- 4. SUBMIT ORDER & CHECKOUT ---
- static Future<Map<String, dynamic>> submitOrder(Map<String, dynamic> orderData) async {
+  static Future<Map<String, dynamic>> submitOrder(Map<String, dynamic> orderData) async {
     try {
-      final token = await StorageService.getToken();
+      final headers = await _getHeaders();
       final int? outletId = await StorageService.getOutletId();
 
       orderData['outlet_id'] = outletId;
 
-      // UBAH URL DI BAWAH INI:
-      // Dari '$baseUrl/orders' menjadi '$baseUrl/orders/checkout'
       final response = await http.post(
         Uri.parse('$baseUrl/orders/checkout'), 
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: headers,
         body: jsonEncode(orderData),
       );
-
-      print("DEBUG PAYLOAD: ${jsonEncode(orderData)}");
-      print("SERVER LOG: ${response.body}");
 
       final result = jsonDecode(response.body);
 
@@ -137,17 +132,60 @@ class ApiService {
     }
   }
 
-  // --- 5. UPDATE ITEM STATUS (KITCHEN ACTION) ---
+  // --- 5. API HISTORY TRANSACTIONS ---
+
+  // GET LIST RIWAYAT
+  static Future<List<Order>> fetchHistory() async {
+    try {
+      final headers = await _getHeaders();
+      final int? outletId = await StorageService.getOutletId();
+      
+      final response = await http.get(
+        Uri.parse('$baseUrl/history-transactions?outlet_id=$outletId&per_page=100'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> result = jsonDecode(response.body);
+        List<dynamic> data = result['data'] is List 
+            ? result['data'] 
+            : result['data']['data'] ?? [];
+        return data.map((json) => Order.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint("Error fetching history: $e");
+      return [];
+    }
+  }
+
+  // GET DETAIL RIWAYAT (Berdasarkan ID)
+  static Future<Order> fetchHistoryDetail(int id) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/history-transactions/$id'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        return Order.fromJson(result['data']);
+      } else {
+        throw Exception('Detail tidak ditemukan');
+      }
+    } catch (e) {
+      throw Exception('Error: $e');
+    }
+  }
+
+  // --- 6. UPDATE ITEM STATUS (KITCHEN ACTION) ---
   static Future<Map<String, dynamic>> updateItemStatus(int itemId, String status) async {
     try {
-      final token = await StorageService.getToken();
+      final headers = await _getHeaders();
       final response = await http.patch(
         Uri.parse('$baseUrl/order-items/$itemId/status'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: headers,
         body: jsonEncode({'status': status}),
       );
 
@@ -162,16 +200,13 @@ class ApiService {
     }
   }
 
-  // --- 6. GET STATIONS (STASIUN KERJA) ---
+  // --- 7. GET STATIONS ---
   static Future<List<dynamic>> getStations() async {
     try {
-      final token = await StorageService.getToken();
+      final headers = await _getHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/stations'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: headers,
       );
 
       final result = jsonDecode(response.body);
@@ -184,7 +219,7 @@ class ApiService {
     }
   }
 
-  // --- 7. GET ALL OUTLETS ---
+  // --- 8. GET ALL OUTLETS ---
   static Future<List<dynamic>> getOutlets() async {
     try {
       final response = await http.get(
@@ -200,38 +235,6 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      return [];
-    }
-  }
-
-  // --- 4. FETCH HISTORY (NON-AKTIF SEMENTARA) ---
-  static Future<List<Order>> fetchHistory() async {
-    try {
-      // Kita kembalikan list kosong secara langsung agar UI tidak error
-      // Anda bisa menghapus baris ini nanti jika API sudah siap di backend
-      return []; 
-
-      /* // Kode ini disembunyikan sampai backend siap
-      final token = await StorageService.getToken();
-      final int? outletId = await StorageService.getOutletId();
-      
-      final response = await http.get(
-        Uri.parse('$baseUrl/history?outlet_id=$outletId&per_page=100'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> result = jsonDecode(response.body);
-        List<dynamic> data = result['data'] is List ? result['data'] : result['data']['data'] ?? [];
-        return data.map((json) => Order.fromJson(json)).toList();
-      }
-      return [];
-      */
-    } catch (e) {
-      debugPrint("History is currently disabled or unreachable: $e");
       return [];
     }
   }

@@ -4,14 +4,14 @@ import '../services/api_service.dart';
 import '../models/order_model.dart';
 import '../style.dart';
 
-class HistoryScreenContent extends StatefulWidget {
-  const HistoryScreenContent({super.key});
+class HistoryScreen extends StatefulWidget {
+  const HistoryScreen({super.key});
 
   @override
-  State<HistoryScreenContent> createState() => _HistoryScreenContentState();
+  State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenContentState extends State<HistoryScreenContent> {
+class _HistoryScreenState extends State<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   final NumberFormat _formatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
   
@@ -25,44 +25,62 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
     _loadHistoryData();
   }
 
-  // REFRESH DATA
+  // --- LOGIKA API ---
   Future<void> _loadHistoryData() async {
     setState(() => _isLoading = true);
     try {
       final data = await ApiService.fetchHistory();
-      if (mounted) {
-        setState(() {
-          _allOrders = data;
-          _filteredOrders = data;
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _allOrders = data;
+        _filteredOrders = data;
+        _isLoading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Gagal memuat riwayat: $e"), backgroundColor: Colors.red),
-        );
-      }
+      setState(() => _isLoading = false);
+      _showErrorSnackBar("Gagal memuat riwayat: $e");
     }
   }
 
+  Future<void> _viewDetail(int id) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator(color: AppStyle.primaryBlue)),
+    );
+
+    try {
+      final detailOrder = await ApiService.fetchHistoryDetail(id);
+      Navigator.pop(context); 
+      _showReceiptDialog(detailOrder);
+    } catch (e) {
+      Navigator.pop(context); 
+      _showErrorSnackBar("Gagal memuat detail: $e");
+    }
+  }
+
+  // --- LOGIKA UI ---
   void _onSearchChanged(String query) {
     setState(() {
       _filteredOrders = _allOrders.where((order) {
         final orderNo = order.orderNo.toLowerCase();
         final cashier = order.cashierName.toLowerCase();
-        final searchLower = query.toLowerCase();
-        return orderNo.contains(searchLower) || cashier.contains(searchLower);
+        return orderNo.contains(query.toLowerCase()) || 
+               cashier.contains(query.toLowerCase());
       }).toList();
     });
   }
 
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AppStyle.errorRed),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppStyle.bgLightBlue,
-      child: Padding(
+    return Scaffold(
+      backgroundColor: AppStyle.bgLightBlue,
+      body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,21 +89,24 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
             const SizedBox(height: 20),
             
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadHistoryData,
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
-                  ),
-                  child: _isLoading 
-                      ? const Center(child: CircularProgressIndicator())
-                      : _filteredOrders.isEmpty
-                          ? _buildEmptyState()
-                          : _buildDataTable(),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppStyle.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02), 
+                      blurRadius: 10, 
+                      offset: const Offset(0, 4)
+                    )
+                  ],
                 ),
+                child: _isLoading 
+                    ? const Center(child: CircularProgressIndicator(color: AppStyle.primaryBlue))
+                    : _filteredOrders.isEmpty
+                        ? _buildEmptyState()
+                        : _buildDataTable(), // Memanggil fungsi tabel
               ),
             ),
           ],
@@ -105,6 +126,7 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
       child: TextField(
         controller: _searchController,
         onChanged: _onSearchChanged,
+        style: AppStyle.menuText,
         decoration: const InputDecoration(
           icon: Icon(Icons.search, color: AppStyle.primaryBlue),
           hintText: "Cari No. Pesanan atau Nama Kasir...",
@@ -115,58 +137,64 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
   }
 
   Widget _buildDataTable() {
-    return ListView( // Gunakan ListView agar bisa discroll jika data banyak
-      children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columnSpacing: 40,
-            horizontalMargin: 24,
-            headingRowColor: WidgetStateProperty.all(AppStyle.bgLightBlue.withOpacity(0.5)),
-            columns: [
-              _headerCell('TANGGAL & NO. ORDER'),
-              _headerCell('KASIR'),
-              _headerCell('MEJA'),
-              _headerCell('METODE'),
-              _headerCell('TOTAL'),
-              _headerCell('STATUS'),
-              _headerCell('AKSI'),
-            ],
-            rows: _filteredOrders.map((order) {
-              return DataRow(
-                cells: [
-                  DataCell(Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(order.orderNo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text(order.date, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                    ],
-                  )),
-                  DataCell(Text(order.cashierName)),
-                  DataCell(Text(order.tableNo.isEmpty ? "-" : order.tableNo)),
-                  DataCell(Text(order.paymentMethod)),
-                  DataCell(Text(_formatter.format(order.totalAmount), style: const TextStyle(fontWeight: FontWeight.bold, color: AppStyle.primaryBlue))),
-                  DataCell(_buildStatusBadge(order.status)),
-                  DataCell(
-                    IconButton(
-                      icon: const Icon(Icons.receipt_long, color: AppStyle.primaryBlue),
-                      onPressed: () => _showReceiptDialog(order),
-                      tooltip: "Detail Struk",
-                    ),
-                  ),
+    // LayoutBuilder ditambahkan di sini untuk mendapatkan variabel 'constraints'
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.vertical, // Scroll atas bawah
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal, // Scroll kiri kanan
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                columnSpacing: 30,
+                horizontalMargin: 24,
+                headingRowColor: WidgetStateProperty.all(AppStyle.bgLightBlue.withOpacity(0.5)),
+                columns: [
+                  _headerCell('TANGGAL & NO. ORDER'),
+                  _headerCell('KASIR'),
+                  _headerCell('MEJA'),
+                  _headerCell('METODE'),
+                  _headerCell('TOTAL'),
+                  _headerCell('STATUS'),
+                  _headerCell('AKSI'),
                 ],
-              );
-            }).toList(),
+                rows: _filteredOrders.map((order) {
+                  return DataRow(
+                    cells: [
+                      DataCell(Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(order.orderNo, style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold)),
+                          Text(order.date, style: AppStyle.subTitleText.copyWith(fontSize: 10)),
+                        ],
+                      )),
+                      DataCell(Text(order.cashierName, style: AppStyle.menuText)),
+                      DataCell(Text(order.tableNo, style: AppStyle.menuText)),
+                      DataCell(Text(order.paymentMethod, style: AppStyle.menuText)),
+                      DataCell(Text(_formatter.format(order.totalAmount), style: AppStyle.priceText.copyWith(fontSize: 14))),
+                      DataCell(_buildStatusBadge(order.status)),
+                      DataCell(
+                        TextButton(
+                          onPressed: () => _viewDetail(order.id),
+                          child: const Text('Detail struk', style: TextStyle(color: AppStyle.primaryBlue, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
   DataColumn _headerCell(String label) {
     return DataColumn(
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+      label: Text(label, style: AppStyle.subTitleText.copyWith(fontWeight: FontWeight.bold, color: AppStyle.textMain))
     );
   }
 
@@ -201,20 +229,22 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
   void _showReceiptDialog(Order order) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text("Detail Transaksi", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
-          ],
-        ),
-        content: SizedBox(
+        child: Container(
           width: 400,
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Detail Transaksi", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                ],
+              ),
+              const Divider(height: 30),
               _receiptInfoRow("No. Order", order.orderNo),
               _receiptInfoRow("Waktu", order.date),
               _receiptInfoRow("Kasir", order.cashierName),
@@ -251,31 +281,34 @@ class _HistoryScreenContentState extends State<HistoryScreenContent> {
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppStyle.primaryBlue)),
                 ],
               ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppStyle.primaryBlue, 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 16)
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: Text("Tutup", style: AppStyle.buttonText),
+                ),
+              )
             ],
           ),
         ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppStyle.primaryBlue),
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Tutup", style: TextStyle(color: Colors.white)),
-            ),
-          )
-        ],
       ),
     );
   }
 
   Widget _receiptInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),
     );

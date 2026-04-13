@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
-import 'history_screen.dart';
+import 'history_screen.dart'; // Pastikan file ini berisi 'class HistoryScreen'
 import 'rekap_screen.dart';
 import 'setting_screen.dart';
-import 'outlet_selection_screen.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
 import '../widgets/opening_cash_dialog.dart';
@@ -45,7 +44,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
-  // Mengambil data profil dari StorageService
   Future<void> _loadInitialData() async {
     final name = await StorageService.getCashierName();
     final outlet = await StorageService.getOutletName();
@@ -86,11 +84,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
             ),
             onPressed: () async {
-              // Menghapus sesi kasir (ID Outlet tetap aman)
               await StorageService.logoutKasir();
-              
               if (context.mounted) {
-                // Kembali ke halaman Login PIN
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -123,9 +118,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       children: [
                         HomeScreen(searchController: _globalSearchController),
                         const Center(child: Text("Shift Screen")), 
-                        const RekapScreen(),                       
-                        const HistoryScreenContent(),              
-                        const SettingScreen(),                     
+                        const RekapScreen(), 
+                        // PERBAIKAN DI SINI: Ganti HistoryScreenContent menjadi HistoryScreen
+                        const HistoryScreen(), 
+                        const SettingScreen(), 
                       ],
                     ),
                   ),
@@ -147,7 +143,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
           border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
       child: Row(
         children: [
-          // --- KIRI: Menu & Nama Outlet ---
           IconButton(
             icon: const Icon(Icons.menu, color: AppStyle.textMain, size: 30),
             onPressed: () => setState(() => _isSidebarVisible = !_isSidebarVisible),
@@ -161,10 +156,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               letterSpacing: 0.5
             ),
           ),
-
           const Spacer(flex: 1),
-
-          // --- TENGAH: Search Bar ---
           Expanded(
             flex: 6,
             child: Container(
@@ -184,13 +176,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               ),
             ),
           ),
-
           const Spacer(flex: 1),
-
-          // --- KANAN: Profil Karyawan (Foto & Info) ---
           Row(
             children: [
-              // CircleAvatar Menampilkan Foto Karyawan
               CircleAvatar(
                 radius: 24,
                 backgroundColor: AppStyle.primaryBlue.withOpacity(0.1),

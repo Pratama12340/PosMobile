@@ -8,6 +8,8 @@ class StorageService {
   static const String _keyOutletName = 'outlet_name';
   static const String _keyUserRole = 'user_role';
   static const String _keyProfilePhoto = 'profile_photo';
+  static const String _keyLoginTime = 'login_time';
+  static const String _keyOpeningCash = 'opening_cash';
 
   // --- 1. FUNGSI TOKEN ---
   static Future<void> saveToken(String token) async {
@@ -54,6 +56,16 @@ class StorageService {
     return prefs.getString(_keyCashierName) ?? "Cashier";
   }
 
+  static Future<void> saveLoginTime(String time) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLoginTime, time);
+  }
+
+  static Future<String?> getLoginTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyLoginTime);
+  }
+
   // Role User
   static Future<void> saveUserRole(String role) async {
     final prefs = await SharedPreferences.getInstance();
@@ -76,6 +88,16 @@ class StorageService {
     return prefs.getString(_keyProfilePhoto) ?? "";
   }
 
+  static Future<void> saveOpeningCash(int amount) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt(_keyOpeningCash, amount);
+}
+
+static Future<int> getOpeningCash() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getInt(_keyOpeningCash) ?? 0;
+}
+
   // --- 4. PROSES LOGOUT KASIR ---
   static Future<void> logoutKasir() async {
     final prefs = await SharedPreferences.getInstance();
@@ -85,6 +107,9 @@ class StorageService {
     await prefs.remove(_keyCashierName);
     await prefs.remove(_keyUserRole);
     await prefs.remove(_keyProfilePhoto);
+
+    await prefs.remove('opening_cash'); 
+    await prefs.remove('login_time');
 
     // Data Outlet ID & Name TIDAK DIHAPUS agar HP tetap terkunci ke cabang tsb
     print("Logout Berhasil: Sesi karyawan dibersihkan, Identitas Outlet dipertahankan.");

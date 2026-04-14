@@ -18,7 +18,7 @@ class ApiService {
     };
   }
 
-  // --- 1. LOGIN PIN (DENGAN FETCH PROFIL) ---
+  // --- 1. LOGIN PIN ---
   static Future<Map<String, dynamic>> loginPin(String pin, int outletId) async {
     try {
       final response = await http.post(
@@ -36,7 +36,7 @@ class ApiService {
         final user = data['user']; 
         
         await StorageService.saveToken(data['token']);
-        await StorageService.saveCashierName(user['name']);
+        await StorageService.saveCashierName(user['name'] ?? "Kasir");
         await StorageService.saveOutletId(outletId);
         
         if (user['image'] != null) {
@@ -94,7 +94,7 @@ class ApiService {
       if (result['data'] != null) {
         List<dynamic> productList = (result['data'] is List) 
             ? result['data'] 
-            : result['data']['data'];
+            : result['data']['data'] ?? [];
         return productList.map((json) => Product.fromJson(json)).toList();
       }
       return [];
@@ -147,9 +147,14 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> result = jsonDecode(response.body);
-        List<dynamic> data = result['data'] is List 
-            ? result['data'] 
-            : result['data']['data'] ?? [];
+        List<dynamic> data = [];
+        
+        if (result['data'] is List) {
+          data = result['data'];
+        } else if (result['data'] != null && result['data']['data'] is List) {
+          data = result['data']['data'];
+        }
+        
         return data.map((json) => Order.fromJson(json)).toList();
       }
       return [];
@@ -160,26 +165,32 @@ class ApiService {
   }
 
   // GET DETAIL RIWAYAT (Berdasarkan ID)
-  static Future<Order> fetchHistoryDetail(int id) async {
+  static Future<Order?> fetchHistoryDetail(int id) async {
     try {
       final headers = await _getHeaders();
+      // Perbaikan URL: Pastikan path sesuai dengan endpoint API detail history Anda
       final response = await http.get(
-        Uri.parse('$baseUrl/history-transactions/$id'),
-        headers: headers,
+        Uri.parse('$baseUrl/history-transactions/$id'), 
+        headers: headers
       );
 
       if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        return Order.fromJson(result['data']);
-      } else {
-        throw Exception('Detail tidak ditemukan');
+        final decoded = jsonDecode(response.body);
+        
+        // Cek apakah data dibungkus dalam key 'data' atau tidak
+        final dataToParse = decoded['data'] ?? decoded;
+        
+        if (dataToParse != null && dataToParse is Map<String, dynamic>) {
+          return Order.fromJson(dataToParse);
+        }
       }
     } catch (e) {
-      throw Exception('Error: $e');
+      debugPrint("Error API Detail: $e");
     }
+    return null;
   }
 
-  // --- 6. UPDATE ITEM STATUS (KITCHEN ACTION) ---
+  // --- 6. UPDATE ITEM STATUS ---
   static Future<Map<String, dynamic>> updateItemStatus(int itemId, String status) async {
     try {
       final headers = await _getHeaders();

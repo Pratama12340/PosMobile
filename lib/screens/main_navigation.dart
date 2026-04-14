@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
-import 'history_screen.dart'; // Pastikan file ini berisi 'class HistoryScreen'
+import 'history_screen.dart'; 
 import 'rekap_screen.dart';
 import 'setting_screen.dart';
 import '../style.dart';

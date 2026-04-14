@@ -4,7 +4,7 @@ import 'main_navigation.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
-import 'outlet_selection_screen.dart'; // 👇 Wajib di-import untuk fitur Auto-Kick
+import 'outlet_selection_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,14 +24,13 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _loadOutletData(); // Ambil nama cabang dari memori HP saat layar dibuka
+    _loadOutletData();
   }
 
   Future<void> _loadOutletData() async {
     final id = await StorageService.getOutletId();
     final name = await StorageService.getOutletName();
     
-    // 👇 FITUR AUTO-KICK DITAMBAHKAN DI SINI
     if (id == null || id == 0) {
       if (mounted) {
         Navigator.pushReplacement(
@@ -72,16 +71,23 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Login API menggunakan _outletId yang ada di HP
       final result = await ApiService.loginPin(_pin, _outletId);
 
       if (!mounted) return;
 
       if (result['success'] == true) {
+        // --- AWAL BAGIAN SINGKRONISASI ---
         String nameFromServer = result['data']['user']['name'] ?? "Cashier";
-        await StorageService.saveCashierName(nameFromServer);
         
-        // MAJU KE HOME, DAN MINTA INPUT KAS AWAL
+        // Mengambil waktu login saat ini
+        DateTime now = DateTime.now();
+        String loginTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+
+        // Menyimpan ke Storage
+        await StorageService.saveCashierName(nameFromServer);
+        await StorageService.saveLoginTime(loginTime); 
+        // --- AKHIR BAGIAN SINGKRONISASI ---
+        
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const MainNavigationScaffold(requireCashInput: true)),
@@ -135,7 +141,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text("Masukkan 6 digit PIN akses", style: AppStyle.subTitleText), 
                         const SizedBox(height: 15),
 
-                        // LABEL NAMA OUTLET
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
                           decoration: BoxDecoration(
@@ -183,7 +188,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- Fungsi Pin Dots & Num Pad biarkan sama seperti sebelumnya ---
   Widget _buildPinDots() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,

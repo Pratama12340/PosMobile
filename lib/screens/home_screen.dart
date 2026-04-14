@@ -7,6 +7,7 @@ import '../models/product_models.dart';
 import '../models/order_model.dart';
 import '../widgets/cart_panel.dart';
 import 'SuccessPaymentPage.dart';
+import 'package:sistem_pos/widgets/opening_cash_dialog.dart'; // Import file dialog kas awal
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -33,7 +34,28 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     widget.searchController.addListener(_applyFilters);
     _loadInitialData();
+    
+    // PEMICU POP-UP KAS AWAL: Muncul setelah frame pertama selesai dirender
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowOpeningCash();
+    });
   }
+
+  // Fungsi untuk mengecek dan menampilkan dialog kas awal
+  Future<void> _checkAndShowOpeningCash() async {
+    final existingCash = await StorageService.getOpeningCash();
+    if (existingCash == 0) {
+      if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false, 
+      builder: (context) => const OpeningCashDialog(),
+    );
+    
+    setState(() {}); 
+    }
+  }
+
 
   @override
   void dispose() {
@@ -135,8 +157,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                   }),
                   onDelete: (id) => setState(() => _cart.remove(id)),
-                  
-                  // FIX: LOGIKA UPDATE STOK SETELAH BAYAR
                   onCheckoutSuccess: (res) {
                     setState(() {
                       _cart.forEach((productId, cartItem) {
@@ -263,7 +283,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (_cart.containsKey(p.id)) {
                         _cart[p.id]!.quantity++;
                       } else {
-                        // FIX: ADDED ID PARAMETER
                         _cart[p.id] = OrderItem(
                           id: p.id,
                           itemName: p.name, 

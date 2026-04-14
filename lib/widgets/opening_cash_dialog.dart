@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../style.dart';
+import '../services/storage_service.dart'; 
 
 class OpeningCashDialog extends StatefulWidget {
   const OpeningCashDialog({super.key});
@@ -38,7 +39,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
       child: Container(
         width: isTablet ? screenWidth * 0.55 : 450,
         constraints: const BoxConstraints(maxWidth: 650, maxHeight: 750), 
-        padding: const EdgeInsets.all(35), // Padding luar sedikit dikurangi agar pas
+        padding: const EdgeInsets.all(35),
         decoration: BoxDecoration(
           color: AppStyle.white,
           borderRadius: BorderRadius.circular(35),
@@ -53,9 +54,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ==========================================
-            // 1. BAGIAN ATAS (STATIS)
-            // ==========================================
+            // 1. Icon & Header
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
@@ -81,9 +80,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
             ),
             const SizedBox(height: 30),
 
-            // ==========================================
-            // 2. BAGIAN TENGAH (BISA SCROLL JIKA KEYBOARD MUNCUL)
-            // ==========================================
+            // 2. Input Area
             Flexible(
               child: SingleChildScrollView(
                 child: Column(
@@ -114,15 +111,11 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                             ),
                           ),
                         ),
-                        prefixIconConstraints: const BoxConstraints(
-                          minWidth: 0,
-                          minHeight: 0,
-                        ),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
                         ),
-                        // Jarak dalam TextField disesuaikan agar tidak terlalu bengkak
                         contentPadding: const EdgeInsets.symmetric(vertical: 20), 
                       ),
                       onChanged: (value) {
@@ -155,9 +148,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                             color: AppStyle.primaryBlue.withOpacity(0.2),
                             width: 1.5,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                           onPressed: () {
                             setState(() {
                               _cashController.text = _formatNumber(amount.toString());
@@ -172,23 +163,23 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
             ),
             const SizedBox(height: 30),
 
-            // ==========================================
-            // 3. BAGIAN BAWAH (STATIS)
-            // ==========================================
+            // 3. Action Button (Di sini perubahan utamanya)
             SizedBox(
               width: double.infinity,
               height: 65,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppStyle.primaryBlue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   elevation: 0,
                 ),
-                onPressed: () {
+                onPressed: () async {
                   if (_rawAmount > 0) {
-                    Navigator.pop(context, _rawAmount);
+                    // SINKRONISASI: Simpan data ke memori permanen sebelum menutup dialog
+                    await StorageService.saveOpeningCash(_rawAmount);
+                    
+                    if (!mounted) return;
+                    Navigator.pop(context);
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(

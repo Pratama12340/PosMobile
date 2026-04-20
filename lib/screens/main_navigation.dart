@@ -123,7 +123,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                         HomeScreen(searchController: _globalSearchController),
                         const Center(child: Text("Shift Screen")), 
                         RekapScreen(searchController: _globalSearchController),    // Tambahkan parameter ini
-                        HistoryScreen(searchController: _globalSearchController),  // Tambahkan parameter ini
+                        HistoryScreen(),  // Tambahkan parameter ini
                         SettingScreen(searchController: _globalSearchController),
                       ],
                     ),

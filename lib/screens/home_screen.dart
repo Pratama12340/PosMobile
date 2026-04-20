@@ -7,7 +7,6 @@ import '../models/product_models.dart';
 import '../models/order_model.dart';
 import '../widgets/cart_panel.dart';
 import 'SuccessPaymentPage.dart';
-import 'package:sistem_pos/widgets/opening_cash_dialog.dart'; // Import file dialog kas awal
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -28,36 +27,16 @@ class _HomeScreenState extends State<HomeScreen> {
   String _selectedCategory = "All Menu";
 
   String formatHarga(double price) => NumberFormat.currency(
-    locale: 'id_ID',
-    symbol: 'Rp ',
-    decimalDigits: 0,
-  ).format(price);
+        locale: 'id_ID',
+        symbol: 'Rp ',
+        decimalDigits: 0,
+      ).format(price);
 
   @override
   void initState() {
     super.initState();
     widget.searchController.addListener(_applyFilters);
     _loadInitialData();
-
-    // PEMICU POP-UP KAS AWAL: Muncul setelah frame pertama selesai dirender
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndShowOpeningCash();
-    });
-  }
-
-  // Fungsi untuk mengecek dan menampilkan dialog kas awal
-  Future<void> _checkAndShowOpeningCash() async {
-    final existingCash = await StorageService.getOpeningCash();
-    if (existingCash == 0) {
-      if (!mounted) return;
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const OpeningCashDialog(),
-      );
-
-      setState(() {});
-    }
   }
 
   @override
@@ -186,8 +165,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (productIndex != -1) {
                             _allProducts[productIndex].stock -=
                                 cartItem.quantity;
-                            if (_allProducts[productIndex].stock < 0)
+                            if (_allProducts[productIndex].stock < 0) {
                               _allProducts[productIndex].stock = 0;
+                            }
                           }
                         });
                         _cart.clear();
@@ -226,14 +206,14 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }),
       child: Container(
-        width: 45, // Ukuran lebih presisi
+        width: 45, 
         height: 45,
         decoration: BoxDecoration(
-          color: Colors.white, // Background putih agar minimalis
+          color: Colors.white, 
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: Colors.grey.withOpacity(0.1),
-          ), // Border tipis
+          ), 
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -246,13 +226,11 @@ class _HomeScreenState extends State<HomeScreen> {
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            // Icon menggunakan warna primary agar tetap sesuai tema
             Icon(
               Icons.shopping_cart_outlined,
               color: AppStyle.primaryBlue,
               size: 35,
             ),
-
             if (_drafts.isNotEmpty)
               Positioned(
                 right: -2,
@@ -260,12 +238,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent, // Merah yang lebih lembut
+                    color: Colors.redAccent, 
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: Colors.white,
                       width: 2,
-                    ), // Ring putih agar badge "pop out"
+                    ), 
                   ),
                   constraints: const BoxConstraints(
                     minWidth: 18,
@@ -398,18 +376,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: isOutOfStock
                         ? null
                         : () => setState(() {
-                            if (_cart.containsKey(p.id)) {
-                              _cart[p.id]!.quantity++;
-                            } else {
-                              _cart[p.id] = OrderItem(
-                                id: p.id,
-                                productId: p.id, // TAMBAHKAN BARIS INI
-                                itemName: p.name,
-                                quantity: 1,
-                                unitPrice: p.price.toDouble(),
-                              );
-                            }
-                          }),
+                              if (_cart.containsKey(p.id)) {
+                                _cart[p.id]!.quantity++;
+                              } else {
+                                _cart[p.id] = OrderItem(
+                                  id: p.id,
+                                  productId: p.id, 
+                                  itemName: p.name,
+                                  quantity: 1,
+                                  unitPrice: p.price.toDouble(),
+                                );
+                              }
+                            }),
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: const BoxDecoration(

@@ -456,22 +456,32 @@ void _loadTaxes() async {
     );
   }
 
-  Future<void> _processPayment() async {
+ Future<void> _processPayment() async {
     setState(() => _isLoading = true);
     try {
       final savedOutletId = await StorageService.getOutletId();
 
       if (savedOutletId == null || savedOutletId == 0) {
         throw Exception(
-            "ID Outlet tidak ditemukan. Silakan login ulang atau pilih outlet kembali.");
+            "ID Outlet tidak ditemukan. Silakan login ulang.");
       }
 
       double subTotal = widget.totalAmount;
       double discountAmount = _calculateDiscountValue(subTotal);
+      double baseAmount = subTotal - discountAmount;
       
-      // Menghitung pajak final untuk payload
-      double taxAmountFinal = (subTotal - discountAmount) * (_totalTaxPercentage / 100);
-      double grandTotal = (subTotal - discountAmount) + taxAmountFinal;
+      // --- PERBAIKAN: HITUNG PAJAK FINAL ---
+      double taxAmountFinal = 0;
+      for (var tax in _availableTaxes) {
+        double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+        if (tax['type'] == 'percentage') {
+          taxAmountFinal += baseAmount * (rate / 100);
+        } else {
+          taxAmountFinal += rate;
+        }
+      }
+
+      double grandTotal = baseAmount + taxAmountFinal;
       double change = _amountTendered - grandTotal;
 
       double discountPercentageTotal = subTotal > 0 ? (discountAmount / subTotal) : 0.0;
@@ -481,7 +491,7 @@ void _loadTaxes() async {
         double finalItemPrice = item.unitPrice - itemDiscountPortion;
 
         return {
-          'product_id': item.productId, // Menggunakan productId dari model terbaru
+          'product_id': item.productId,
           'qty': item.quantity,
           'price': finalItemPrice.toInt(),
           'note': item.note ?? ''
@@ -490,6 +500,7 @@ void _loadTaxes() async {
 
       String invNumber = "INV-${DateTime.now().millisecondsSinceEpoch}";
 
+      // --- PERBAIKAN: KEY PAYLOAD (paid_amount & tax_amount) ---
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
         'invoice_number': invNumber,
@@ -497,20 +508,22 @@ void _loadTaxes() async {
         'subtotal_price': subTotal.toInt(),
         'total_price': grandTotal.toInt(),
         'discount_amount': discountAmount.toInt(),
-        
-        // --- PAJAK TERKIRIM KE BACKEND ---
         'tax_amount': taxAmountFinal.toInt(),
-        'tax_breakdown': jsonEncode(_availableTaxes),
+        
+        // --- PERBAIKAN DI SINI: Kirim sebagai List, bukan String JSON ---
+        'tax_breakdown': _availableTaxes, 
         
         'payment_method': _paymentMethod,
-        'amount_paid': _amountTendered.toInt(),
+        'paid_amount': _amountTendered.toInt(), // Sesuai migration history_transactions
         'change_amount': change.toInt(),
         'discount_id': _selectedDiscount?.id,
         'items': mappedItems,
         'status': 'paid',
       };
 
-      print("Payload API dengan Pajak: $payload");
+      // --- FUNGSI PRINT DEBUG ---
+      print("--- [DEBUG] PAYLOAD API ---");
+      print(const JsonEncoder.withIndent('  ').convert(payload));
 
       final res = await ApiService.submitOrder(payload);
 

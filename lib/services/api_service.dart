@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'storage_service.dart';
 import 'package:flutter/foundation.dart';
+import 'storage_service.dart';
 import '../models/product_models.dart';
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
+import '../models/rekap_model.dart'; // Import model rekap & shift master
 
 class ApiService {
   static const String baseUrl = 'https://api.etres.my.id/api/v1';
@@ -41,12 +42,10 @@ class ApiService {
       if (response.statusCode == 200) {
         final user = data['user'];
 
-        // Simpan data dasar wajib
         await StorageService.saveToken(data['token']);
         await StorageService.saveCashierName(user['name'] ?? "Kasir");
         await StorageService.saveOutletId(outletId);
 
-        // Ambil nama outlet secara live
         final outletName = await fetchOutletNameLive();
         await StorageService.saveOutletName(outletName);
 
@@ -68,7 +67,7 @@ class ApiService {
     }
   }
 
-  // --- 2. FETCH OUTLET NAME LIVE (DIPERBAIKI: Null Safety Token) ---
+  // --- 2. FETCH OUTLET NAME LIVE ---
   static Future<String> fetchOutletNameLive() async {
     try {
       final token = await StorageService.getToken();
@@ -152,43 +151,31 @@ class ApiService {
     }
   }
 
-  // --- 5. SUBMIT ORDER (DIPERBAIKI: Mengembalikan Body Response) ---
+  // --- 5. SUBMIT ORDER ---
   static Future<Map<String, dynamic>> submitOrder(Map<String, dynamic> orderData) async {
     try {
       final headers = await _getHeaders();
-      
-      // Pastikan outlet_id ada di payload
       if (!orderData.containsKey('outlet_id')) {
         final int? outletId = await StorageService.getOutletId();
         orderData['outlet_id'] = outletId;
       }
-
       final response = await http.post(
         Uri.parse('$baseUrl/orders/checkout'),
         headers: headers,
         body: jsonEncode(orderData),
       );
-
       final result = jsonDecode(response.body);
-
       if (response.statusCode == 201 || response.statusCode == 200) {
-        return {
-          'success': true, 
-          'data': result['data'] ?? result
-        };
+        return {'success': true, 'data': result['data'] ?? result};
       } else {
-        // Jika 403 Forbidden, pesan dari Laravel akan dikembalikan di sini
-        return {
-          'success': false,
-          'message': result['message'] ?? 'Gagal Simpan (Error ${response.statusCode})',
-        };
+        return {'success': false, 'message': result['message'] ?? 'Gagal Simpan',};
       }
     } catch (e) {
       return {'success': false, 'message': 'Kesalahan Sistem: $e'};
     }
   }
 
-  // --- 6. API HISTORY TRANSACTIONS ---
+  // --- 5. API HISTORY TRANSACTIONS (DIPERBAIKI) ---
   static Future<List<Order>> fetchHistory() async {
     try {
       final headers = await _getHeaders();
@@ -205,6 +192,7 @@ class ApiService {
         } else if (result['data'] != null && result['data']['data'] is List) {
           data = result['data']['data'];
         }
+        // Langsung map ke List<Order>
         return data.map((json) => Order.fromJson(json)).toList();
       }
       return [];
@@ -216,16 +204,9 @@ class ApiService {
   static Future<Order?> fetchHistoryDetail(int id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/history-transactions/$id'),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse('$baseUrl/history-transactions/$id'), headers: headers);
       if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final dataToParse = decoded['data'] ?? decoded;
-        if (dataToParse != null && dataToParse is Map<String, dynamic>) {
-          return Order.fromJson(dataToParse);
-        }
+        return Order.fromJson(jsonDecode(response.body));
       }
     } catch (e) {
       debugPrint("Error API Detail: $e");
@@ -233,13 +214,34 @@ class ApiService {
     return null;
   }
 
+  // --- 6. VOID / EDIT ITEM ---
+  static Future<Map<String, dynamic>> voidOrEditItem({
+    required int itemId, required int orderId, required int newQty, required String reason
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/order-items/$itemId/void-items'),
+        headers: await _getHeaders(),
+        body: jsonEncode({
+          'order_id': orderId,
+          'qty': newQty,
+          'notes': reason,
+        }),
+      );
+      return (response.statusCode == 200 || response.statusCode == 201) 
+          ? {'success': true} 
+          : {'success': false, 'message': json.decode(response.body)['message'] ?? 'Gagal simpan'};
+    } catch (e) {
+      return {'success': false, 'message': 'Terjadi kesalahan: $e'};
+    }
+  }
+
   // --- 7. UPDATE ITEM STATUS ---
   static Future<Map<String, dynamic>> updateItemStatus(int itemId, String status) async {
     try {
-      final headers = await _getHeaders();
       final response = await http.patch(
         Uri.parse('$baseUrl/order-items/$itemId/status'),
-        headers: headers,
+        headers: await _getHeaders(),
         body: jsonEncode({'status': status}),
       );
       return response.statusCode == 200 ? {'success': true} : {'success': false};
@@ -251,40 +253,25 @@ class ApiService {
   // --- 8. GET STATIONS ---
   static Future<List<dynamic>> getStations() async {
     try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/stations'),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse('$baseUrl/stations'), headers: await _getHeaders());
       final result = jsonDecode(response.body);
-      if (response.statusCode == 200) {
-        return result['data'] is List ? result['data'] : result['data']['data'] ?? [];
-      }
-      return [];
+      return response.statusCode == 200 ? (result['data'] is List ? result['data'] : result['data']['data'] ?? []) : [];
     } catch (e) {
       return [];
     }
   }
 
-  // --- 9. GET SHIFT KARYAWAN ---
-  static Future<List<dynamic>> getShiftKaryawans() async {
+  static Future<List<dynamic>> getOutlets() async {
     try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/shift-karyawans'),
-        headers: headers,
-      );
-
+      final response = await http.get(Uri.parse('$baseUrl/shift-karyawans'), headers: await _getHeaders());
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
         if (result['data'] != null) {
-          if (result['data'] is List) return result['data'];
-          if (result['data']['data'] is List) return result['data']['data'];
+          return result['data'] is List ? result['data'] : result['data']['data'] ?? [];
         }
       }
       return [];
     } catch (e) {
-      debugPrint("Error getShiftKaryawans: $e");
       return [];
     }
   }
@@ -292,70 +279,103 @@ class ApiService {
   // --- 10. GET DISCOUNTS ---
   static Future<List<Discount>> getDiscounts() async {
     try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/discounts'),
-        headers: headers,
-      );
-
+      final response = await http.get(Uri.parse('$baseUrl/discounts'), headers: await _getHeaders());
       if (response.statusCode == 200) {
         final dynamic res = jsonDecode(response.body);
         List<dynamic> data = [];
-
-        if (res is List) {
-          data = res;
-        } else if (res is Map) {
-          if (res['data'] is List) {
-            data = res['data'];
-          } else if (res['data'] is Map && res['data']['data'] is List) {
-            data = res['data']['data'];
-          } else if (res['discounts'] is List) {
-            data = res['discounts'];
-          }
+        if (res is List) data = res;
+        else if (res is Map) {
+          if (res['data'] is List) data = res['data'];
+          else if (res['data'] is Map && res['data']['data'] is List) data = res['data']['data'];
+          else if (res['discounts'] is List) data = res['discounts'];
         }
         return data.map((json) => Discount.fromJson(json)).toList();
       }
-    } catch (e) {
-      debugPrint("Error getDiscounts: $e");
-    }
+    } catch (e) { debugPrint("Error getDiscounts: $e"); }
     return [];
   }
 
-  // --- 11. GET TAXES (FIXED: Handling List vs Map) ---
+  // --- 11. GET TAXES ---
   static Future<List<dynamic>> getTaxes() async {
     try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/taxes'),
-        headers: headers,
-      );
-
-      debugPrint("Status Code Pajak: ${response.statusCode}");
-      debugPrint("Raw Response Pajak: ${response.body}");
-
+      final response = await http.get(Uri.parse('$baseUrl/taxes'), headers: await _getHeaders());
       if (response.statusCode == 200) {
         final dynamic result = jsonDecode(response.body);
-
-        // Kasus 1: API kirim List langsung [{id:1, ...}]
-        if (result is List) {
-          return result;
-        }
-
-        // Kasus 2: API kirim Map {"data": [...]} atau Pagination
+        if (result is List) return result;
         if (result is Map) {
-          if (result['data'] is List) {
-            return result['data'];
-          } else if (result['data'] != null && result['data']['data'] is List) {
-            return result['data']['data'];
-          }
+          if (result['data'] is List) return result['data'];
+          if (result['data'] != null && result['data']['data'] is List) return result['data']['data'];
         }
       }
       return [];
+    } catch (e) { return []; }
+  }
+
+  // --- 9. SHIFT KARYAWAN (DIPERBAIKI) ---
+
+  /// Memulai shift (Start Shift) - Sekarang mengirimkan outlet_id dan nominal
+  static Future<Map<String, dynamic>> startShift(int nominal, int outletId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/shift-karyawans/start'),
+        headers: headers,
+        body: jsonEncode({
+          'outlet_id': outletId,
+          'starting_cash': nominal,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data};
+      } else {
+        return {'success': false, 'message': data['message'] ?? 'Gagal memulai shift'};
+      }
     } catch (e) {
-      // Ini yang muncul di log kamu tadi
-      debugPrint("Error getTaxes: $e"); 
-      return [];
+      return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 
+  static Future<Map<String, dynamic>> endShift() async {
+    try {
+      final response = await http.post(Uri.parse('$baseUrl/shift-karyawans/end'), headers: await _getHeaders());
+      final data = jsonDecode(response.body);
+      return (response.statusCode == 200 || response.statusCode == 201) 
+          ? {'success': true, 'data': data} 
+          : {'success': false, 'message': data['message'] ?? 'Gagal mengakhiri shift'};
+    } catch (e) { return {'success': false, 'message': 'Koneksi error: $e'}; }
+  }
+
+  // Ambil Riwayat Shift (DIPERBAIKI: Mengembalikan List<RekapShift>)
+  static Future<List<RekapShift>> getShiftHistory() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/shift-karyawans'), headers: await _getHeaders());
+      final result = jsonDecode(response.body);
+      if (response.statusCode == 200 && result['data'] != null) {
+          List data = result['data'] is List ? result['data'] : result['data']['data'] ?? [];
+          return data.map((json) => RekapShift.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) { return []; }
+  }
+
+  // TAMBAHKAN INI: Mengambil Master Data Shift (DIPERBAIKI: Mengembalikan List<ShiftMaster>)
+  static Future<List<ShiftMaster>> getMasterShifts() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/shifts'), 
+        headers: headers
+      );
+      final result = jsonDecode(response.body);
+      if (response.statusCode == 200 && result['data'] != null) {
+          List data = result['data'] is List ? result['data'] : result['data']['data'] ?? [];
+          return data.map((json) => ShiftMaster.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 }

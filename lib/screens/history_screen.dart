@@ -6,14 +6,14 @@ import '../widgets/receipt_dialog.dart';
 import '../style.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  final TextEditingController searchController; // Tambahkan ini
+  const HistoryScreen({super.key, required this.searchController}); // Tambahkan ini
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  // Formatter menggunakan id_ID yang sudah diinisialisasi di main.dart
   final NumberFormat _priceFormatter = NumberFormat.currency(
     locale: 'id_ID', 
     symbol: 'Rp ', 
@@ -21,22 +21,48 @@ class _HistoryScreenState extends State<HistoryScreen> {
   );
   
   List<Order> _allOrders = [];
+  List<Order> _filteredOrders = []; // Tambahkan list untuk hasil filter
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    // Tambahkan listener untuk mendeteksi ketikan di Search Bar
+    widget.searchController.addListener(_onSearchChanged);
     _loadHistoryData();
   }
 
+  @override
+  void dispose() {
+    // Hapus listener saat halaman ditutup
+    widget.searchController.removeListener(_onSearchChanged);
+    super.dispose();
+  }
+
+  // Logika Filter Pencarian
+  void _onSearchChanged() {
+    String query = widget.searchController.text.toLowerCase();
+    setState(() {
+      _filteredOrders = _allOrders.where((order) {
+        return order.invoiceNo.toLowerCase().contains(query) || 
+               order.tableNo.toLowerCase().contains(query) ||
+               order.paymentMethod.toLowerCase().contains(query);
+      }).toList();
+    });
+  }
+
   Future<void> _loadHistoryData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final data = await ApiService.fetchHistory();
-      setState(() {
-        _allOrders = data;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _allOrders = data;
+          _filteredOrders = data; // Inisialisasi data filter
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -45,7 +71,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  // Fungsi untuk memanggil detail transaksi
   Future<void> _viewDetail(int id) async {
     showDialog(
       context: context,
@@ -59,7 +84,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final detailOrder = await ApiService.fetchHistoryDetail(id);
       
       if (mounted) {
-        Navigator.pop(context); // Tutup loading
+        Navigator.pop(context); 
 
         if (detailOrder != null) {
           showDialog(
@@ -88,7 +113,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
-      // AppBar ditambahkan sebagai pengganti Search Bar agar UI tetap seimbang
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Container(
@@ -106,8 +130,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           child: _isLoading 
             ? const Center(child: CircularProgressIndicator(color: AppStyle.primaryBlue))
-            : _allOrders.isEmpty
-              ? const Center(child: Text("Tidak ada transaksi"))
+            : _filteredOrders.isEmpty // Gunakan filteredOrders
+              ? const Center(child: Text("Data tidak ditemukan"))
               : _buildDataTable(),
         ),
       ),
@@ -130,12 +154,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
             DataColumn(label: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold))),
             DataColumn(label: Text('AKSI', style: TextStyle(fontWeight: FontWeight.bold))),
           ],
-          rows: _allOrders.map((order) {
+          rows: _filteredOrders.map((order) { // Gunakan filteredOrders
             return DataRow(cells: [
               DataCell(Text(order.invoiceNo, 
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)
               )),
-              DataCell(Text(order.date, // Sudah bersih dari '000000Z'
+              DataCell(Text(order.date, 
                 style: const TextStyle(fontSize: 12)
               )),
               DataCell(Text(order.tableNo, 
@@ -153,7 +177,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               )),
               DataCell(Text(_priceFormatter.format(order.totalAmount),
                 style: const TextStyle(
-                  fontFamily: 'JetBrains Mono', // Font khusus angka
+                  fontFamily: 'JetBrains Mono',
                   fontWeight: FontWeight.bold,
                   fontSize: 13
                 ),

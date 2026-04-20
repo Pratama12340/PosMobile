@@ -1,53 +1,85 @@
 import 'package:flutter/material.dart';
-import '../style.dart'; // Import file style Anda
+import '../style.dart'; 
 import 'printer_screen.dart';
 
-class SettingScreen extends StatelessWidget {
-  const SettingScreen({super.key});
+class SettingScreen extends StatefulWidget {
+  final TextEditingController searchController; // Tambahkan ini
+  const SettingScreen({super.key, required this.searchController}); // Tambahkan ini
+
+  @override
+  State<SettingScreen> createState() => _SettingScreenState();
+}
+
+class _SettingScreenState extends State<SettingScreen> {
+  // Tambahkan variabel query jika nanti ingin memfilter daftar setting
+  String _searchQuery = "";
+
+  @override
+  void initState() {
+    super.initState();
+    // Tambahkan listener untuk mendeteksi ketikan di Search Bar
+    widget.searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    // Hapus listener saat halaman ditutup
+    widget.searchController.removeListener(_onSearchChanged);
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {
+      _searchQuery = widget.searchController.text.toLowerCase();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Menggunakan warna background dari AppStyle
       backgroundColor: AppStyle.bgLightBlue, 
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 20), // Jarak atas agar rapi
+          const SizedBox(height: 20), 
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 10),
               children: [
-                _buildSettingItem(
-                  context,
-                  icon: Icons.print_outlined,
-                  title: "Koneksi Printer",
-                  subtitle: "Atur printer struk via Bluetooth",
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const PrinterScreen()),
-                    );
-                  },
-                ),
-                _buildSettingItem(
-                  context,
-                  icon: Icons.storefront_outlined,
-                  title: "Informasi Outlet",
-                  subtitle: "Lihat detail lokasi cabang Anda",
-                  onTap: () {
-                    // Logic untuk info outlet
-                  },
-                ),
-                _buildSettingItem(
-                  context,
-                  icon: Icons.info_outline,
-                  title: "Tentang Aplikasi",
-                  subtitle: "Versi 1.0.0 - Aranus POS",
-                  onTap: () {
-                    // Logic untuk info aplikasi
-                  },
-                ),
+                // Contoh logika filter sederhana: hanya tampilkan jika cocok dengan pencarian
+                if ("koneksi printer".contains(_searchQuery))
+                  _buildSettingItem(
+                    context,
+                    icon: Icons.print_outlined,
+                    title: "Koneksi Printer",
+                    subtitle: "Atur printer struk via Bluetooth",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const PrinterScreen()),
+                      );
+                    },
+                  ),
+                if ("informasi outlet".contains(_searchQuery))
+                  _buildSettingItem(
+                    context,
+                    icon: Icons.storefront_outlined,
+                    title: "Informasi Outlet",
+                    subtitle: "Lihat detail lokasi cabang Anda",
+                    onTap: () {
+                      // Logic untuk info outlet
+                    },
+                  ),
+                if ("tentang aplikasi".contains(_searchQuery))
+                  _buildSettingItem(
+                    context,
+                    icon: Icons.info_outline,
+                    title: "Tentang Aplikasi",
+                    subtitle: "Versi 1.0.0 - Aranus POS",
+                    onTap: () {
+                      // Logic untuk info aplikasi
+                    },
+                  ),
               ],
             ),
           ),
@@ -89,7 +121,6 @@ class SettingScreen extends StatelessWidget {
         ),
         title: Text(
           title,
-          // Menggunakan gaya menuText dari AppStyle (Poppins)
           style: AppStyle.menuText.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: 15,

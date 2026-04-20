@@ -10,6 +10,9 @@ class StorageService {
   static const String _keyProfilePhoto = 'profile_photo';
   static const String _keyLoginTime = 'login_time';
   static const String _keyOpeningCash = 'opening_cash';
+  // Tambahan Key untuk Shift
+  static const String _keyShiftName = 'shift_name';
+  static const String _keyShiftSchedule = 'shift_schedule';
 
   // --- 1. FUNGSI TOKEN ---
   static Future<void> saveToken(String token) async {
@@ -89,14 +92,31 @@ class StorageService {
   }
 
   static Future<void> saveOpeningCash(int amount) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setInt(_keyOpeningCash, amount);
-}
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyOpeningCash, amount);
+  }
 
-static Future<int> getOpeningCash() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getInt(_keyOpeningCash) ?? 0;
-}
+  static Future<int> getOpeningCash() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_keyOpeningCash) ?? 0;
+  }
+
+  // --- 5. FUNGSI SHIFT (TAMBAHAN BARU) ---
+  static Future<void> saveShiftInfo(String name, String schedule) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyShiftName, name);
+    await prefs.setString(_keyShiftSchedule, schedule);
+  }
+
+  static Future<String> getShiftName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyShiftName) ?? "Shift -";
+  }
+
+  static Future<String> getShiftSchedule() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyShiftSchedule) ?? "00:00 - 00:00";
+  }
 
   // --- 4. PROSES LOGOUT KASIR ---
   static Future<void> logoutKasir() async {
@@ -108,8 +128,13 @@ static Future<int> getOpeningCash() async {
     await prefs.remove(_keyUserRole);
     await prefs.remove(_keyProfilePhoto);
 
-    await prefs.remove('opening_cash'); 
-    await prefs.remove('login_time');
+    // Menggunakan variable key agar lebih aman dari typo
+    await prefs.remove(_keyOpeningCash); 
+    await prefs.remove(_keyLoginTime);
+    
+    // Menghapus data shift saat logout
+    await prefs.remove(_keyShiftName);
+    await prefs.remove(_keyShiftSchedule);
 
     // Data Outlet ID & Name TIDAK DIHAPUS agar HP tetap terkunci ke cabang tsb
     print("Logout Berhasil: Sesi karyawan dibersihkan, Identitas Outlet dipertahankan.");

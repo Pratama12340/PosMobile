@@ -17,8 +17,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String _pin = '';
   final int _pinLength = 6;
   bool _isLoading = false;
-  
-  String _outletName = "Loading...";
   int _outletId = 0;
 
   @override
@@ -28,8 +26,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loadOutletData() async {
+    await Future.delayed(const Duration(milliseconds: 100));
     final id = await StorageService.getOutletId();
-    final name = await StorageService.getOutletName();
     
     if (id == null || id == 0) {
       if (mounted) {
@@ -38,15 +36,49 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (context) => const OutletSelectionScreen()),
         );
       }
-      return; 
+      return;
     }
-
+    
     if (mounted) {
       setState(() {
         _outletId = id;
-        _outletName = name;
       });
     }
+  }
+
+  void _showResetOutletDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Reset Outlet?", style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text("Data outlet akan dihapus. Anda harus memilih outlet kembali."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("BATAL", style: TextStyle(color: Colors.grey.shade600)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await StorageService.saveOutletId(0);
+                if (mounted) {
+                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const OutletSelectionScreen()),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text("YA, RESET", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _onNumPadTap(String value) {
@@ -57,43 +89,71 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (value == 'delete') {
         if (_pin.isNotEmpty) _pin = _pin.substring(0, _pin.length - 1);
       } else {
-        if (_pin.length < _pinLength) _pin += value;
+        if (_pin.length < _pinLength) {
+          _pin += value;
+          if (_pin.length == _pinLength) {
+            _verifyPin();
+          }
+        }
       }
     });
   }
 
   void _verifyPin() async {
-    if (_pin.length < _pinLength) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Masukkan 6 digit PIN')));
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
+      final currentId = await StorageService.getOutletId();
+      if (currentId == null || currentId == 0) {
+        _handleLoginError("ID Outlet tidak valid. Silakan reset.");
+        return;
+      }
+
+      _outletId = currentId;
       final result = await ApiService.loginPin(_pin, _outletId);
 
       if (!mounted) return;
 
       if (result['success'] == true) {
-        // --- AWAL BAGIAN SINGKRONISASI ---
-        String nameFromServer = result['data']['user']['name'] ?? "Cashier";
-        
-        // Mengambil waktu login saat ini
+        // =============================================================
+        // TAMBAHAN: LOGIKA AUDIT CABANG (MENCEGAH FORBIDDEN 403)
+        // =============================================================
+        final userFromServer = result['data']['user'];
+        final int userOutletId = userFromServer['outlet_id'];
+
+        print("--- AUDIT KEAMANAN LOGIN ---");
+        print("Cabang pilihan App: $_outletId");
+        print("Cabang asli User di DB: $userOutletId");
+
+        // Jika ID di Database tidak sama dengan ID yang dipilih, kita cegah masuk.
+        // Ini adalah penyebab utama error 'Forbidden' saat Checkout.
+        if (userOutletId != _outletId) {
+          _handleLoginError("Akses Ditolak: Akun Anda terdaftar di Cabang lain.");
+          return; // Hentikan proses navigasi
+        }
+        // =============================================================
+
+        String nameFromServer = userFromServer['name'] ?? "Cashier";
         DateTime now = DateTime.now();
         String loginTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
 
-        // Menyimpan ke Storage
         await StorageService.saveCashierName(nameFromServer);
-        await StorageService.saveLoginTime(loginTime); 
-        // --- AKHIR BAGIAN SINGKRONISASI ---
+        await StorageService.saveLoginTime(loginTime);
         
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainNavigationScaffold(requireCashInput: true)),
-        );
+        // Rekomendasi: Simpan juga Token/Bearer jika ada di response data
+        // await StorageService.saveToken(result['data']['token']);
+
+        String liveOutletName = await ApiService.fetchOutletNameLive();
+        await StorageService.saveOutletName(liveOutletName);
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainNavigationScaffold(requireCashInput: true)),
+          );
+        }
       } else {
-        _handleLoginError(result['message']);
+        _handleLoginError(result['message'] ?? "PIN Salah");
       }
     } catch (e) {
       _handleLoginError("Koneksi bermasalah: $e");
@@ -101,14 +161,21 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleLoginError(String message) {
-    setState(() { _isLoading = false; _pin = ''; });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: AppStyle.errorRed));
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _pin = '';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppStyle.errorRed),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppStyle.bgLightBlue, 
+      backgroundColor: AppStyle.bgLightBlue,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -125,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   flex: 1,
                   child: Container(
                     padding: const EdgeInsets.all(40),
-                    child: SvgPicture.asset('assets/images/login.svg', height: 250),
+                    child: SvgPicture.asset('assets/images/login.svg', height: 320),
                   ),
                 ),
                 Container(width: 1, height: 400, color: Colors.grey.shade100),
@@ -136,46 +203,32 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text("Sign In", style: AppStyle.titleText),
-                        const SizedBox(height: 5),
-                        Text("Masukkan 6 digit PIN akses", style: AppStyle.subTitleText), 
-                        const SizedBox(height: 15),
-
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppStyle.primaryBlue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.storefront, size: 16, color: AppStyle.primaryBlue),
-                              const SizedBox(width: 8),
-                              Text(_outletName, style: const TextStyle(color: AppStyle.primaryBlue, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
+                        GestureDetector(
+                          onLongPress: _showResetOutletDialog,
+                          child: Text("Sign In", style: AppStyle.titleText.copyWith(color: AppStyle.primaryBlue)),
                         ),
-                        const SizedBox(height: 25),
+                        const SizedBox(height: 5),
+                        Text("Masukkan 6 digit PIN akses", style: AppStyle.subTitleText),
+                        const SizedBox(height: 35),
+                        
+                        // BAGIAN YANG DIPERBAIKI: Menggunakan fixed height container
+                        // Agar saat berpindah antara Loading dan PIN Dots, posisi tidak berubah
+                        SizedBox(
+                          height: 30, // Sesuaikan dengan tinggi PIN Dots agar tetap simetris
+                          child: _isLoading
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 24, 
+                                    height: 24, 
+                                    child: CircularProgressIndicator(strokeWidth: 2)
+                                  ),
+                                )
+                              : _buildPinDots(),
+                        ),
 
-                        _buildPinDots(),
                         const SizedBox(height: 35),
                         _buildNumPad(),
-                        const SizedBox(height: 35),
-
-                        SizedBox(
-                          width: double.infinity, height: 54,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _verifyPin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppStyle.primaryBlue,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                            ),
-                            child: _isLoading 
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Text('LOGIN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), 
-                          ),
-                        ),
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
@@ -226,20 +279,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _numButton(String number) {
     return InkWell(
-      onTap: () => _onNumPadTap(number), borderRadius: BorderRadius.circular(15),
+      onTap: () => _onNumPadTap(number),
+      borderRadius: BorderRadius.circular(15),
       child: Container(
         decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade200)),
-        child: Center(child: Text(number, style: AppStyle.numPadText)), 
+        child: Center(child: Text(number, style: AppStyle.numPadText)),
       ),
     );
   }
 
   Widget _actionButton(String label, String action, Color bgColor, Color textColor) {
     return InkWell(
-      onTap: () => _onNumPadTap(action), borderRadius: BorderRadius.circular(15),
+      onTap: () => _onNumPadTap(action),
+      borderRadius: BorderRadius.circular(15),
       child: Container(
         decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(15)),
-        child: Center(child: label == '<' ? Icon(Icons.backspace_outlined, color: textColor, size: 22) : Text(label, style: AppStyle.numPadText.copyWith(color: textColor))), 
+        child: Center(
+          child: label == '<'
+              ? Icon(Icons.backspace_outlined, color: textColor, size: 22)
+              : Text(label, style: AppStyle.numPadText.copyWith(color: textColor)),
+        ),
       ),
     );
   }

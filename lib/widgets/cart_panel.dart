@@ -206,7 +206,7 @@ class _CartPanelState extends State<CartPanel> {
             children: [
               Expanded(
                 child: TextField(
-                  onChanged: (v) => item.notes = v,
+                  onChanged: (v) => item.note = v,
                   style: const TextStyle(fontSize: 11),
                   decoration: InputDecoration(
                     hintText: "Catatan...",

@@ -13,6 +13,9 @@ class OpeningCashDialog extends StatefulWidget {
 class _OpeningCashDialogState extends State<OpeningCashDialog> {
   final TextEditingController _cashController = TextEditingController();
   final List<int> _quickAmounts = [50000, 100000, 200000, 500000];
+  
+  // FIX: Tambahkan variabel loading untuk mencegah double click pada tombol
+  bool _isSaving = false;
 
   int get _rawAmount {
     String clean = _cashController.text.replaceAll('.', '');
@@ -21,7 +24,9 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
 
   String _formatNumber(String s) {
     if (s.isEmpty) return "";
-    return s.replaceAllMapped(
+    // Menghapus titik lama sebelum memformat ulang agar tidak berantakan
+    String clean = s.replaceAll('.', '');
+    return clean.replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]}.',
     );
@@ -54,7 +59,6 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 1. Icon & Header
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
@@ -80,7 +84,6 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
             ),
             const SizedBox(height: 30),
 
-            // 2. Input Area
             Flexible(
               child: SingleChildScrollView(
                 child: Column(
@@ -90,6 +93,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                       controller: _cashController,
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
+                      enabled: !_isSaving, // Matikan input saat sedang menyimpan
                       style: AppStyle.numPadText.copyWith(
                         fontSize: 34,
                         color: AppStyle.textMain,
@@ -149,7 +153,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                             width: 1.5,
                           ),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                          onPressed: () {
+                          onPressed: _isSaving ? null : () {
                             setState(() {
                               _cashController.text = _formatNumber(amount.toString());
                             });
@@ -163,7 +167,6 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
             ),
             const SizedBox(height: 30),
 
-            // 3. Action Button (Di sini perubahan utamanya)
             SizedBox(
               width: double.infinity,
               height: 65,
@@ -173,13 +176,22 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   elevation: 0,
                 ),
-                onPressed: () async {
+                // FIX: Logika penguncian tombol
+                onPressed: _isSaving ? null : () async {
                   if (_rawAmount > 0) {
-                    // SINKRONISASI: Simpan data ke memori permanen sebelum menutup dialog
-                    await StorageService.saveOpeningCash(_rawAmount);
+                    setState(() => _isSaving = true); // Mulai proses simpan
                     
-                    if (!mounted) return;
-                    Navigator.pop(context);
+                    try {
+                      // Simpan ke storage permanen
+                      await StorageService.saveOpeningCash(_rawAmount);
+                      
+                      if (!mounted) return;
+                      // Tutup dialog hanya setelah data benar-benar tersimpan
+                      Navigator.pop(context);
+                    } catch (e) {
+                      setState(() => _isSaving = false);
+                      // Tampilkan error jika gagal simpan
+                    }
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -190,13 +202,15 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                     );
                   }
                 },
-                child: Text(
-                  "BUKA KASIR SEKARANG",
-                  style: AppStyle.buttonText.copyWith(
-                    fontSize: 18,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+                child: _isSaving 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Text(
+                      "BUKA KASIR SEKARANG",
+                      style: AppStyle.buttonText.copyWith(
+                        fontSize: 18,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
               ),
             ),
           ],

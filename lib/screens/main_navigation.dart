@@ -6,6 +6,7 @@ import 'rekap_screen.dart';
 import 'setting_screen.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
+import '../services/api_service.dart'; 
 import '../widgets/opening_cash_dialog.dart';
 
 class MainNavigationScaffold extends StatefulWidget {
@@ -20,9 +21,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   bool _isSidebarVisible = false;
   
-  // Variabel untuk data profil & outlet
   String _cashierName = "Loading...";
-  String _outletName = "Loading...";
+  String _outletName = "Loading..."; // Akan diisi dari Storage
   String _profilePhoto = "";
   String _userRole = "Cashier";
   
@@ -44,18 +44,22 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
+  // --- FIX: Pemanggilan data diperbaiki agar fokus ke Local Storage ---
   Future<void> _loadInitialData() async {
-    final name = await StorageService.getCashierName();
-    final outlet = await StorageService.getOutletName();
-    final photo = await StorageService.getProfilePhoto();
-    final role = await StorageService.getUserRole();
+    // Mengambil data dari Storage secara paralel agar lebih cepat
+    final results = await Future.wait([
+      StorageService.getCashierName(),
+      StorageService.getOutletName(), // Ini akan mengambil "Aranus PoS R&B" jika data kosong
+      StorageService.getProfilePhoto(),
+      StorageService.getUserRole(),
+    ]);
     
     if (mounted) {
       setState(() {
-        _cashierName = name;
-        _outletName = outlet;
-        _profilePhoto = photo;
-        _userRole = role;
+        _cashierName = results[0] as String;
+        _outletName = results[1] as String;
+        _profilePhoto = results[2] as String;
+        _userRole = results[3] as String;
       });
     }
   }
@@ -118,10 +122,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       children: [
                         HomeScreen(searchController: _globalSearchController),
                         const Center(child: Text("Shift Screen")), 
-                        const RekapScreen(), 
-                        // PERBAIKAN DI SINI: Ganti HistoryScreenContent menjadi HistoryScreen
-                        const HistoryScreen(), 
-                        const SettingScreen(), 
+                        RekapScreen(searchController: _globalSearchController),    // Tambahkan parameter ini
+                        HistoryScreen(searchController: _globalSearchController),  // Tambahkan parameter ini
+                        SettingScreen(searchController: _globalSearchController),
                       ],
                     ),
                   ),
@@ -152,7 +155,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             _outletName.toUpperCase(),
             style: AppStyle.titleText.copyWith(
               fontSize: 20, 
-              color: AppStyle.primaryBlue,
+              color: const Color.fromARGB(255, 14, 16, 19),
               letterSpacing: 0.5
             ),
           ),

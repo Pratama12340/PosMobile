@@ -12,48 +12,62 @@ class OutletSelectionScreen extends StatefulWidget {
 
 class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
   final TextEditingController _outletIdController = TextEditingController();
-  final TextEditingController _outletNameController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
     _outletIdController.dispose();
-    _outletNameController.dispose();
     super.dispose();
   }
 
   void _saveAndContinue() async {
     String idText = _outletIdController.text.trim();
-    String nameText = _outletNameController.text.trim();
 
-    if (idText.isEmpty || nameText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ID dan Nama Outlet wajib diisi!")),
-      );
+    if (idText.isEmpty) {
+      _showSnackBar("ID Outlet wajib diisi!", isError: true);
       return;
     }
 
     int? id = int.tryParse(idText);
     if (id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ID Outlet harus berupa angka!")),
-      );
+      _showSnackBar("ID Outlet harus berupa angka!", isError: true);
       return;
     }
 
     setState(() => _isLoading = true);
 
-    // 👇 PROSES SIMPAN KE STORAGE (TANPA API)
-    await StorageService.saveOutletId(id);
-    await StorageService.saveOutletName(nameText);
+    try {
+      // 1. Simpan ke Storage
+      await StorageService.saveOutletId(id);
+      print("DEBUG: Berhasil menyimpan ID $id ke Storage");
 
-    if (mounted) {
-      // Langsung pindah ke Login
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+      // 2. Jeda Sinkronisasi (Penting agar Disk IO selesai)
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      if (mounted) {
+        // 3. Pindah ke Login dan bersihkan stack navigasi
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        _showSnackBar("Gagal menyimpan konfigurasi: $e", isError: true);
+      }
     }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppStyle.errorRed : Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -62,17 +76,13 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
       backgroundColor: AppStyle.bgLightBlue,
       body: Center(
         child: Container(
-          width: 450, // Ukuran form input yang proporsional
+          width: 450,
           padding: const EdgeInsets.all(40),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              )
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
             ],
           ),
           child: Column(
@@ -83,36 +93,25 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
               Text("Konfigurasi Outlet", style: AppStyle.titleText.copyWith(fontSize: 22)),
               const SizedBox(height: 10),
               const Text(
-                "Masukkan ID Outlet sesuai instruksi Manager",
+                "Masukkan ID Outlet sesuai instruksi Manager.\nIdentitas ini akan mengunci menu dan akses kasir.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(color: Colors.grey, height: 1.5),
               ),
               const SizedBox(height: 30),
-
-              // INPUT ID OUTLET (ANGKA)
               TextField(
                 controller: _outletIdController,
                 keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
-                  labelText: "ID Outlet (Contoh: 1, 2, 3)",
+                  labelText: "ID Outlet",
                   prefixIcon: const Icon(Icons.numbers),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // INPUT NAMA OUTLET (TEKS)
-              TextField(
-                controller: _outletNameController,
-                decoration: InputDecoration(
-                  labelText: "Nama Outlet (Contoh: Cabang Jakarta)",
-                  prefixIcon: const Icon(Icons.store),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
                 ),
               ),
               const SizedBox(height: 30),
-
-              // TOMBOL SIMPAN
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -121,13 +120,12 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppStyle.primaryBlue,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          "SIMPAN & LANJUT LOGIN",
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
+                      : const Text("SIMPAN & LANJUT LOGIN",
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

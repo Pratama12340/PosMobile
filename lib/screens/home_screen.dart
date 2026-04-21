@@ -32,6 +32,16 @@ class _HomeScreenState extends State<HomeScreen> {
         decimalDigits: 0,
       ).format(price);
 
+  // Fungsi pembantu untuk mengambil inisial nama menu
+  String _getInitials(String name) {
+    if (name.isEmpty) return "";
+    List<String> words = name.trim().split(RegExp(r'\s+'));
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return words[0][0].toUpperCase();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -307,6 +317,20 @@ class _HomeScreenState extends State<HomeScreen> {
           "https://api.etres.my.id/storage/${imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl}";
     }
 
+    // Widget placeholder jika gambar kosong atau error
+    Widget imagePlaceholder = Container(
+      color: const Color(0xFFEEEEEE),
+      alignment: Alignment.center,
+      child: Text(
+        _getInitials(p.name),
+        style: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey[400],
+        ),
+      ),
+    );
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -317,12 +341,13 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (c, e, s) =>
-                    const Icon(Icons.fastfood, size: 50, color: Colors.grey),
-              ),
+              child: imageUrl.isEmpty
+                  ? imagePlaceholder
+                  : Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => imagePlaceholder,
+                    ),
             ),
             Positioned.fill(
               child: Container(color: Colors.black.withOpacity(0.3)),

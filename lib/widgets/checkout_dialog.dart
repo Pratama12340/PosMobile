@@ -41,6 +41,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   Discount? _selectedDiscount;
   List<Discount> _availableDiscounts = [];
 
+  // --- STATE PAJAK ---
   List<dynamic> _availableTaxes = [];
   double _totalTaxPercentage = 0.0;
 
@@ -56,11 +57,14 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     if (mounted) setState(() => _availableDiscounts = discounts);
   }
 
+  // --- FUNGSI LOAD PAJAK: Membaca 'rate' dan mendukung tipe percentage/fixed ---
   void _loadTaxes() async {
     final taxes = await ApiService.getTaxes();
     if (mounted) {
       setState(() {
         _availableTaxes = taxes;
+        
+        // Hitung total persentase khusus untuk label UI (tipe percentage)
         _totalTaxPercentage = taxes.fold(0.0, (sum, tax) {
           if (tax['type'] == 'percentage') {
             double val = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0.0;
@@ -169,8 +173,20 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   Widget build(BuildContext context) {
     double subTotal = widget.totalAmount;
     double discountAmount = _calculateDiscountValue(subTotal);
-    double taxAmount = (subTotal - discountAmount) * (_totalTaxPercentage / 100);
-    double grandTotal = (subTotal - discountAmount) + taxAmount;
+    double baseAmount = subTotal - discountAmount;
+    
+    // --- PERBAIKAN: HITUNG PAJAK (SUPPORT PERCENTAGE & FIXED) ---
+    double taxAmount = 0;
+    for (var tax in _availableTaxes) {
+      double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+      if (tax['type'] == 'percentage') {
+        taxAmount += baseAmount * (rate / 100);
+      } else {
+        taxAmount += rate;
+      }
+    }
+    
+    double grandTotal = baseAmount + taxAmount;
     if (grandTotal < 0) grandTotal = 0;
     double change = _amountTendered - grandTotal;
 

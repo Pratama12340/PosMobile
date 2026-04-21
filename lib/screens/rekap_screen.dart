@@ -4,6 +4,7 @@ import '../services/storage_service.dart';
 import '../services/api_service.dart';
 import '../models/rekap_model.dart';
 import '../models/order_model.dart';
+import '../widgets/closing_cash_dialog.dart';
 import 'package:intl/intl.dart';
 
 class RekapScreen extends StatefulWidget {
@@ -15,66 +16,116 @@ class RekapScreen extends StatefulWidget {
 }
 
 class _RekapScreenState extends State<RekapScreen> {
-  String _formatNumber(int number) => number.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+  // Variabel untuk menampung Future agar tidak reload saat build
+  late Future<List<dynamic>> _rekapDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  // Fungsi untuk memicu pengambilan data
+  void _loadInitialData() {
+    _rekapDataFuture = Future.wait([
+      StorageService.getCashierName(),    // [0]
+      ApiService.getShiftHistory(),       // [1]
+      ApiService.fetchHistory(),          // [2]
+      ApiService.getMasterShifts(),       // [3]
+      StorageService.getOpeningBalance(), // [4] Data Lokal
+    ]);
+  }
+
+  String _formatNumber(int number) => number.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
       body: FutureBuilder<List<dynamic>>(
-        future: Future.wait([
-          StorageService.getCashierName(), // [0]
-          ApiService.getShiftHistory(),    // [1] Sudah List<RekapShift>
-          ApiService.fetchHistory(),       // [2] Sudah List<Order>
-          ApiService.getMasterShifts(),    // [3] Sudah List<ShiftMaster>
-        ]),
+        future: _rekapDataFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
+          }
 
           final String cashierName = snapshot.data?[0] ?? "Kasir";
-          
-          // PERBAIKAN: Langsung cast ke List Model tanpa mapping lagi
           final List<ShiftMaster> masterData = snapshot.data?[3] ?? [];
-          final List<RekapShift> shiftList = snapshot.data?[1] ?? [];
+          List<RekapShift> shiftList = snapshot.data?[1] ?? [];
           final List<Order> allOrders = snapshot.data?[2] ?? [];
+          
+          // --- PERBAIKAN 1: Safe Casting Kas Awal ---
+          final dynamic rawOpening = snapshot.data?[4];
+          final int localOpeningBalance = (rawOpening is double) 
+              ? rawOpening.toInt() 
+              : (rawOpening as int? ?? 0);
 
-          // Mapping Master Info ke dalam Rekap (Join Data)
+          // --- PERBAIKAN 2: Sorting Shift Terkini ---
+          // Memastikan shift yang baru saja dibuka berada di urutan teratas
+          if (shiftList.isNotEmpty) {
+            shiftList.sort((a, b) => (b.startedAt ?? DateTime.now()).compareTo(a.startedAt ?? DateTime.now()));
+          }
+
+          // Mapping Master Info (Join Data)
           for (var rekap in shiftList) {
             rekap.masterInfo = masterData.firstWhere(
               (m) => m.id == rekap.shiftId,
-              orElse: () => ShiftMaster(id: 0, name: 'Shift?', startTime: '00:00:00', endTime: '00:00:00'),
+              orElse: () => ShiftMaster(
+                  id: 0, name: 'Shift?', startTime: '00:00:00', endTime: '00:00:00'),
             );
           }
 
-          final RekapShift? activeShift = shiftList.isNotEmpty ? shiftList.first : null;
+          // Cari shift aktif (pilih yang paling baru)
+          final RekapShift? activeShift = shiftList.firstWhere(
+            (s) => s.status == 'active',
+            orElse: () => shiftList.isNotEmpty ? shiftList.first : RekapShift(id: 0, shiftId: 0, status: 'none'),
+          );
 
-          // Hitung Kas Bersih
-          int kasAwal = activeShift?.uangAwal ?? 0;
+          // SINKRONISASI KAS AWAL (Lokal > Server)
+          int kasAwal = localOpeningBalance > 0 
+              ? localOpeningBalance 
+              : (activeShift?.uangAwal?.toInt() ?? 0);
+          
           int bersih = 0;
           int count = 0;
 
+          // --- PERBAIKAN 3: Logika Perhitungan dengan Waktu Lokal ---
           if (activeShift != null && activeShift.startedAt != null) {
+            // Konversi start shift ke local time (WIB)
+            DateTime startShiftWIB = activeShift.startedAt!.toLocal();
+            
             final df = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
             for (var order in allOrders) {
               try {
-                DateTime ot = df.parse(order.date);
-                if (ot.isAfter(activeShift.startedAt!)) {
+                // Parse date order dan pastikan diperlakukan sebagai local time
+                DateTime orderTime = df.parse(order.date).toLocal();
+                if (orderTime.isAfter(startShiftWIB)) {
                   bersih += order.totalPrice.round();
                   count++;
                 }
-              } catch (_) {}
+              } catch (e) {
+                debugPrint("Error parsing date: $e");
+              }
             }
           }
 
           return RefreshIndicator(
-            onRefresh: () async => setState(() {}),
+            onRefresh: () async {
+              setState(() {
+                _loadInitialData();
+              });
+            },
             child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 children: [
-                  _buildProfileHeader(cashierName, activeShift, kasAwal, count, bersih),
-                  // Tambahkan widget lain jika diperlukan
+                  _buildProfileHeader(
+                      context, cashierName, activeShift, kasAwal, count, bersih),
                 ],
               ),
             ),
@@ -84,16 +135,52 @@ class _RekapScreenState extends State<RekapScreen> {
     );
   }
 
-  Widget _buildProfileHeader(String name, RekapShift? shift, int awal, int count, int bersih) {
-    String loginTime = shift?.startedAt != null ? DateFormat('HH:mm').format(shift!.startedAt!) : "--:--";
+  Widget _buildProfileHeader(BuildContext context, String name,
+      RekapShift? shift, int awal, int count, int bersih) {
+    
+    // --- PERBAIKAN 4: Format Jam WIB ---
+    String loginTime = shift?.startedAt != null
+        ? DateFormat('HH:mm').format(shift!.startedAt!.toLocal())
+        : "--:--";
+
+    bool isActuallyLate = false;
+    String statusText = "Tepat Waktu";
+
+    if (shift != null && shift.startedAt != null && shift.masterInfo != null) {
+      try {
+        final timeParts = shift.masterInfo!.startTime.split(':');
+        // Pastikan perbandingan jadwal juga menggunakan basis tanggal yang sama
+        final scheduledTime = DateTime(
+          shift.startedAt!.year,
+          shift.startedAt!.month,
+          shift.startedAt!.day,
+          int.parse(timeParts[0]),
+          int.parse(timeParts[1]),
+        );
+        
+        // Toleransi 10 menit
+        if (shift.startedAt!.isAfter(scheduledTime.add(const Duration(minutes: 10)))) {
+          isActuallyLate = true;
+          statusText = "Telat";
+        }
+      } catch (e) {
+        isActuallyLate = shift.isLate;
+        statusText = shift.lateStatusText;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(24)),
       child: Column(
         children: [
           Row(
             children: [
-              const CircleAvatar(radius: 30, backgroundColor: AppStyle.bgLightBlue, child: Icon(Icons.person, color: AppStyle.primaryBlue)),
+              const CircleAvatar(
+                  radius: 30,
+                  backgroundColor: AppStyle.bgLightBlue,
+                  child: Icon(Icons.person, color: AppStyle.primaryBlue)),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -101,22 +188,55 @@ class _RekapScreenState extends State<RekapScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(name, style: AppStyle.titleText.copyWith(fontSize: 20)),
+                        Text(name,
+                            style: AppStyle.titleText.copyWith(fontSize: 20)),
                         const SizedBox(width: 8),
-                        if (shift != null)
+                        if (shift != null && shift.status != 'none')
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: shift.isLate ? Colors.red.shade50 : Colors.green.shade50,
+                              color: isActuallyLate
+                                  ? Colors.red.shade50
+                                  : Colors.green.shade50,
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: shift.isLate ? Colors.red : Colors.green),
+                              border: Border.all(
+                                  color:
+                                      isActuallyLate ? Colors.red : Colors.green),
                             ),
-                            child: Text(shift.lateStatusText, style: TextStyle(color: shift.isLate ? Colors.red : Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                            child: Text(statusText,
+                                style: TextStyle(
+                                    color: isActuallyLate
+                                        ? Colors.red
+                                        : Colors.green,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
                           ),
                       ],
                     ),
-                    Text("Shift: ${shift?.masterInfo?.name} • Masuk: $loginTime WIB", style: AppStyle.subTitleText),
+                    Text(
+                        "Shift: ${shift?.masterInfo?.name ?? '-'} • Masuk: $loginTime WIB",
+                        style: AppStyle.subTitleText),
                   ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const ClosingCashDialog(),
+                  );
+                },
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text("Tutup Shift"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
                 ),
               ),
             ],
@@ -127,10 +247,14 @@ class _RekapScreenState extends State<RekapScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _infoItem("Kas Awal", "Rp ${_formatNumber(awal)}", Icons.wallet, Colors.blue),
+              _infoItem(
+                  "Kas Awal", "Rp ${_formatNumber(awal)}", Icons.wallet, Colors.blue),
               _infoItem("Transaksi", "$count", Icons.payments, Colors.orange),
-              _infoItem("Kas Bersih", "Rp ${_formatNumber(bersih)}", Icons.shopping_bag, Colors.green),
-              _infoItem("Total Akhir", "Rp ${_formatNumber(awal + bersih)}", Icons.summarize, AppStyle.primaryBlue, isBold: true),
+              _infoItem("Kas Bersih", "Rp ${_formatNumber(bersih)}",
+                  Icons.shopping_bag, Colors.green),
+              _infoItem("Total Akhir", "Rp ${_formatNumber(awal + bersih)}",
+                  Icons.summarize, AppStyle.primaryBlue,
+                  isBold: true),
             ],
           ),
         ],
@@ -138,12 +262,17 @@ class _RekapScreenState extends State<RekapScreen> {
     );
   }
 
-  Widget _infoItem(String label, String value, IconData icon, Color color, {bool isBold = false}) {
+  Widget _infoItem(String label, String value, IconData icon, Color color,
+      {bool isBold = false}) {
     return Column(
       children: [
         Icon(icon, color: color, size: 20),
         const SizedBox(height: 8),
-        Text(value, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: 16, color: isBold ? AppStyle.primaryBlue : Colors.black87)),
+        Text(value,
+            style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                fontSize: 16,
+                color: isBold ? AppStyle.primaryBlue : Colors.black87)),
         Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
       ],
     );

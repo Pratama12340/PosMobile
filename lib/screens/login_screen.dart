@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // TAMBAHAN IMPORT
 import 'main_navigation.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
@@ -110,38 +111,75 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       _outletId = currentId;
+      
       final result = await ApiService.loginPin(_pin, _outletId);
 
       if (!mounted) return;
 
       if (result['success'] == true) {
-        // =============================================================
-        // TAMBAHAN: LOGIKA AUDIT CABANG (MENCEGAH FORBIDDEN 403)
-        // =============================================================
         final userFromServer = result['data']['user'];
-        final int userOutletId = userFromServer['outlet_id'];
+        final int userOutletId = int.tryParse(userFromServer['outlet_id'].toString()) ?? 0;
 
         print("--- AUDIT KEAMANAN LOGIN ---");
         print("Cabang pilihan App: $_outletId");
         print("Cabang asli User di DB: $userOutletId");
 
-        // Jika ID di Database tidak sama dengan ID yang dipilih, kita cegah masuk.
-        // Ini adalah penyebab utama error 'Forbidden' saat Checkout.
+        // Validasi Cabang
         if (userOutletId != _outletId) {
           _handleLoginError("Akses Ditolak: Akun Anda terdaftar di Cabang lain.");
-          return; // Hentikan proses navigasi
+          return; 
         }
+
+        // =============================================================
+        // LOGIKA BYPASS KAS AWAL (DIPERBAIKI SECARA PERMANEN)
+        // =============================================================
+        final String? oldShiftId = await StorageService.getCurrentShiftId();
+        final String? newShiftId = result['data']['shift_id']?.toString();
+        
+        // Menggunakan ID Karyawan untuk mendeteksi orang yang berbeda
+        // Ini menghindari bug memori terhapus saat karyawan klik tombol "Logout"
+        final prefs = await SharedPreferences.getInstance();
+        final int lastUserId = prefs.getInt('last_shift_user_id') ?? 0;
+        final int currentUserId = int.tryParse(userFromServer['id'].toString()) ?? 0;
+
+        bool isKasirOpened = await StorageService.getShiftStatus() ?? false;
+
+        // 🌟 PERBAIKAN 1: Jika Shift-nya beda ATAU ID User-nya beda -> Wajib isi Kas Awal lagi!
+        if (oldShiftId != newShiftId || lastUserId != currentUserId) {
+            print("🔄 Shift atau Karyawan baru terdeteksi. Mereset status kasir...");
+            isKasirOpened = false;
+            await StorageService.saveShiftStatus(false);
+        } else {
+            if (isKasirOpened) print("⏩ Kasir sudah dibuka di shift ini. Bypass Kas Awal.");
+        }
+
+        // Simpan ID User yang berhasil login untuk pengecekan berikutnya
+        await prefs.setInt('last_shift_user_id', currentUserId);
         // =============================================================
 
-        String nameFromServer = userFromServer['name'] ?? "Cashier";
-        DateTime now = DateTime.now();
-        String loginTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+        // Simpan Token di memori
+        final String? tokenFromServer = result['data']['token'];
+        if (tokenFromServer != null) {
+          await StorageService.saveToken(tokenFromServer);
+          print("🔑 Token Akses Berhasil Disimpan!");
+        }
 
-        await StorageService.saveCashierName(nameFromServer);
-        await StorageService.saveLoginTime(loginTime);
-        
-        // Rekomendasi: Simpan juga Token/Bearer jika ada di response data
-        // await StorageService.saveToken(result['data']['token']);
+        // 🌟 PERBAIKAN 2: Cegah penimpaan Waktu Start Shift
+        // Jika sedang bypass, JANGAN simpan ulang waktu login,
+        // agar waktu awal shift tidak rusak.
+        if (!isKasirOpened) {
+          DateTime now = DateTime.now();
+          String loginTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+          await StorageService.saveLoginTime(loginTime);
+        }
+
+        final String newCashierName = userFromServer['name'] ?? "Cashier";
+        await StorageService.saveCashierName(newCashierName);
+
+        // Jika berhasil mendapat shift_id, pastikan kita simpan juga ke Storage
+        if (newShiftId != null) {
+          await StorageService.saveCurrentShiftId(newShiftId);
+        }
 
         String liveOutletName = await ApiService.fetchOutletNameLive();
         await StorageService.saveOutletName(liveOutletName);
@@ -149,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const MainNavigationScaffold(requireCashInput: true)),
+            MaterialPageRoute(builder: (context) => MainNavigationScaffold(requireCashInput: !isKasirOpened)),
           );
         }
       } else {
@@ -211,10 +249,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text("Masukkan 6 digit PIN akses", style: AppStyle.subTitleText),
                         const SizedBox(height: 35),
                         
-                        // BAGIAN YANG DIPERBAIKI: Menggunakan fixed height container
-                        // Agar saat berpindah antara Loading dan PIN Dots, posisi tidak berubah
                         SizedBox(
-                          height: 30, // Sesuaikan dengan tinggi PIN Dots agar tetap simetris
+                          height: 30, 
                           child: _isLoading
                               ? const Center(
                                   child: SizedBox(

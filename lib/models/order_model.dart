@@ -1,99 +1,119 @@
 import 'package:intl/intl.dart';
 
+class OrderLog {
+  final String title, reason, date, actor;
+
+  OrderLog({required this.title, required this.reason, required this.date, required this.actor});
+
+  factory OrderLog.fromJson(Map<String, dynamic> json) {
+    String rawDate = json['created_at'] ?? "";
+    String formattedLogDate = rawDate;
+    if (rawDate.isNotEmpty) {
+      try {
+        DateTime parsedDate = DateTime.parse(rawDate).toLocal();
+        formattedLogDate = DateFormat('dd MMM yyyy HH:mm', 'id_ID').format(parsedDate);
+      } catch (e) {
+        formattedLogDate = rawDate.replaceAll('T', ' ').split('.')[0];
+      }
+    }
+    return OrderLog(
+      title: json['title'] ?? json['action'] ?? "Perubahan Pesanan",
+      reason: json['reason'] ?? json['notes'] ?? "-",
+      date: formattedLogDate,
+      actor: json['user']?['name'] ?? json['cashier_name'] ?? "Staff",
+    );
+  }
+}
+
 class OrderItem {
-  final int id;
-  final int productId;
-  int quantity;
+  final int id, productId;
+  final int originalQty; // Kuantitas awal dari database (sebelum divoid)
+  int activeQty;         // Kuantitas valid saat ini yang bisa diubah di UI
+  
   final String itemName;
   final double unitPrice;
   final bool isVoided;
-  String note;
+  String notes;
+
+  // Agar tidak perlu mengubah kode di ReceiptDialog, kita buat
+  // getter dan setter 'quantity' yang merujuk ke activeQty.
+  int get quantity => activeQty;
+  set quantity(int val) {
+    // Pastikan UI tidak bisa menambah item melebihi kuantitas order aslinya
+    if (val <= originalQty) {
+      activeQty = val;
+    }
+  }
 
   OrderItem({
-    required this.id,
-    required this.productId,
-    required this.quantity,
-    required this.itemName,
-    required this.unitPrice,
-    this.isVoided = false,
-    this.note = "",
+    required this.id, 
+    required this.productId, 
+    required this.originalQty,
+    required this.activeQty,
+    required this.itemName, 
+    required this.unitPrice, 
+    this.isVoided = false, 
+    this.notes = "",
   });
 
-  // Jika item di-void, maka subtotal dianggap 0
-  double get subtotal => isVoided ? 0 : (quantity * unitPrice);
+  double get subtotal => (isVoided || activeQty == 0) ? 0 : (activeQty * unitPrice);
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     var product = json['product'] ?? {};
+    
+    // Tarik data qty asli dan qty yang sudah dibatalkan dari backend
+    int orig = int.tryParse((json['qty'] ?? json['quantity'])?.toString() ?? '1') ?? 1;
+    int canc = int.tryParse(json['cancelled_qty']?.toString() ?? '0') ?? 0;
+
     return OrderItem(
       id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       productId: int.tryParse(json['product_id']?.toString() ?? '0') ?? 0,
-      quantity: int.tryParse((json['qty'] ?? json['quantity'])?.toString() ?? '1') ?? 1,
+      originalQty: orig,
+      activeQty: orig - canc, // UI hanya menampilkan sisa item yang belum dibatalkan
       itemName: product['name'] ?? json['product_name'] ?? json['item_name'] ?? 'Tanpa Nama',
       unitPrice: double.tryParse((json['price'] ?? json['unit_price'])?.toString() ?? '0') ?? 0.0,
-      isVoided: json['is_void'] == 1 || json['status'] == 'void',
-      note: json['note'] ?? json['notes'] ?? "",
+      isVoided: json['is_void'] == 1 || json['status'] == 'void' || (orig - canc <= 0),
+      notes: json['notes'] ?? json['note'] ?? "",
     );
   }
 
   Map<String, dynamic> toJson() {
+    // Backend (Laravel) mengharapkan format yang sama persis seperti di Vue,
+    // yaitu array berisi ID item dan JUMLAH item yang DIBATALKAN (bukan jumlah sisanya).
     return {
-      'product_id': productId != 0 ? productId : id,
-      'qty': quantity,
-      'price': unitPrice.toInt(),
-      'note': note,
-      'is_void': isVoided ? 1 : 0,
+      'id': id,
+      'cancelled_qty': originalQty - activeQty,
     };
   }
 }
 
 class Order {
-  final int id;
-  final String invoiceNo;
-  final String date;
-  final String cashierName;
-  final String customerName;
-  final String tableNo;
-  final String paymentMethod;
-  final String status;
-  final double subtotalPrice;
-  final double discountAmount;
-  final double taxAmount;
-  final double totalPrice;
-  final double paidAmount;
-  final double changeAmount;
+  final int id;              // Ini id_history
+  final int orderId;         // Ini id_order asli untuk update items
+  final String invoiceNo, date, cashierName, customerName, tableNo, paymentMethod, status;
+  final double subtotalPrice, discountAmount, taxAmount, totalPrice, paidAmount, changeAmount;
   final List<OrderItem> items;
-  String? note;
+  final List<OrderLog> logs;
 
   Order({
     required this.id,
-    required this.invoiceNo,
-    required this.date,
-    required this.cashierName,
-    required this.customerName,
-    required this.tableNo,
-    required this.paymentMethod,
-    required this.status,
-    required this.subtotalPrice,
-    required this.discountAmount,
-    required this.taxAmount,
-    required this.totalPrice,
-    required this.paidAmount,
-    required this.changeAmount,
-    required this.items,
-    this.note,
+    required this.orderId,    
+    required this.invoiceNo, required this.date, required this.cashierName,
+    required this.customerName, required this.tableNo, required this.paymentMethod, required this.status,
+    required this.subtotalPrice, required this.discountAmount, required this.taxAmount,
+    required this.totalPrice, required this.paidAmount, required this.changeAmount,
+    required this.items, required this.logs,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
-    // 1. Deteksi Wrapper (Data Detail vs List History)
     final Map<String, dynamic> d = (json['data'] != null && json['data'] is Map) ? json['data'] : json;
     
-    // 2. Akses Relasi Order (sering muncul di API detail history)
-    final Map<String, dynamic> orderRelasi = d['order'] is Map ? d['order'] : {};
-    
-    // 3. Ambil List Items dari berbagai kemungkinan key API
-    var itemsRaw = (orderRelasi['order_items'] ?? orderRelasi['items'] ?? d['items'] ?? []) as List;
+    final int actualOrderId = int.tryParse(d['order_id']?.toString() ?? '0') ?? 0;
 
-    // 4. Format Tanggal & Waktu
+    final Map<String, dynamic> orderRelasi = d['order'] is Map ? d['order'] : {};
+    var itemsRaw = (orderRelasi['order_items'] ?? orderRelasi['items'] ?? d['items'] ?? []) as List;
+    var logsRaw = (d['logs'] ?? d['order_logs'] ?? orderRelasi['logs'] ?? orderRelasi['order_logs'] ?? []) as List;
+
     String rawDate = d['paid_at'] ?? d['created_at'] ?? orderRelasi['created_at'] ?? "";
     String formattedDate = "-";
     if (rawDate.isNotEmpty) {
@@ -101,12 +121,10 @@ class Order {
         DateTime parsedDate = DateTime.parse(rawDate).toLocal();
         formattedDate = DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(parsedDate);
       } catch (e) {
-        // Fallback jika format ISO gagal, hapus karakter aneh
         formattedDate = rawDate.replaceAll('T', ' ').split('.')[0];
       }
     }
 
-    // 5. Logika Penamaan Meja
     String tNo = "Takeaway";
     var tableData = orderRelasi['table'] ?? d['table'];
     if (tableData != null) {
@@ -115,14 +133,12 @@ class Order {
       tNo = "Meja ${d['table_id']}";
     }
 
-    // 6. Nama Kasir
-    String cName = d['cashier_name'] ?? d['cashier']?['name'] ?? d['user']?['name'] ?? "Staff";
-
     return Order(
-      id: int.tryParse(d['id']?.toString() ?? '0') ?? 0,
+      id: int.tryParse(d['id']?.toString() ?? '0') ?? 0, 
+      orderId: actualOrderId,                            
       invoiceNo: d['invoice_number']?.toString() ?? d['invoice_no'] ?? "-",
       date: formattedDate,
-      cashierName: cName,
+      cashierName: d['cashier_name'] ?? d['cashier']?['name'] ?? d['user']?['name'] ?? "Staff",
       customerName: d['customer_name'] ?? "-",
       tableNo: tNo,
       paymentMethod: (d['payment_method']?.toString() ?? "CASH").toUpperCase(),
@@ -134,7 +150,7 @@ class Order {
       paidAmount: double.tryParse((d['paid_amount'] ?? d['amount_paid'] ?? '0').toString()) ?? 0.0,
       changeAmount: double.tryParse((d['change_amount'] ?? '0').toString()) ?? 0.0,
       items: itemsRaw.map((i) => OrderItem.fromJson(i)).toList(),
-      note: d['notes'] ?? d['note'],
+      logs: logsRaw.map((l) => OrderLog.fromJson(l)).toList(),
     );
   }
 }

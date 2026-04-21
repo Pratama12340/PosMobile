@@ -175,7 +175,7 @@ class ApiService {
     }
   }
 
-  // --- 5. API HISTORY TRANSACTIONS (DIPERBAIKI) ---
+  // --- 5. API HISTORY TRANSACTIONS ---
   static Future<List<Order>> fetchHistory() async {
     try {
       final headers = await _getHeaders();
@@ -192,7 +192,6 @@ class ApiService {
         } else if (result['data'] != null && result['data']['data'] is List) {
           data = result['data']['data'];
         }
-        // Langsung map ke List<Order>
         return data.map((json) => Order.fromJson(json)).toList();
       }
       return [];
@@ -212,6 +211,48 @@ class ApiService {
       debugPrint("Error API Detail: $e");
     }
     return null;
+  }
+
+  // TAMBAHKAN: UPDATE ORDER (PERBAIKAN ENDPOINT & PAYLOAD)
+  static Future<bool> updateOrder({
+    required int orderId,
+    required List<OrderItem> items,
+    required String reason,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      
+      // PERBAIKAN 1: Sesuaikan nama key dengan ekspektasi Laravel (sama seperti di Vue)
+      final Map<String, dynamic> bodyData = {
+        'reason': reason, // Ubah 'notes' menjadi 'reason'
+        'items': items.map((item) => item.toJson()).toList(), // Ubah 'order_items' menjadi 'items'
+      };
+
+      print("--- [DEBUG] PROSES UPDATE ORDER ---");
+      print("URL: $baseUrl/orders/$orderId/void-items");
+      print("PAYLOAD JSON: ${jsonEncode(bodyData)}");
+
+      // PERBAIKAN 2: Ubah method jadi POST dan Endpoint ke orders/void-items
+      final response = await http.post(
+        Uri.parse('$baseUrl/orders/$orderId/void-items'),
+        headers: headers,
+        body: jsonEncode(bodyData),
+      );
+
+      print("STATUS CODE: ${response.statusCode}");
+      print("RESPONSE BODY: ${response.body}");
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print("--- [DEBUG] UPDATE BERHASIL DI SERVER ---");
+        return true;
+      } else {
+        print("--- [DEBUG] UPDATE GAGAL (SERVER REJECTED) ---");
+        return false;
+      }
+    } catch (e) {
+      print("--- [DEBUG] ERROR KONEKSI/SISTEM: $e ---");
+      return false;
+    }
   }
 
   // --- 6. VOID / EDIT ITEM ---
@@ -311,9 +352,8 @@ class ApiService {
     } catch (e) { return []; }
   }
 
-  // --- 9. SHIFT KARYAWAN (DIPERBAIKI) ---
+  // --- 9. SHIFT KARYAWAN ---
 
-  /// Memulai shift (Start Shift) - Sekarang mengirimkan outlet_id dan nominal
   static Future<Map<String, dynamic>> startShift(int nominal, int outletId) async {
     try {
       final headers = await _getHeaders();
@@ -347,7 +387,6 @@ class ApiService {
     } catch (e) { return {'success': false, 'message': 'Koneksi error: $e'}; }
   }
 
-  // Ambil Riwayat Shift (DIPERBAIKI: Mengembalikan List<RekapShift>)
   static Future<List<RekapShift>> getShiftHistory() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/shift-karyawans'), headers: await _getHeaders());
@@ -360,7 +399,6 @@ class ApiService {
     } catch (e) { return []; }
   }
 
-  // TAMBAHKAN INI: Mengambil Master Data Shift (DIPERBAIKI: Mengembalikan List<ShiftMaster>)
   static Future<List<ShiftMaster>> getMasterShifts() async {
     try {
       final headers = await _getHeaders();

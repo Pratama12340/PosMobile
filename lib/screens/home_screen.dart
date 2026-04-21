@@ -383,7 +383,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   id: p.id,
                                   productId: p.id, 
                                   itemName: p.name,
-                                  quantity: 1,
+                                  originalQty: 1,
+                                  activeQty: 1,
                                   unitPrice: p.price.toDouble(),
                                 );
                               }

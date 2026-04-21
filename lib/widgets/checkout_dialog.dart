@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert'; // Untuk jsonEncode breakdown pajak
+import 'dart:convert';
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../style.dart';
@@ -32,18 +32,15 @@ class CheckoutDialog extends StatefulWidget {
 }
 
 class _CheckoutDialogState extends State<CheckoutDialog> {
-  // State Pembayaran
   String _paymentMethod = 'Cash';
   double _amountTendered = 0;
   final TextEditingController _manualTenderController = TextEditingController();
   bool _isLoading = false;
 
-  // State Diskon
   bool _showDiscountList = false;
   Discount? _selectedDiscount;
   List<Discount> _availableDiscounts = [];
 
-  // --- STATE PAJAK BARU ---
   List<dynamic> _availableTaxes = [];
   double _totalTaxPercentage = 0.0;
 
@@ -51,39 +48,30 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   void initState() {
     super.initState();
     _loadDiscounts();
-    _loadTaxes(); // Mengambil data pajak saat pertama kali dibuka
+    _loadTaxes(); 
   }
 
   void _loadDiscounts() async {
     final discounts = await ApiService.getDiscounts();
-    if (mounted) {
-      setState(() => _availableDiscounts = discounts);
-    }
+    if (mounted) setState(() => _availableDiscounts = discounts);
   }
 
-  // --- FUNGSI BARU: LOAD PAJAK DARI SERVER ---
-void _loadTaxes() async {
+  void _loadTaxes() async {
     final taxes = await ApiService.getTaxes();
-    print("--- [DEBUG] DATA PAJAK DITERIMA ---");
-    
     if (mounted) {
       setState(() {
         _availableTaxes = taxes;
-        
-        // Kita hitung total persentase khusus untuk yang tipenya 'percentage'
         _totalTaxPercentage = taxes.fold(0.0, (sum, tax) {
           if (tax['type'] == 'percentage') {
-            // PAKAI 'rate', BUKAN 'value'
             double val = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0.0;
             return sum + val;
           }
           return sum;
         });
-        
-        print("Total Persentase Pajak Terdeteksi: $_totalTaxPercentage%");
       });
     }
   }
+
   double _calculateDiscountValue(double subtotal) {
     if (_selectedDiscount == null) return 0;
     return _selectedDiscount!.type == 'percentage'
@@ -91,9 +79,7 @@ void _loadTaxes() async {
         : _selectedDiscount!.value.toDouble();
   }
 
-  // =============================================================
-  // HELPER 1: MENU PILIHAN DISKON
-  // =============================================================
+  // --- UI WIDGETS ---
   Widget _buildDiscountPickerMenu(double sub) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -101,24 +87,15 @@ void _loadTaxes() async {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Pilih Diskon",
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    fontFamily: 'Poppins')),
-            IconButton(
-              icon: const Icon(Icons.close, size: 18, color: Colors.red),
-              onPressed: () => setState(() => _showDiscountList = false),
-            ),
+            const Text("Pilih Diskon", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Poppins')),
+            IconButton(icon: const Icon(Icons.close, size: 18, color: Colors.red), onPressed: () => setState(() => _showDiscountList = false)),
           ],
         ),
         const Divider(),
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 180),
           child: _availableDiscounts.isEmpty
-              ? const Center(
-                  child: Text("Tidak ada diskon aktif",
-                      style: TextStyle(fontSize: 12, color: Colors.grey)))
+              ? const Center(child: Text("Tidak ada diskon aktif", style: TextStyle(fontSize: 12, color: Colors.grey)))
               : ListView.builder(
                   shrinkWrap: true,
                   itemCount: _availableDiscounts.length,
@@ -129,18 +106,8 @@ void _loadTaxes() async {
                       contentPadding: EdgeInsets.zero,
                       enabled: eligible,
                       dense: true,
-                      leading: Icon(Icons.stars,
-                          size: 18,
-                          color: eligible ? Colors.orange : Colors.grey),
-                      title: Text(d.name,
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.bold)),
-                      subtitle: Text(
-                        eligible
-                            ? "Klik untuk pasang"
-                            : "Min. ${widget.formatCurrency(d.minPurchase.toDouble())}",
-                        style: const TextStyle(fontSize: 10),
-                      ),
+                      leading: Icon(Icons.stars, size: 18, color: eligible ? Colors.orange : Colors.grey),
+                      title: Text(d.name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       onTap: () {
                         setState(() {
                           _selectedDiscount = d;
@@ -155,15 +122,11 @@ void _loadTaxes() async {
     );
   }
 
-  // =============================================================
-  // HELPER 2: RINCIAN HARGA (PAJAK SUDAH TERBACA)
-  // =============================================================
   Widget _buildReceiptSummary(double sub, double tx, double disc, double grand) {
     return Column(
       children: [
         _rowInf("Sub Total", sub),
         const SizedBox(height: 8),
-        // Menampilkan persentase pajak dinamis dari server
         _rowInf("Pajak ($_totalTaxPercentage%)", tx),
         const SizedBox(height: 8),
         GestureDetector(
@@ -173,40 +136,20 @@ void _loadTaxes() async {
             children: [
               Row(
                 children: [
-                  const Text("Diskon",
-                      style: TextStyle(color: Colors.black45, fontSize: 12)),
+                  const Text("Diskon", style: TextStyle(color: Colors.black45, fontSize: 12)),
                   if (_selectedDiscount != null) ...[
                     const SizedBox(width: 6),
-                    Text("(${_selectedDiscount!.name})",
-                        style: const TextStyle(
-                            color: Colors.orange,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold)),
+                    Text("(${_selectedDiscount!.name})", style: const TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: () => setState(() => _selectedDiscount = null),
-                      child:
-                          const Icon(Icons.cancel, size: 14, color: Colors.red),
-                    ),
+                    GestureDetector(onTap: () => setState(() => _selectedDiscount = null), child: const Icon(Icons.cancel, size: 14, color: Colors.red)),
                   ] else ...[
                     const SizedBox(width: 6),
-                    const Text("(Pilih Diskon)",
-                        style: TextStyle(
-                            color: AppStyle.primaryBlue,
-                            fontSize: 10,
-                            decoration: TextDecoration.underline)),
+                    const Text("(Pilih Diskon)", style: TextStyle(color: AppStyle.primaryBlue, fontSize: 10, decoration: TextDecoration.underline)),
                   ]
                 ],
               ),
-              Text(
-                disc > 0
-                    ? "- ${widget.formatCurrency(disc)}"
-                    : widget.formatCurrency(0),
-                style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    color: disc > 0 ? Colors.red : Colors.black),
-              ),
+              Text(disc > 0 ? "- ${widget.formatCurrency(disc)}" : widget.formatCurrency(0),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: disc > 0 ? Colors.red : Colors.black)),
             ],
           ),
         ),
@@ -214,19 +157,8 @@ void _loadTaxes() async {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Total",
-                style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    fontFamily: 'Poppins')),
-            Text(
-              widget.formatCurrency(grand),
-              style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: AppStyle.primaryBlue,
-                  fontFamily: 'Poppins'),
-            ),
+            const Text("Total", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, fontFamily: 'Poppins')),
+            Text(widget.formatCurrency(grand), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppStyle.primaryBlue, fontFamily: 'Poppins')),
           ],
         ),
       ],
@@ -237,10 +169,7 @@ void _loadTaxes() async {
   Widget build(BuildContext context) {
     double subTotal = widget.totalAmount;
     double discountAmount = _calculateDiscountValue(subTotal);
-    
-    // --- PERBAIKAN: PAJAK DIHITUNG DARI SUBTOTAL SETELAH DISKON ---
     double taxAmount = (subTotal - discountAmount) * (_totalTaxPercentage / 100);
-    
     double grandTotal = (subTotal - discountAmount) + taxAmount;
     if (grandTotal < 0) grandTotal = 0;
     double change = _amountTendered - grandTotal;
@@ -253,23 +182,17 @@ void _loadTaxes() async {
       child: Container(
         width: 1000,
         height: 680,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
         child: Row(
           children: [
-            // ================= SISI KIRI: PEMBAYARAN =================
+            // SISI KIRI
             Expanded(
               flex: 5,
               child: Padding(
                 padding: const EdgeInsets.all(40),
                 child: Column(
                   children: [
-                    const Text("Payment Method",
-                        style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Poppins')),
+                    const Text("Payment Method", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
                     const SizedBox(height: 30),
                     Row(children: [
                       _payBtn('Cash', Icons.payments_outlined),
@@ -283,57 +206,32 @@ void _loadTaxes() async {
                       TextField(
                         controller: _manualTenderController,
                         keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          CurrencyInputFormatter()
-                        ],
-                        style: AppStyle.numPadText
-                            .copyWith(fontSize: 35, color: AppStyle.primaryBlue),
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()],
+                        style: AppStyle.numPadText.copyWith(fontSize: 35, color: AppStyle.primaryBlue),
                         textAlign: TextAlign.center,
                         decoration: InputDecoration(
-                          hintText: "0",
                           labelText: "Isi Uang Manual",
-                          prefixIcon: const Icon(Icons.edit_note, size: 30),
                           filled: true,
                           fillColor: const Color(0xFFF8F9FA),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(15),
-                              borderSide: BorderSide.none),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
                         ),
-                        onChanged: (v) => setState(() => _amountTendered = v.isEmpty
-                            ? 0
-                            : double.tryParse(v.replaceAll('.', '')) ?? 0),
+                        onChanged: (v) => setState(() => _amountTendered = v.isEmpty ? 0 : double.tryParse(v.replaceAll('.', '')) ?? 0),
                       ),
                       const SizedBox(height: 25),
-                      Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          alignment: WrapAlignment.center,
-                          children: [20000, 50000, 100000, 150000, 200000]
-                              .map((v) => _quickBtn(v.toDouble()))
-                              .toList()),
+                      Wrap(spacing: 12, runSpacing: 12, alignment: WrapAlignment.center,
+                          children: [20000, 50000, 100000, 150000, 200000].map((v) => _quickBtn(v.toDouble())).toList()),
                       const Spacer(),
                       if (change > 0) _buildChangeDisplay(change),
                     ] else ...[
                       const Spacer(),
-                      Icon(
-                          _paymentMethod == 'Card'
-                              ? Icons.credit_card
-                              : Icons.qr_code_2,
-                          size: 120,
-                          color: Colors.grey.shade300),
-                      const SizedBox(height: 20),
-                      const Text("SCAN UNTUK MEMBAYAR",
-                          style: TextStyle(
-                              fontFamily: 'Poppins', color: Colors.grey)),
+                      Icon(_paymentMethod == 'Card' ? Icons.credit_card : Icons.qr_code_2, size: 120, color: Colors.grey.shade300),
                       const Spacer(),
                     ]
                   ],
                 ),
               ),
             ),
-
-            // ================= SISI KANAN: RINGKASAN =================
+            // SISI KANAN
             Expanded(
               flex: 4,
               child: Container(
@@ -342,26 +240,9 @@ void _loadTaxes() async {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Align(
-                        alignment: Alignment.topRight,
-                        child: IconButton(
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close))),
-                    Text("Kasir: ${widget.cashierName}",
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.bold)),
-                    Text("$currentDate | $currentTime WIB",
-                        style: const TextStyle(
-                            fontSize: 11, color: Colors.black54)),
-                    if (widget.tableNumber.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text("Meja: ${widget.tableNumber}",
-                            style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87)),
-                      ),
+                    Align(alignment: Alignment.topRight, child: IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close))),
+                    Text("Kasir: ${widget.cashierName}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    Text("$currentDate | $currentTime WIB", style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     const Divider(height: 30),
                     Expanded(
                       child: ListView.builder(
@@ -372,38 +253,14 @@ void _loadTaxes() async {
                             padding: const EdgeInsets.only(bottom: 16),
                             child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                      child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                        Text(item.itemName,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13)),
-                                        Text(
-                                            "${item.quantity} x ${widget.formatCurrency(item.unitPrice)}",
-                                            style: const TextStyle(
-                                                color: Colors.black45,
-                                                fontSize: 11)),
-                                        if (item.note != null &&
-                                            item.note.isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 4),
-                                            child: Text("Note: ${item.note}",
-                                                style: TextStyle(
-                                                    fontSize: 10,
-                                                    color: Colors.orange[800],
-                                                    fontStyle: FontStyle.italic)),
-                                          ),
+                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                        Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                        Text("${item.quantity} x ${widget.formatCurrency(item.unitPrice)}", style: const TextStyle(color: Colors.black45, fontSize: 11)),
+                                        if (item.notes != null && item.notes.isNotEmpty)
+                                          Text("Note: ${item.notes}", style: TextStyle(fontSize: 10, color: Colors.orange[800], fontStyle: FontStyle.italic)),
                                       ])),
-                                  const SizedBox(width: 8),
-                                  Text(widget.formatCurrency(item.subtotal),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13)),
+                                  Text(widget.formatCurrency(item.subtotal), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                 ]),
                           );
                         },
@@ -411,40 +268,16 @@ void _loadTaxes() async {
                     ),
                     Container(
                       padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: const Color(0xFFEEEEEE)),
-                      ),
-                      child: _showDiscountList
-                          ? _buildDiscountPickerMenu(subTotal)
-                          : _buildReceiptSummary(subTotal, taxAmount,
-                              discountAmount, grandTotal),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFEEEEEE))),
+                      child: _showDiscountList ? _buildDiscountPickerMenu(subTotal) : _buildReceiptSummary(subTotal, taxAmount, discountAmount, grandTotal),
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppStyle.primaryBlue,
-                        minimumSize: const Size(double.infinity, 60),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15)),
-                      ),
-                      onPressed: (_paymentMethod == 'Cash' &&
-                                  _amountTendered < grandTotal) ||
-                              _isLoading
-                          ? null
-                          : _processPayment,
+                      style: ElevatedButton.styleFrom(backgroundColor: AppStyle.primaryBlue, minimumSize: const Size(double.infinity, 60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                      onPressed: (_paymentMethod == 'Cash' && _amountTendered < grandTotal) || _isLoading ? null : _processPayment,
                       child: _isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : const Text("PROSES PEMBAYARAN",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16)),
+                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text("PROSES PEMBAYARAN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ],
                 ),
@@ -456,180 +289,98 @@ void _loadTaxes() async {
     );
   }
 
- Future<void> _processPayment() async {
+  Future<void> _processPayment() async {
     setState(() => _isLoading = true);
     try {
       final savedOutletId = await StorageService.getOutletId();
-
-      if (savedOutletId == null || savedOutletId == 0) {
-        throw Exception(
-            "ID Outlet tidak ditemukan. Silakan login ulang.");
-      }
+      if (savedOutletId == null || savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");
 
       double subTotal = widget.totalAmount;
       double discountAmount = _calculateDiscountValue(subTotal);
       double baseAmount = subTotal - discountAmount;
-      
-      // --- PERBAIKAN: HITUNG PAJAK FINAL ---
+
       double taxAmountFinal = 0;
       for (var tax in _availableTaxes) {
         double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
-        if (tax['type'] == 'percentage') {
-          taxAmountFinal += baseAmount * (rate / 100);
-        } else {
-          taxAmountFinal += rate;
-        }
+        taxAmountFinal += (tax['type'] == 'percentage') ? (baseAmount * (rate / 100)) : rate;
       }
 
       double grandTotal = baseAmount + taxAmountFinal;
       double change = _amountTendered - grandTotal;
 
-      double discountPercentageTotal = subTotal > 0 ? (discountAmount / subTotal) : 0.0;
-
       var mappedItems = widget.cart.values.map((item) {
-        double itemDiscountPortion = item.unitPrice * discountPercentageTotal;
-        double finalItemPrice = item.unitPrice - itemDiscountPortion;
-
         return {
           'product_id': item.productId,
           'qty': item.quantity,
-          'price': finalItemPrice.toInt(),
-          'note': item.note ?? ''
+          'price': item.unitPrice.toInt(),
+          // ==========================================
+          // PERUBAHAN DI SINI: DARI 'note' MENJADI 'notes'
+          // ==========================================
+          'notes': item.notes ?? '' 
         };
       }).toList();
 
-      String invNumber = "INV-${DateTime.now().millisecondsSinceEpoch}";
-
-      // --- PERBAIKAN: KEY PAYLOAD (paid_amount & tax_amount) ---
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
-        'invoice_number': invNumber,
+        'invoice_number': "INV-${DateTime.now().millisecondsSinceEpoch}",
         'table_id': widget.tableNumber.isEmpty ? null : widget.tableNumber,
         'subtotal_price': subTotal.toInt(),
         'total_price': grandTotal.toInt(),
         'discount_amount': discountAmount.toInt(),
         'tax_amount': taxAmountFinal.toInt(),
-        
-        // --- PERBAIKAN DI SINI: Kirim sebagai List, bukan String JSON ---
-        'tax_breakdown': _availableTaxes, 
-        
+        'tax_breakdown': _availableTaxes,
         'payment_method': _paymentMethod,
-        'paid_amount': _amountTendered.toInt(), // Sesuai migration history_transactions
-        'change_amount': change.toInt(),
+        'paid_amount': _paymentMethod == 'Cash' ? _amountTendered.toInt() : grandTotal.toInt(),
+        'change_amount': _paymentMethod == 'Cash' ? change.toInt() : 0,
         'discount_id': _selectedDiscount?.id,
         'items': mappedItems,
         'status': 'paid',
       };
 
-      // --- FUNGSI PRINT DEBUG ---
-      print("--- [DEBUG] PAYLOAD API ---");
+      // DEBUG LOG UNTUK BUKTI
+      print("===========================================");
+      print("🚀 MENGIRIM DATA KE BACKEND (CHECKOUT)");
+      print("===========================================");
       print(const JsonEncoder.withIndent('  ').convert(payload));
+      print("===========================================");
 
       final res = await ApiService.submitOrder(payload);
 
       if (res['success'] && context.mounted) {
         Navigator.pop(context, {'status': 'success'});
-        Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (c) => SuccessPaymentPage(
-                      orderId: widget.orderId,
-                      paymentMethod: _paymentMethod,
-                      grandTotal: grandTotal,
-                      amountPaid: _amountTendered,
-                      change: change,
-                      cart: widget.cart,
-                      tableNumber: widget.tableNumber,
-                      cashierName: widget.cashierName,
-                      outletName: "ARANUS POS",
-                      formatCurrency: widget.formatCurrency,
-                    )));
+        Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
+          orderId: widget.orderId,
+          paymentMethod: _paymentMethod,
+          grandTotal: grandTotal,
+          amountPaid: _paymentMethod == 'Cash' ? _amountTendered : grandTotal,
+          change: _paymentMethod == 'Cash' ? change : 0,
+          cart: widget.cart,
+          tableNumber: widget.tableNumber,
+          cashierName: widget.cashierName,
+          outletName: "ARANUS POS",
+          formatCurrency: widget.formatCurrency,
+        )));
       } else {
-        String errorMsg = res['message'] ?? "Gagal memproses pesanan";
-        throw Exception(errorMsg);
+        throw Exception(res['message'] ?? "Gagal memproses pesanan");
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Gagal: $e"),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ));
-      }
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal: $e"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Widget _rowInf(String l, double v) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(l, style: const TextStyle(color: Colors.black45, fontSize: 12)),
-        Text(widget.formatCurrency(v),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))
-      ]));
-
-  Widget _payBtn(String l, IconData i) {
-    bool s = _paymentMethod == l;
-    return Expanded(
-        child: GestureDetector(
-      onTap: () => setState(() => _paymentMethod = l),
-      child: Container(
-        height: 100,
-        decoration: BoxDecoration(
-            color: s ? AppStyle.primaryBlue : Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-                color: s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(i, color: s ? Colors.white : AppStyle.textMain, size: 28),
-          const SizedBox(height: 8),
-          Text(l,
-              style: TextStyle(
-                  color: s ? Colors.white : AppStyle.textMain,
-                  fontWeight: s ? FontWeight.bold : FontWeight.normal))
-        ]),
-      ),
-    ));
-  }
-
-  Widget _quickBtn(double v) => GestureDetector(
-        onTap: () => setState(() {
-          _amountTendered = v;
-          _manualTenderController.text =
-              NumberFormat.decimalPattern('id').format(v.toInt());
-        }),
-        child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFEEEEEE))),
-            child: Text(widget.formatCurrency(v),
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.bold))),
-      );
-
-  Widget _buildChangeDisplay(double c) => Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-          color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        const Text("Kembalian",
-            style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-        Text(widget.formatCurrency(c),
-            style: const TextStyle(
-                color: Colors.green, fontWeight: FontWeight.bold, fontSize: 20))
-      ]));
+  Widget _rowInf(String l, double v) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(l, style: const TextStyle(color: Colors.black45, fontSize: 12)), Text(widget.formatCurrency(v), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))]));
+  Widget _payBtn(String l, IconData i) { bool s = _paymentMethod == l; return Expanded(child: GestureDetector(onTap: () => setState(() => _paymentMethod = l), child: Container(height: 100, decoration: BoxDecoration(color: s ? AppStyle.primaryBlue : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(i, color: s ? Colors.white : AppStyle.textMain, size: 28), const SizedBox(height: 8), Text(l, style: TextStyle(color: s ? Colors.white : AppStyle.textMain, fontWeight: s ? FontWeight.bold : FontWeight.normal))])))); }
+  Widget _quickBtn(double v) => GestureDetector(onTap: () => setState(() { _amountTendered = v; _manualTenderController.text = NumberFormat.decimalPattern('id').format(v.toInt()); }), child: Container(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFEEEEEE))), child: Text(widget.formatCurrency(v), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))));
+  Widget _buildChangeDisplay(double c) => Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)), Text(widget.formatCurrency(c), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 20))]));
 }
 
 class CurrencyInputFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue o, TextEditingValue n) {
     if (n.text.isEmpty) return n.copyWith(text: '');
-    String t = NumberFormat.decimalPattern('id')
-        .format(double.parse(n.text.replaceAll('.', '')));
-    return n.copyWith(
-        text: t, selection: TextSelection.collapsed(offset: t.length));
+    String t = NumberFormat.decimalPattern('id').format(double.parse(n.text.replaceAll('.', '')));
+    return n.copyWith(text: t, selection: TextSelection.collapsed(offset: t.length));
   }
 }

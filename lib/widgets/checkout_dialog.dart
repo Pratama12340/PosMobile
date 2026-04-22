@@ -14,6 +14,7 @@ class CheckoutDialog extends StatefulWidget {
   final double totalAmount;
   final String orderId;
   final String tableNumber;
+  final String customerName; 
   final String cashierName;
   final String Function(double) formatCurrency;
 
@@ -23,6 +24,7 @@ class CheckoutDialog extends StatefulWidget {
     required this.totalAmount,
     required this.orderId,
     required this.tableNumber,
+    required this.customerName, 
     required this.cashierName,
     required this.formatCurrency,
   });
@@ -41,7 +43,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   Discount? _selectedDiscount;
   List<Discount> _availableDiscounts = [];
 
-  // --- STATE PAJAK ---
   List<dynamic> _availableTaxes = [];
   double _totalTaxPercentage = 0.0;
 
@@ -57,14 +58,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     if (mounted) setState(() => _availableDiscounts = discounts);
   }
 
-  // --- FUNGSI LOAD PAJAK: Membaca 'rate' dan mendukung tipe percentage/fixed ---
   void _loadTaxes() async {
     final taxes = await ApiService.getTaxes();
     if (mounted) {
       setState(() {
         _availableTaxes = taxes;
-        
-        // Hitung total persentase khusus untuk label UI (tipe percentage)
         _totalTaxPercentage = taxes.fold(0.0, (sum, tax) {
           if (tax['type'] == 'percentage') {
             double val = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0.0;
@@ -83,7 +81,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         : _selectedDiscount!.value.toDouble();
   }
 
-  // --- UI WIDGETS ---
   Widget _buildDiscountPickerMenu(double sub) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -175,7 +172,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     double discountAmount = _calculateDiscountValue(subTotal);
     double baseAmount = subTotal - discountAmount;
     
-    // --- PERBAIKAN: HITUNG PAJAK (SUPPORT PERCENTAGE & FIXED) ---
     double taxAmount = 0;
     for (var tax in _availableTaxes) {
       double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
@@ -194,14 +190,14 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     String currentDate = DateFormat('dd MMM yyyy').format(DateTime.now());
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: Container(
         width: 1000,
         height: 680,
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28)),
         child: Row(
           children: [
-            // SISI KIRI
+            // SISI KIRI: PEMBAYARAN
             Expanded(
               flex: 5,
               child: Padding(
@@ -247,18 +243,57 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 ),
               ),
             ),
-            // SISI KANAN
+            // SISI KANAN: RINGKASAN PESANAN
             Expanded(
               flex: 4,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(30, 20, 30, 30),
-                color: const Color(0xFFFBFBFB),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFBFBFB),
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Align(alignment: Alignment.topRight, child: IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close))),
-                    Text("Kasir: ${widget.cashierName}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                    Text("$currentDate | $currentTime WIB", style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                    
+                    // INFORMASI TRANSAKSI (CUSTOMER & MEJA DIMAJUKAN KE KIRI)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Informasi Kasir
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Kasir: ${widget.cashierName}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            Text("$currentDate | $currentTime WIB", style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                          ],
+                        ),
+                        
+                        // Jarak tetap untuk memajukan posisi kolom Customer
+                        const SizedBox(width: 70), 
+
+                        // Informasi Customer & Meja (Sejajar Atas-Bawah, Rata Kiri)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.customerName.isEmpty ? "Customer: -" : "Customer: ${widget.customerName}", 
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              widget.tableNumber.isEmpty ? "Meja: -" : "Meja: ${widget.tableNumber}", 
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)
+                            ),
+                          ],
+                        )
+                      ],
+                    ),
+                    
                     const Divider(height: 30),
                     Expanded(
                       child: ListView.builder(
@@ -329,9 +364,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           'product_id': item.productId,
           'qty': item.quantity,
           'price': item.unitPrice.toInt(),
-          // ==========================================
-          // PERUBAHAN DI SINI: DARI 'note' MENJADI 'notes'
-          // ==========================================
           'notes': item.notes ?? '' 
         };
       }).toList();
@@ -339,6 +371,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
         'invoice_number': "INV-${DateTime.now().millisecondsSinceEpoch}",
+        'customer_name': widget.customerName, 
         'table_id': widget.tableNumber.isEmpty ? null : widget.tableNumber,
         'subtotal_price': subTotal.toInt(),
         'total_price': grandTotal.toInt(),
@@ -353,13 +386,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         'status': 'paid',
       };
 
-      // DEBUG LOG UNTUK BUKTI
-      print("===========================================");
-      print("🚀 MENGIRIM DATA KE BACKEND (CHECKOUT)");
-      print("===========================================");
-      print(const JsonEncoder.withIndent('  ').convert(payload));
-      print("===========================================");
-
       final res = await ApiService.submitOrder(payload);
 
       if (res['success'] && context.mounted) {
@@ -372,6 +398,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           change: _paymentMethod == 'Cash' ? change : 0,
           cart: widget.cart,
           tableNumber: widget.tableNumber,
+          customerName: widget.customerName, 
           cashierName: widget.cashierName,
           outletName: "ARANUS POS",
           formatCurrency: widget.formatCurrency,
@@ -387,9 +414,49 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   }
 
   Widget _rowInf(String l, double v) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(l, style: const TextStyle(color: Colors.black45, fontSize: 12)), Text(widget.formatCurrency(v), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))]));
-  Widget _payBtn(String l, IconData i) { bool s = _paymentMethod == l; return Expanded(child: GestureDetector(onTap: () => setState(() => _paymentMethod = l), child: Container(height: 100, decoration: BoxDecoration(color: s ? AppStyle.primaryBlue : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(i, color: s ? Colors.white : AppStyle.textMain, size: 28), const SizedBox(height: 8), Text(l, style: TextStyle(color: s ? Colors.white : AppStyle.textMain, fontWeight: s ? FontWeight.bold : FontWeight.normal))])))); }
+  
+  Widget _payBtn(String l, IconData i) { 
+    bool s = _paymentMethod == l; 
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _paymentMethod = l), 
+        child: Container(
+          height: 100, 
+          decoration: BoxDecoration(
+            color: s ? AppStyle.primaryBlue : Colors.white, 
+            borderRadius: BorderRadius.circular(18), 
+            border: Border.all(color: s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))
+          ), 
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center, 
+            children: [
+              Icon(i, color: s ? Colors.white : AppStyle.textMain, size: 28), 
+              const SizedBox(height: 8), 
+              Text(l, style: TextStyle(color: s ? Colors.white : AppStyle.textMain, fontWeight: s ? FontWeight.bold : FontWeight.normal))
+            ]
+          )
+        )
+      )
+    ); 
+  }
+  
   Widget _quickBtn(double v) => GestureDetector(onTap: () => setState(() { _amountTendered = v; _manualTenderController.text = NumberFormat.decimalPattern('id').format(v.toInt()); }), child: Container(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFEEEEEE))), child: Text(widget.formatCurrency(v), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))));
-  Widget _buildChangeDisplay(double c) => Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)), Text(widget.formatCurrency(c), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 20))]));
+  
+  Widget _buildChangeDisplay(double c) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), 
+    decoration: BoxDecoration(
+      color: Colors.green.shade50, 
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: Colors.green.withOpacity(0.1))
+    ), 
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+      children: [
+        const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)), 
+        Text(widget.formatCurrency(c), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 24))
+      ]
+    )
+  );
 }
 
 class CurrencyInputFormatter extends TextInputFormatter {

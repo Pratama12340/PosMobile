@@ -11,6 +11,7 @@ class SuccessPaymentPage extends StatelessWidget {
   final double change;
   final Map<int, OrderItem> cart;
   final String tableNumber;
+  final String customerName; // Tambahan parameter Nama Customer
   final String cashierName;
   final String outletName;
   final String Function(double) formatCurrency;
@@ -24,6 +25,7 @@ class SuccessPaymentPage extends StatelessWidget {
     required this.change,
     required this.cart,
     required this.tableNumber,
+    required this.customerName, // Tambahan di constructor
     required this.cashierName,
     required this.outletName,
     required this.formatCurrency,
@@ -82,6 +84,21 @@ class SuccessPaymentPage extends StatelessWidget {
                     fontFamily: 'Poppins',
                   ),
                 ),
+                
+                // Menampilkan Nama Customer jika ada
+                if (customerName.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    "Customer: $customerName",
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppStyle.primaryBlue, // Menggunakan warna biru Aranus POS
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+                
                 const SizedBox(height: 40),
 
                 // Box Kembalian (Hanya muncul jika Cash)

@@ -27,21 +27,23 @@ class OrderLog {
 
 class OrderItem {
   final int id, productId;
-  final int originalQty; // Kuantitas awal dari database (sebelum divoid)
-  int activeQty;         // Kuantitas valid saat ini yang bisa diubah di UI
+  int originalQty; // 👈 PERBAIKAN 1: Hapus 'final' agar bisa disesuaikan di keranjang
+  int activeQty;   
   
   final String itemName;
   final double unitPrice;
   final bool isVoided;
   String notes;
 
-  // Agar tidak perlu mengubah kode di ReceiptDialog, kita buat
-  // getter dan setter 'quantity' yang merujuk ke activeQty.
   int get quantity => activeQty;
+  
+  // 👈 PERBAIKAN 2: Sesuaikan setter agar tidak mengunci saat menambah pesanan baru
   set quantity(int val) {
-    // Pastikan UI tidak bisa menambah item melebihi kuantitas order aslinya
-    if (val <= originalQty) {
-      activeQty = val;
+    activeQty = val;
+    // Jika activeQty bertambah melebihi originalQty (seperti di keranjang belanja),
+    // maka originalQty harus mengikuti agar tidak dianggap 'void' (negatif) saat kirim ke backend.
+    if (activeQty > originalQty) {
+      originalQty = activeQty;
     }
   }
 
@@ -61,7 +63,6 @@ class OrderItem {
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     var product = json['product'] ?? {};
     
-    // Tarik data qty asli dan qty yang sudah dibatalkan dari backend
     int orig = int.tryParse((json['qty'] ?? json['quantity'])?.toString() ?? '1') ?? 1;
     int canc = int.tryParse(json['cancelled_qty']?.toString() ?? '0') ?? 0;
 
@@ -69,7 +70,7 @@ class OrderItem {
       id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       productId: int.tryParse(json['product_id']?.toString() ?? '0') ?? 0,
       originalQty: orig,
-      activeQty: orig - canc, // UI hanya menampilkan sisa item yang belum dibatalkan
+      activeQty: orig - canc, 
       itemName: product['name'] ?? json['product_name'] ?? json['item_name'] ?? 'Tanpa Nama',
       unitPrice: double.tryParse((json['price'] ?? json['unit_price'])?.toString() ?? '0') ?? 0.0,
       isVoided: json['is_void'] == 1 || json['status'] == 'void' || (orig - canc <= 0),
@@ -78,8 +79,6 @@ class OrderItem {
   }
 
   Map<String, dynamic> toJson() {
-    // Backend (Laravel) mengharapkan format yang sama persis seperti di Vue,
-    // yaitu array berisi ID item dan JUMLAH item yang DIBATALKAN (bukan jumlah sisanya).
     return {
       'id': id,
       'cancelled_qty': originalQty - activeQty,
@@ -88,8 +87,8 @@ class OrderItem {
 }
 
 class Order {
-  final int id;              // Ini id_history
-  final int orderId;         // Ini id_order asli untuk update items
+  final int id;              
+  final int orderId;         
   final String invoiceNo, date, cashierName, customerName, tableNo, paymentMethod, status;
   final double subtotalPrice, discountAmount, taxAmount, totalPrice, paidAmount, changeAmount;
   final List<OrderItem> items;

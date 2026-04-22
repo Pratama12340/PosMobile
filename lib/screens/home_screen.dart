@@ -155,37 +155,70 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 if (_cart.isNotEmpty)
                   CartPanel(
-                    cart: _cart,
-                    formatCurrency: formatHarga,
-                    onIncrease: (item) => setState(() => item.quantity++),
-                    onDecrease: (id) => setState(() {
-                      if (_cart[id]!.quantity > 1) {
-                        _cart[id]!.quantity--;
-                      } else {
-                        _cart.remove(id);
-                      }
-                    }),
-                    onDelete: (id) => setState(() => _cart.remove(id)),
-                    onCheckoutSuccess: (res) {
-                      setState(() {
-                        _cart.forEach((productId, cartItem) {
-                          int productIndex = _allProducts.indexWhere(
-                            (p) => p.id == productId,
-                          );
-                          if (productIndex != -1) {
-                            _allProducts[productIndex].stock -=
-                                cartItem.quantity;
-                            if (_allProducts[productIndex].stock < 0) {
-                              _allProducts[productIndex].stock = 0;
-                            }
-                          }
-                        });
-                        _cart.clear();
-                        _applyFilters();
-                      });
-                    },
-                    onSaveDraft: _saveToDraft,
-                  ),
+  cart: _cart,
+  formatCurrency: formatHarga,
+  
+  // FUNGSI TAMBAH (onIncrease)
+  onIncrease: (id) {
+  debugPrint("Parent: Memproses penambahan untuk ID $id"); 
+  
+  setState(() {
+    if (_cart.containsKey(id)) {
+      // Menggunakan .update untuk memperbarui nilai di dalam Map secara reaktif
+      _cart.update(id, (item) {
+        item.quantity += 1;
+        // Jika ada getter subtotal, dia akan otomatis ikut berubah
+        return item; 
+      });
+      
+      debugPrint("Quantity baru ID $id adalah: ${_cart[id]!.quantity}");
+    }
+  });
+},
+
+  // FUNGSI KURANG (onDecrease)
+  onDecrease: (id) {
+  setState(() {
+    if (_cart.containsKey(id)) {
+      if (_cart[id]!.quantity > 1) {
+        _cart.update(id, (item) {
+          item.quantity -= 1;
+          return item;
+        });
+      } else {
+        _cart.remove(id);
+      }
+    }
+  });
+},
+
+  // FUNGSI HAPUS (onDelete)
+  onDelete: (id) {
+    setState(() {
+      _cart.remove(id);
+    });
+  },
+
+  // FUNGSI CHECKOUT SUCCESS
+  onCheckoutSuccess: (res) {
+    setState(() {
+      // Update stok produk lokal setelah bayar berhasil
+      _cart.forEach((productId, cartItem) {
+        int productIndex = _allProducts.indexWhere((p) => p.id == productId);
+        if (productIndex != -1) {
+          _allProducts[productIndex].stock -= cartItem.quantity;
+          if (_allProducts[productIndex].stock < 0) {
+            _allProducts[productIndex].stock = 0;
+          }
+        }
+      });
+      _cart.clear(); // Kosongkan keranjang
+      _applyFilters(); // Refresh UI list produk
+    });
+  },
+
+  onSaveDraft: _saveToDraft,
+),
               ],
             ),
     );

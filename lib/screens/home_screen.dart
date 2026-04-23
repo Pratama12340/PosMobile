@@ -357,7 +357,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Text(
         _getInitials(p.name),
         style: TextStyle(
-          fontSize: 32,
+          fontSize: 80,
           fontWeight: FontWeight.bold,
           color: Colors.grey[400],
         ),

@@ -7,17 +7,17 @@ import '../models/order_model.dart';
 import '../widgets/closing_cash_dialog.dart';
 import 'package:intl/intl.dart';
 
-class RekapScreen extends StatefulWidget {
+class ShiftScreen extends StatefulWidget {
   final TextEditingController searchController;
-  const RekapScreen({super.key, required this.searchController});
+  const ShiftScreen({super.key, required this.searchController});
 
   @override
-  State<RekapScreen> createState() => _RekapScreenState();
+  State<ShiftScreen> createState() => _ShiftScreenState();
 }
 
-class _RekapScreenState extends State<RekapScreen> {
+class _ShiftScreenState extends State<ShiftScreen> {
   // Variabel untuk menampung Future agar tidak reload saat build
-  late Future<List<dynamic>> _rekapDataFuture;
+  late Future<List<dynamic>> _shiftDataFuture;
 
   @override
   void initState() {
@@ -27,13 +27,25 @@ class _RekapScreenState extends State<RekapScreen> {
 
   // Fungsi untuk memicu pengambilan data
   void _loadInitialData() {
-    _rekapDataFuture = Future.wait([
+    _shiftDataFuture = Future.wait([
       StorageService.getCashierName(),    // [0]
       ApiService.getShiftHistory(),       // [1]
       ApiService.fetchHistory(),          // [2]
       ApiService.getMasterShifts(),       // [3]
       StorageService.getOpeningBalance(), // [4] Data Lokal
     ]);
+  }
+
+  // Helper untuk memastikan angka dari storage terbaca dengan benar (int/double/string)
+  int _parseToInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) {
+      String cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
+      return int.tryParse(cleaned) ?? 0;
+    }
+    return 0;
   }
 
   String _formatNumber(int number) => number.toString().replaceAllMapped(
@@ -44,7 +56,7 @@ class _RekapScreenState extends State<RekapScreen> {
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
       body: FutureBuilder<List<dynamic>>(
-        future: _rekapDataFuture,
+        future: _shiftDataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -58,14 +70,10 @@ class _RekapScreenState extends State<RekapScreen> {
           List<RekapShift> shiftList = snapshot.data?[1] ?? [];
           final List<Order> allOrders = snapshot.data?[2] ?? [];
           
-          // --- PERBAIKAN 1: Safe Casting Kas Awal ---
-          final dynamic rawOpening = snapshot.data?[4];
-          final int localOpeningBalance = (rawOpening is double) 
-              ? rawOpening.toInt() 
-              : (rawOpening as int? ?? 0);
+          // --- PERBAIKAN: Safe Parsing Kas Awal ---
+          final int localOpeningBalance = _parseToInt(snapshot.data?[4]);
 
-          // --- PERBAIKAN 2: Sorting Shift Terkini ---
-          // Memastikan shift yang baru saja dibuka berada di urutan teratas
+          // --- PERBAIKAN: Sorting Shift Terkini ---
           if (shiftList.isNotEmpty) {
             shiftList.sort((a, b) => (b.startedAt ?? DateTime.now()).compareTo(a.startedAt ?? DateTime.now()));
           }
@@ -93,16 +101,14 @@ class _RekapScreenState extends State<RekapScreen> {
           int bersih = 0;
           int count = 0;
 
-          // --- PERBAIKAN 3: Logika Perhitungan dengan Waktu Lokal ---
+          // --- PERBAIKAN: Logika Perhitungan dengan Waktu Lokal (WIB) ---
           if (activeShift != null && activeShift.startedAt != null) {
-            // Konversi start shift ke local time (WIB)
             DateTime startShiftWIB = activeShift.startedAt!.toLocal();
             
             final df = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
             for (var order in allOrders) {
               try {
-                // Parse date order dan pastikan diperlakukan sebagai local time
-                DateTime orderTime = df.parse(order.date).toLocal();
+                DateTime orderTime = df.parse(order.date);
                 if (orderTime.isAfter(startShiftWIB)) {
                   bersih += order.totalPrice.round();
                   count++;
@@ -138,7 +144,7 @@ class _RekapScreenState extends State<RekapScreen> {
   Widget _buildProfileHeader(BuildContext context, String name,
       RekapShift? shift, int awal, int count, int bersih) {
     
-    // --- PERBAIKAN 4: Format Jam WIB ---
+    // --- PERBAIKAN: Format Jam WIB ---
     String loginTime = shift?.startedAt != null
         ? DateFormat('HH:mm').format(shift!.startedAt!.toLocal())
         : "--:--";
@@ -149,17 +155,19 @@ class _RekapScreenState extends State<RekapScreen> {
     if (shift != null && shift.startedAt != null && shift.masterInfo != null) {
       try {
         final timeParts = shift.masterInfo!.startTime.split(':');
-        // Pastikan perbandingan jadwal juga menggunakan basis tanggal yang sama
+        final loginTimeLocal = shift.startedAt!.toLocal();
+        
+        // Membandingkan jadwal pada tanggal yang sama dengan waktu login
         final scheduledTime = DateTime(
-          shift.startedAt!.year,
-          shift.startedAt!.month,
-          shift.startedAt!.day,
+          loginTimeLocal.year,
+          loginTimeLocal.month,
+          loginTimeLocal.day,
           int.parse(timeParts[0]),
           int.parse(timeParts[1]),
         );
         
         // Toleransi 10 menit
-        if (shift.startedAt!.isAfter(scheduledTime.add(const Duration(minutes: 10)))) {
+        if (loginTimeLocal.isAfter(scheduledTime.add(const Duration(minutes: 10)))) {
           isActuallyLate = true;
           statusText = "Telat";
         }

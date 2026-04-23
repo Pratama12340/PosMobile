@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
-import 'history_screen.dart'; 
-import 'rekap_screen.dart';
+import 'history_screen.dart';
+import 'shif_screen.dart'; 
 import 'setting_screen.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
@@ -22,7 +22,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   bool _isSidebarVisible = false;
   
   String _cashierName = "Loading...";
-  String _outletName = "Loading..."; // Akan diisi dari Storage
+  String _outletName = "Loading..."; 
   String _profilePhoto = "";
   String _userRole = "Cashier";
   
@@ -44,12 +44,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
-  // --- FIX: Pemanggilan data diperbaiki agar fokus ke Local Storage ---
   Future<void> _loadInitialData() async {
-    // Mengambil data dari Storage secara paralel agar lebih cepat
     final results = await Future.wait([
       StorageService.getCashierName(),
-      StorageService.getOutletName(), // Ini akan mengambil "Aranus PoS R&B" jika data kosong
+      StorageService.getOutletName(), 
       StorageService.getProfilePhoto(),
       StorageService.getUserRole(),
     ]);
@@ -120,10 +118,13 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                     child: IndexedStack(
                       index: _currentIndex,
                       children: [
+                        // Index 0
                         HomeScreen(searchController: _globalSearchController),
-                        const Center(child: Text("Shift Screen")), 
-                        RekapScreen(searchController: _globalSearchController),    // Tambahkan parameter ini
-                        HistoryScreen(),  // Tambahkan parameter ini
+                        // Index 1
+                        ShiftScreen(searchController: _globalSearchController),
+                        // Index 2
+                        HistoryScreen(),
+                        // Index 3
                         SettingScreen(searchController: _globalSearchController),
                       ],
                     ),
@@ -222,11 +223,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
           const SizedBox(height: 20),
           _buildMenuItem(Icons.home_rounded, "Home", 0),
           _buildMenuItem(Icons.access_time_filled_rounded, "Shift", 1),
-          _buildMenuItem(Icons.assessment_rounded, "Rekapitulasi", 2),
-          _buildMenuItem(Icons.history_rounded, "History", 3),
+          _buildMenuItem(Icons.history_rounded, "History", 2),
           const Spacer(),
           const Divider(indent: 20, endIndent: 20),
-          _buildMenuItem(Icons.settings_rounded, "Setting", 4),
+          _buildMenuItem(Icons.settings_rounded, "Setting", 3),
           _buildMenuItem(Icons.logout_rounded, "Logout", -1, isLogout: true),
           const SizedBox(height: 20),
         ],

@@ -29,7 +29,7 @@ class StorageService {
     return prefs.getString(_keyToken) ?? '';
   }
 
-  // --- 2. FUNGSI OUTLET DATA (Dipertahankan saat logout & tutup kasir) ---
+  // --- 2. FUNGSI OUTLET DATA ---
   static Future<void> saveOutletId(int id) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyOutletId, id);
@@ -102,9 +102,15 @@ class StorageService {
     final val = prefs.get(_keyOpeningCash); 
     
     if (val == null) return 0;
-    // Proteksi jika data tersimpan sebagai double agar tidak crash
+    
+    // Proteksi Multi-Type: Menangani jika tersimpan sebagai int, double, atau String
+    if (val is int) return val;
     if (val is double) return val.toInt(); 
-    if (val is int) return val;            
+    if (val is String) {
+      // Jika tersimpan sebagai String (misal dari input text), bersihkan karakter non-angka
+      return int.tryParse(val.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    }
+    
     return 0;
   }
 
@@ -174,28 +180,24 @@ class StorageService {
 
   // --- 6. LOGIKA LOGOUT VS TUTUP KASIR ---
 
-  // Logout HANYA menghapus sesi identitas pengguna.
-  // Kas Awal, Outlet ID, dan Status Shift TETAP tersimpan.
+  // Logout hanya menghapus sesi user, data shift tetap aman
   static Future<void> logoutKasir() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyToken);
     await prefs.remove(_keyCashierName);
     await prefs.remove(_keyUserRole);
     await prefs.remove(_keyProfilePhoto);
-    print("Sesi Login Berakhir. Data Shift & Kas Awal dipertahankan.");
   }
 
-  // Tutup Kasir menghapus SEMUA data operasional shift yang sedang berjalan.
-  // Digunakan saat proses End Shift (Akhiri Shift) di aplikasi.
+  // Menghapus data operasional saat shift benar-benar selesai
   static Future<void> tutupKasir() async {
     final prefs = await SharedPreferences.getInstance();
-    await clearOpeningBalance(); // Reset Kas Awal ke 0/Hapus
+    await clearOpeningBalance(); 
     await prefs.remove(_keyLoginTime);
     await prefs.remove(_keyIsShiftActive);
     await prefs.remove(_keyCurrentShiftId);
     await prefs.remove(_keyShiftName);
     await prefs.remove(_keyShiftSchedule);
     await prefs.remove(_keyLastShiftUserId); 
-    print("Shift Selesai. Seluruh data operasional kasir telah di-reset.");
   }
 }

@@ -18,7 +18,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final Map<int, OrderItem> _cart = {};
-  final List<Map<int, OrderItem>> _drafts = [];
+  
+  // STRUKTUR DRAFT BARU: Menyimpan keranjang beserta info customer & meja
+  final List<Map<String, dynamic>> _drafts = [];
+
+  // Variabel untuk menyimpan data yang sedang aktif di panel
+  String? _currentCustomerName;
+  String? _currentTableNumber;
 
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
@@ -32,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
         decimalDigits: 0,
       ).format(price);
 
-  // Fungsi pembantu untuk mengambil inisial nama menu
   String _getInitials(String name) {
     if (name.isEmpty) return "";
     List<String> words = name.trim().split(RegExp(r'\s+'));
@@ -94,11 +99,20 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _saveToDraft() {
+  // FUNGSI SIMPAN DRAFT: Menyimpan nama dan meja ke list
+  void _saveToDraft(String customerName, String tableNumber) {
     setState(() {
       if (_cart.isNotEmpty) {
-        _drafts.add(Map.from(_cart));
+        _drafts.add({
+          'cart': Map<int, OrderItem>.from(_cart),
+          'customerName': customerName,
+          'tableNumber': tableNumber,
+        });
+        
+        // Bersihkan state setelah disimpan
         _cart.clear();
+        _currentCustomerName = null;
+        _currentTableNumber = null;
       }
     });
   }
@@ -121,6 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             Expanded(child: _buildCategoryChips()),
                             const SizedBox(width: 15),
+                            // Tombol draf muncul jika keranjang kosong tapi ada draf tersimpan
                             if (_cart.isEmpty && _drafts.isNotEmpty)
                               _buildDraftDropdownButton(),
                           ],
@@ -130,13 +145,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               double spacing = 18.0;
-                              double itemHeight =
-                                  (constraints.maxHeight - spacing) / 2;
-                              double itemWidth =
-                                  (constraints.maxWidth - (spacing * 3)) / 4;
+                              double itemHeight = (constraints.maxHeight - spacing) / 2;
+                              double itemWidth = (constraints.maxWidth - (spacing * 3)) / 4;
                               return GridView.builder(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 4,
                                       childAspectRatio: itemWidth / itemHeight,
                                       crossAxisSpacing: spacing,
@@ -153,72 +165,70 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                if (_cart.isNotEmpty)
+                // Tampilkan panel jika ada barang atau sedang mengedit info customer
+                if (_cart.isNotEmpty || _currentCustomerName != null || _currentTableNumber != null)
                   CartPanel(
-  cart: _cart,
-  formatCurrency: formatHarga,
-  
-  // FUNGSI TAMBAH (onIncrease)
-  onIncrease: (id) {
-  debugPrint("Parent: Memproses penambahan untuk ID $id"); 
-  
-  setState(() {
-    if (_cart.containsKey(id)) {
-      // Menggunakan .update untuk memperbarui nilai di dalam Map secara reaktif
-      _cart.update(id, (item) {
-        item.quantity += 1;
-        // Jika ada getter subtotal, dia akan otomatis ikut berubah
-        return item; 
-      });
-      
-      debugPrint("Quantity baru ID $id adalah: ${_cart[id]!.quantity}");
-    }
-  });
-},
-
-  // FUNGSI KURANG (onDecrease)
-  onDecrease: (id) {
-  setState(() {
-    if (_cart.containsKey(id)) {
-      if (_cart[id]!.quantity > 1) {
-        _cart.update(id, (item) {
-          item.quantity -= 1;
-          return item;
-        });
-      } else {
-        _cart.remove(id);
-      }
-    }
-  });
-},
-
-  // FUNGSI HAPUS (onDelete)
-  onDelete: (id) {
-    setState(() {
-      _cart.remove(id);
-    });
-  },
-
-  // FUNGSI CHECKOUT SUCCESS
-  onCheckoutSuccess: (res) {
-    setState(() {
-      // Update stok produk lokal setelah bayar berhasil
-      _cart.forEach((productId, cartItem) {
-        int productIndex = _allProducts.indexWhere((p) => p.id == productId);
-        if (productIndex != -1) {
-          _allProducts[productIndex].stock -= cartItem.quantity;
-          if (_allProducts[productIndex].stock < 0) {
-            _allProducts[productIndex].stock = 0;
-          }
-        }
-      });
-      _cart.clear(); // Kosongkan keranjang
-      _applyFilters(); // Refresh UI list produk
-    });
-  },
-
-  onSaveDraft: _saveToDraft,
-),
+                    cart: _cart,
+                    formatCurrency: formatHarga,
+                    initialCustomerName: _currentCustomerName,
+                    initialTableNumber: _currentTableNumber,
+                    onIncrease: (id) {
+                      setState(() {
+                        if (_cart.containsKey(id)) {
+                          _cart.update(id, (item) {
+                            item.quantity += 1;
+                            return item; 
+                          });
+                        }
+                      });
+                    },
+                    onDecrease: (id) {
+                      setState(() {
+                        if (_cart.containsKey(id)) {
+                          if (_cart[id]!.quantity > 1) {
+                            _cart.update(id, (item) {
+                              item.quantity -= 1;
+                              return item;
+                            });
+                          } else {
+                            _cart.remove(id);
+                            if (_cart.isEmpty) {
+                              _currentCustomerName = null;
+                              _currentTableNumber = null;
+                            }
+                          }
+                        }
+                      });
+                    },
+                    onDelete: (id) {
+                      setState(() {
+                        _cart.remove(id);
+                        if (_cart.isEmpty) {
+                          _currentCustomerName = null;
+                          _currentTableNumber = null;
+                        }
+                      });
+                    },
+                    onCheckoutSuccess: (res) {
+                      setState(() {
+                        // Reset stok lokal
+                        _cart.forEach((productId, cartItem) {
+                          int productIndex = _allProducts.indexWhere((p) => p.id == productId);
+                          if (productIndex != -1) {
+                            _allProducts[productIndex].stock -= cartItem.quantity;
+                            if (_allProducts[productIndex].stock < 0) _allProducts[productIndex].stock = 0;
+                          }
+                        });
+                        
+                        // RESET TOTAL: Bersihkan keranjang dan form setelah bayar
+                        _cart.clear(); 
+                        _currentCustomerName = null;
+                        _currentTableNumber = null;
+                        _applyFilters(); 
+                      });
+                    },
+                    onSaveDraft: _saveToDraft,
+                  ),
               ],
             ),
     );
@@ -231,76 +241,56 @@ class _HomeScreenState extends State<HomeScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       onSelected: (int index) {
         setState(() {
-          _cart.addAll(_drafts[index]);
+          final selectedDraft = _drafts[index];
+          // KEMBALIKAN DATA: Masukkan kembali barang, nama, dan meja
+          _cart.addAll(selectedDraft['cart'] as Map<int, OrderItem>);
+          _currentCustomerName = selectedDraft['customerName'];
+          _currentTableNumber = selectedDraft['tableNumber'];
           _drafts.removeAt(index);
         });
       },
       itemBuilder: (context) => List.generate(_drafts.length, (index) {
-        int totalItems = _drafts[index].values.fold(
-          0,
-          (sum, item) => sum + item.quantity,
-        );
+        final draft = _drafts[index];
+        final cartItems = draft['cart'] as Map<int, OrderItem>;
+        int totalItems = cartItems.values.fold(0, (sum, item) => sum + item.quantity);
+        
+        // AMBIL NAMA CUSTOMER SAJA
+        String customerName = draft['customerName']?.toString().trim() ?? "";
+        String label = customerName.isEmpty ? "Draft ${index + 1}" : customerName;
+
         return PopupMenuItem<int>(
           value: index,
-          child: Text(
-            "Draft ${index + 1} ($totalItems Item)",
-            style: const TextStyle(fontSize: 13),
+          child: Row(
+            children: [
+              const Icon(Icons.person_outline, size: 18, color: Colors.grey),
+              const SizedBox(width: 10),
+              Text(
+                label, // <--- HANYA NAMA CUSTOMER
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
         );
       }),
       child: Container(
-        width: 45, 
-        height: 45,
+        width: 45, height: 45,
         decoration: BoxDecoration(
-          color: Colors.white, 
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.grey.withOpacity(0.1),
-          ), 
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: Colors.white, borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            Icon(
-              Icons.shopping_cart_outlined,
-              color: AppStyle.primaryBlue,
-              size: 35,
-            ),
+            const Icon(Icons.shopping_cart_outlined, color: AppStyle.primaryBlue, size: 28),
             if (_drafts.isNotEmpty)
               Positioned(
-                right: -2,
-                top: -2,
+                right: -2, top: -2,
                 child: Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent, 
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white,
-                      width: 2,
-                    ), 
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  child: Text(
-                    '${_drafts.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+                  decoration: BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  child: Text('${_drafts.length}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                 ),
               ),
           ],
@@ -309,6 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- Fungsi Lain Tetap Sama ---
   Widget _buildCategoryChips() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -346,68 +337,35 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isOutOfStock = p.stock <= 0;
     String imageUrl = p.image.trim();
     if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
-      imageUrl =
-          "https://api.etres.my.id/storage/${imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl}";
+      imageUrl = "https://api.etres.my.id/storage/${imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl}";
     }
 
-    // Widget placeholder jika gambar kosong atau error
     Widget imagePlaceholder = Container(
       color: const Color(0xFFEEEEEE),
       alignment: Alignment.center,
-      child: Text(
-        _getInitials(p.name),
-        style: TextStyle(
-          fontSize: 80,
-          fontWeight: FontWeight.bold,
-          color: Colors.grey[400],
-        ),
-      ),
+      child: Text(_getInitials(p.name), style: TextStyle(fontSize: 80, fontWeight: FontWeight.bold, color: Colors.grey[400])),
     );
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
             Positioned.fill(
-              child: imageUrl.isEmpty
-                  ? imagePlaceholder
-                  : Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, s) => imagePlaceholder,
-                    ),
+              child: imageUrl.isEmpty ? imagePlaceholder : Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (c, e, s) => imagePlaceholder),
             ),
-            Positioned.fill(
-              child: Container(color: Colors.black.withOpacity(0.3)),
-            ),
+            Positioned.fill(child: Container(color: Colors.black.withOpacity(0.3))),
             Positioned(
-              top: 10,
-              right: 10,
+              top: 10, right: 10,
               child: Container(
                 padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: isOutOfStock ? Colors.red : AppStyle.primaryBlue,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  isOutOfStock ? "HABIS" : "STOK: ${p.stock}",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                decoration: BoxDecoration(color: isOutOfStock ? Colors.red : AppStyle.primaryBlue, borderRadius: BorderRadius.circular(8)),
+                child: Text(isOutOfStock ? "HABIS" : "STOK: ${p.stock}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
               ),
             ),
             Positioned(
-              bottom: 15,
-              left: 15,
-              right: 15,
+              bottom: 15, left: 15, right: 15,
               child: Row(
                 children: [
                   Expanded(
@@ -415,50 +373,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          p.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                        ),
-                        Text(
-                          formatHarga(p.price.toDouble()),
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                        Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1),
+                        Text(formatHarga(p.price.toDouble()), style: const TextStyle(color: Colors.white)),
                       ],
                     ),
                   ),
                   GestureDetector(
-                    onTap: isOutOfStock
-                        ? null
-                        : () => setState(() {
-                              if (_cart.containsKey(p.id)) {
-                                _cart[p.id]!.quantity++;
-                              } else {
-                                _cart[p.id] = OrderItem(
-                                  id: p.id,
-                                  productId: p.id, 
-                                  itemName: p.name,
-                                  originalQty: 1,
-                                  activeQty: 1,
-                                  unitPrice: p.price.toDouble(),
-                                );
-                              }
-                            }),
+                    onTap: isOutOfStock ? null : () => setState(() {
+                      if (_cart.containsKey(p.id)) {
+                        _cart[p.id]!.quantity++;
+                      } else {
+                        _cart[p.id] = OrderItem(id: p.id, productId: p.id, itemName: p.name, originalQty: 1, activeQty: 1, unitPrice: p.price.toDouble());
+                      }
+                    }),
                     child: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.add,
-                        color: isOutOfStock
-                            ? Colors.grey
-                            : AppStyle.primaryBlue,
-                      ),
+                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                      child: Icon(Icons.add, color: isOutOfStock ? Colors.grey : AppStyle.primaryBlue),
                     ),
                   ),
                 ],

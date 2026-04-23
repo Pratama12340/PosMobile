@@ -16,10 +16,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadHistory(); // Pindahkan inisialisasi ke fungsi terpisah
+    _loadHistory();
   }
 
-  // Fungsi untuk memuat ulang data dari API
   void _loadHistory() {
     setState(() {
       _historyFuture = ApiService.fetchHistory();
@@ -41,15 +40,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
       body: FutureBuilder<List<Order>>(
         future: _historyFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Belum ada data"));
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text("Belum ada data"));
+          }
 
           return GridView.builder(
             padding: const EdgeInsets.all(32),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2, 
-              crossAxisSpacing: 20, 
-              mainAxisSpacing: 20, 
+              crossAxisCount: 2,
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 20,
               mainAxisExtent: 100,
             ),
             itemCount: snapshot.data!.length,
@@ -58,47 +61,156 @@ class _HistoryScreenState extends State<HistoryScreen> {
               final sideColor = _getSideColor(order.paymentMethod);
 
               return Container(
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-                child: Row(
-                  children: [
-                    Container(width: 6, color: sideColor),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(order.invoiceNo, style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold)),
-                          Text(order.customerName, style: AppStyle.subTitleText.copyWith(fontSize: 10, fontWeight: FontWeight.bold)),
-                          Text(order.tableNo, style: AppStyle.subTitleText.copyWith(fontSize: 10, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // Harga ini sekarang akan update karena UI akan direbuild setelah dialog tutup
-                        Text(style.formatHarga(order.totalPrice), style: AppStyle.priceText.copyWith(fontSize: 16)),
-                        Text(order.paymentMethod, style: TextStyle(color: sideColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      icon: const Icon(Icons.receipt_long, color: AppStyle.primaryBlue, size: 28),
-                      onPressed: () async {
-                        // 1. Tunggu dialog selesai (di-pop)
-                        await showDialog(
-                          context: context,
-                          builder: (context) => ReceiptDialog(orderId: order.id),
-                        );
-                        
-                        // 2. Setelah dialog ditutup, panggil fungsi loadHistory untuk refresh data
-                        _loadHistory();
-                      },
-                    ),
-                    const SizedBox(width: 8),
                   ],
+                ),
+                // PERBAIKAN: Hanya ada satu properti child di sini
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Row(
+                    children: [
+                      // Sisi Kiri: Garis Tebal + Nomor Urut
+                      Container(
+                        width: 45,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              sideColor,
+                              sideColor.withOpacity(0.7),
+                            ],
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            "${index + 1}",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Konten Tengah: Detail Pesanan
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              order.invoiceNo,
+                              style: AppStyle.menuText.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blueGrey[900],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.person_outline,
+                                    size: 12, color: Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    order.customerName,
+                                    style: AppStyle.subTitleText
+                                        .copyWith(fontSize: 11),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                Icon(Icons.table_restaurant_outlined,
+                                    size: 12, color: Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  order.tableNo,
+                                  style: AppStyle.subTitleText
+                                      .copyWith(fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Konten Kanan: Harga & Badge Metode Pembayaran
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              style.formatHarga(order.totalPrice),
+                              style: AppStyle.priceText.copyWith(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppStyle.primaryBlue,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: sideColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                order.paymentMethod,
+                                style: TextStyle(
+                                  color: sideColor,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Tombol Aksi: Lihat Struk
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () async {
+                            await showDialog(
+                              context: context,
+                              builder: (context) =>
+                                  ReceiptDialog(orderId: order.id),
+                            );
+                            _loadHistory(); // Refresh data setelah dialog tutup
+                          },
+                          child: Container(
+                            height: double.infinity,
+                            width: 50,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                left: BorderSide(color: Colors.grey.shade100),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.receipt_long_rounded,
+                              color: AppStyle.primaryBlue,
+                              size: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

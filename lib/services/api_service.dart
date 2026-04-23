@@ -73,48 +73,45 @@ class ApiService {
         }
         print("✅ [API VALIDASI] Cabang cocok.");
 
-        // Jika semua validasi lulus, baru simpan ke StorageService
+        // --- VALIDASI SHIFT ---
+        final String? shiftId = data['shift_id']?.toString();
+        if (shiftId == null || shiftId == 'null' || shiftId.isEmpty) {
+          print("❌ [API REJECTED] Karyawan tidak memiliki jadwal shift aktif saat ini.");
+          return {
+            'success': false,
+            'message': 'Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.',
+          };
+        }
+        print("✅ [API VALIDASI] Shift ID Aktif: $shiftId");
+
+        // --- SIMPAN KE STORAGE ---
         print("💾 [API ACTION] Login Valid. Menyimpan data ke Storage...");
 
-        // 1. Simpan Token
         await StorageService.saveToken(data['token']);
-
-        // 2. Simpan Nama & Role
         await StorageService.saveCashierName(user['name'] ?? "Kasir");
         final role = user['role'] ?? "Cashier";
         await StorageService.saveUserRole(role.toString());
-
-        // 3. Simpan Outlet ID & Fetch Live Outlet Name
         await StorageService.saveOutletId(outletId);
+        
         final outletName = await fetchOutletNameLive();
         await StorageService.saveOutletName(outletName);
 
-        // 4. Simpan Image
         if (user['image'] != null) {
           await StorageService.saveProfilePhoto(user['image'].toString());
         } else {
           await StorageService.saveProfilePhoto("");
         }
 
-        // 5. Simpan Shift Data & Kas Awal
-        if (data['shift_id'] != null) {
-          print("✅ [API VALIDASI] Shift ID Aktif: ${data['shift_id']}");
-          await StorageService.saveCurrentShiftId(data['shift_id'].toString());
-          await StorageService.saveShiftStatus(true);
+        // Simpan Shift ID (Status kasir dibiarkan utuh diurus oleh LoginScreen)
+        await StorageService.saveCurrentShiftId(shiftId);
 
-          // --- TAMBAHAN: Simpan Kas Awal jika sedang dalam shift aktif ---
-          if (data['opening_balance'] != null) {
-            int balance = int.tryParse(data['opening_balance'].toString()) ?? 0;
-            await StorageService.saveOpeningBalance(balance);
-            print("💾 [API ACTION] Kas Awal ditemukan & disimpan: $balance");
-          }
-        } else {
-          print(
-            "⚠️ [API WARNING] Karyawan login namun belum memiliki shift aktif.",
-          );
-          await StorageService.saveShiftStatus(false);
-          // Jika tidak ada shift aktif, pastikan storage kas awal bersih
-          await StorageService.clearOpeningBalance();
+        // Jika kebetulan backend mengirimkan data opening balance, kita simpan.
+        // Jika tidak ada (null), KITA JANGAN MENGHAPUSNYA agar tidak ter-reset saat logout.
+        if (data['opening_balance'] != null) {
+          int balance = int.tryParse(data['opening_balance'].toString()) ?? 0;
+          await StorageService.saveOpeningBalance(balance);
+          await StorageService.saveShiftStatus(true);
+          print("💾 [API ACTION] Kas Awal dari server disimpan: $balance");
         }
 
         print("=========================================\n");
@@ -261,9 +258,13 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final int? outletId = await StorageService.getOutletId();
+      
+      // 🌟 PERBAIKAN: Ambil Shift ID saat ini agar Menu Terlaris difilter per shift
+      final String? shiftId = await StorageService.getCurrentShiftId(); 
+
       final response = await http.get(
         Uri.parse(
-          '$baseUrl/history-transactions?outlet_id=$outletId&per_page=100',
+          '$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=100',
         ),
         headers: headers,
       );
@@ -299,7 +300,7 @@ class ApiService {
     return null;
   }
 
-  // --- TAMBAHKAN: UPDATE ORDER (LOGIKA VOID ITEMS) ---
+  // --- 7. UPDATE ORDER (LOGIKA VOID ITEMS) ---
   static Future<bool> updateOrder({
     required int orderId,
     required List<OrderItem> items,
@@ -339,7 +340,7 @@ class ApiService {
     }
   }
 
-  // --- 7. VOID / EDIT ITEM ---
+  // --- 8. VOID / EDIT ITEM ---
   static Future<Map<String, dynamic>> voidOrEditItem({
     required int itemId,
     required int orderId,
@@ -364,7 +365,7 @@ class ApiService {
     }
   }
 
-  // --- 8. UPDATE ITEM STATUS ---
+  // --- 9. UPDATE ITEM STATUS ---
   static Future<Map<String, dynamic>> updateItemStatus(
     int itemId,
     String status,
@@ -383,7 +384,7 @@ class ApiService {
     }
   }
 
-  // --- 9. GET STATIONS & OUTLETS ---
+  // --- 10. GET STATIONS & OUTLETS ---
   static Future<List<dynamic>> getStations() async {
     try {
       final response = await http.get(
@@ -425,7 +426,7 @@ class ApiService {
     }
   }
 
-  // --- 10. GET DISCOUNTS ---
+  // --- 11. GET DISCOUNTS ---
   static Future<List<Discount>> getDiscounts() async {
     try {
       final response = await http.get(
@@ -453,7 +454,7 @@ class ApiService {
     return [];
   }
 
-  // --- 11. GET TAXES ---
+  // --- 12. GET TAXES ---
   static Future<List<dynamic>> getTaxes() async {
     try {
       final response = await http.get(
@@ -477,6 +478,38 @@ class ApiService {
 
   // --- SHIFT KARYAWAN ---
 
+  // --- TAMBAHAN: CEK STATUS SHIFT ---
+  static Future<Map<String, dynamic>> checkShiftStatus(int outletId) async {
+    print("\n[API REQUEST] --> CEK STATUS SHIFT");
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/shift-karyawans/check-status?outlet_id=$outletId'),
+        headers: headers,
+      );
+
+      print("[API RESPONSE] <-- STATUS: ${response.statusCode}");
+      print("Body: ${response.body}");
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {
+          'success': data['success'] ?? true, 
+          'message': data['message'], 
+          'data': data['data']
+        };
+      } else {
+        return {
+          'success': false, 
+          'message': data['message'] ?? 'Gagal cek status shift'
+        };
+      }
+    } catch (e) {
+      print("💥 [API ERROR] checkShiftStatus: $e");
+      return {'success': false, 'message': 'Koneksi error: $e'};
+    }
+  }
+
   static Future<Map<String, dynamic>> startShift(int nominal, int outletId) async {
     try {
       final headers = await _getHeaders();
@@ -491,12 +524,12 @@ class ApiService {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // --- PERBAIKAN: Ambil nilai dari server untuk sinkronisasi ---
         final int openingBalanceFromServer = 
             int.tryParse(data['data']['opening_balance'].toString()) ?? nominal;
 
-        // --- SIMPAN KE STORAGE LOKAL ---
         await StorageService.saveOpeningBalance(openingBalanceFromServer);
+        // Set flag bahwa kasir sudah dibuka (sudah input kas awal)
+        await StorageService.saveShiftStatus(true);
         
         return {'success': true, 'data': data};
       } else {
@@ -511,7 +544,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> endShift(
+ static Future<Map<String, dynamic>> endShift(
     int totalFisik,
     String notes,
   ) async {
@@ -531,12 +564,30 @@ class ApiService {
       print("Body: ${response.body}");
 
       final data = jsonDecode(response.body);
+
+      // 1. JIKA NORMAL DAN SUKSES TUTUP SHIFT
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // --- HAPUS DATA KAS AWAL DARI STORAGE SETELAH SHIFT BERAKHIR ---
         await StorageService.clearOpeningBalance();
-        
+        await StorageService.saveShiftStatus(false);
         return {'success': true, 'data': data};
-      } else {
+      } 
+      // 2. JIKA SERVER BILANG SHIFT SUDAH TIDAK ADA (BUG NYANGKUT)
+      else if (response.statusCode == 404) {
+        print("⚠️ [API SYNC] Server mengatakan tidak ada shift aktif. Memaksa reset data lokal...");
+        
+        // PAKSA hapus status di HP agar sinkron dengan server
+        await StorageService.clearOpeningBalance();
+        await StorageService.saveShiftStatus(false);
+        
+        // Kita kembalikan nilai success: true agar dialog di UI mau menutup dan kembali ke halaman Login/Kas awal
+        return {
+          'success': true, 
+          'message': 'Shift berhasil disinkronkan (Sudah tertutup di server).',
+          'is_forced_sync': true // Penanda opsional jika kamu ingin memberikan alert khusus di UI
+        };
+      } 
+      // 3. JIKA ERROR LAINNYA (MISAL 500 SERVER DOWN)
+      else {
         return {
           'success': false,
           'message': data['message'] ?? 'Gagal mengakhiri shift',

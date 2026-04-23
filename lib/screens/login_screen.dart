@@ -124,17 +124,24 @@ class _LoginScreenState extends State<LoginScreen> {
         print("Cabang pilihan App: $_outletId");
         print("Cabang asli User di DB: $userOutletId");
 
-        // Validasi Cabang
+        // 1. Validasi Cabang (Verifikasi Outlet)
         if (userOutletId != _outletId) {
           _handleLoginError("Akses Ditolak: Akun Anda terdaftar di Cabang lain.");
           return; 
+        }
+
+        // 2. Validasi Shift Aktif (Verifikasi Shift)
+        // Mengecek apakah ada jadwal shift untuk user ini di jam sekarang
+        final String? newShiftId = result['data']['shift_id']?.toString();
+        if (newShiftId == null || newShiftId == 'null' || newShiftId.isEmpty) {
+          _handleLoginError("Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.");
+          return;
         }
 
         // =============================================================
         // LOGIKA BYPASS KAS AWAL (DIPERBAIKI SECARA PERMANEN)
         // =============================================================
         final String? oldShiftId = await StorageService.getCurrentShiftId();
-        final String? newShiftId = result['data']['shift_id']?.toString();
         
         // Menggunakan ID Karyawan untuk mendeteksi orang yang berbeda
         // Ini menghindari bug memori terhapus saat karyawan klik tombol "Logout"
@@ -177,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await StorageService.saveCashierName(newCashierName);
 
         // Jika berhasil mendapat shift_id, pastikan kita simpan juga ke Storage
-        if (newShiftId != null) {
+        if (newShiftId != null && newShiftId != 'null') {
           await StorageService.saveCurrentShiftId(newShiftId);
         }
 
@@ -241,10 +248,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        GestureDetector(
-                          onLongPress: _showResetOutletDialog,
-                          child: Text("Sign In", style: AppStyle.titleText.copyWith(color: AppStyle.primaryBlue)),
-                        ),
+                        // HAPUS GestureDetector dari sini, ganti jadi Text biasa
+                        Text("Sign In", style: AppStyle.titleText.copyWith(color: AppStyle.primaryBlue)),
                         const SizedBox(height: 5),
                         Text("Masukkan 6 digit PIN akses", style: AppStyle.subTitleText),
                         const SizedBox(height: 35),
@@ -264,7 +269,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 35),
                         _buildNumPad(),
-                        const SizedBox(height: 20),
+                        
+                        // TOMBOL RESET OUTLET DIPINDAH KE SINI
+                        const SizedBox(height: 15),
+                        TextButton(
+                          onPressed: _showResetOutletDialog,
+                          child: Text(
+                            "Ganti Outlet?", 
+                            style: TextStyle(
+                              color: const Color.fromARGB(255, 20, 20, 20), 
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+
                       ],
                     ),
                   ),

@@ -24,9 +24,16 @@ class StorageService {
     await prefs.setString(_keyToken, token);
   }
 
-  static Future<String> getToken() async {
+  // PERBAIKAN: Me-return String? agar aman saat dicek (token != null) di ApiService
+  static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyToken) ?? '';
+    return prefs.getString(_keyToken);
+  }
+
+  // Tambahan keamanan untuk menghapus token saja
+  static Future<void> removeToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyToken);
   }
 
   // --- 2. FUNGSI OUTLET DATA ---

@@ -16,7 +16,6 @@ class ShiftScreen extends StatefulWidget {
 }
 
 class _ShiftScreenState extends State<ShiftScreen> {
-  // Variabel untuk menampung Future agar tidak reload saat build
   late Future<List<dynamic>> _shiftDataFuture;
 
   @override
@@ -25,18 +24,16 @@ class _ShiftScreenState extends State<ShiftScreen> {
     _loadInitialData();
   }
 
-  // Fungsi untuk memicu pengambilan data
   void _loadInitialData() {
     _shiftDataFuture = Future.wait([
-      StorageService.getCashierName(),    // [0]
-      ApiService.getShiftHistory(),       // [1]
-      ApiService.fetchHistory(),          // [2]
-      ApiService.getMasterShifts(),       // [3]
-      StorageService.getOpeningBalance(), // [4] Data Lokal
+      StorageService.getCashierName(), // [0]
+      ApiService.getShiftHistory(), // [1]
+      ApiService.fetchHistory(), // [2]
+      ApiService.getMasterShifts(), // [3]
+      StorageService.getOpeningBalance(), // [4]
     ]);
   }
 
-  // Helper untuk memastikan angka dari storage terbaca dengan benar (int/double/string)
   int _parseToInt(dynamic value) {
     if (value == null) return 0;
     if (value is int) return value;
@@ -49,7 +46,9 @@ class _ShiftScreenState extends State<ShiftScreen> {
   }
 
   String _formatNumber(int number) => number.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (Match m) => '${m[1]}.',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -69,49 +68,67 @@ class _ShiftScreenState extends State<ShiftScreen> {
           final List<ShiftMaster> masterData = snapshot.data?[3] ?? [];
           List<RekapShift> shiftList = snapshot.data?[1] ?? [];
           final List<Order> allOrders = snapshot.data?[2] ?? [];
-          
-          // --- PERBAIKAN: Safe Parsing Kas Awal ---
           final int localOpeningBalance = _parseToInt(snapshot.data?[4]);
 
-          // --- PERBAIKAN: Sorting Shift Terkini ---
           if (shiftList.isNotEmpty) {
-            shiftList.sort((a, b) => (b.startedAt ?? DateTime.now()).compareTo(a.startedAt ?? DateTime.now()));
+            shiftList.sort(
+              (a, b) => (b.startedAt ?? DateTime.now()).compareTo(
+                a.startedAt ?? DateTime.now(),
+              ),
+            );
           }
 
-          // Mapping Master Info (Join Data)
           for (var rekap in shiftList) {
             rekap.masterInfo = masterData.firstWhere(
               (m) => m.id == rekap.shiftId,
               orElse: () => ShiftMaster(
-                  id: 0, name: 'Shift?', startTime: '00:00:00', endTime: '00:00:00'),
+                id: 0,
+                name: 'Shift?',
+                startTime: '00:00:00',
+                endTime: '00:00:00',
+              ),
             );
           }
 
-          // Cari shift aktif (pilih yang paling baru)
           final RekapShift? activeShift = shiftList.firstWhere(
             (s) => s.status == 'active',
-            orElse: () => shiftList.isNotEmpty ? shiftList.first : RekapShift(id: 0, shiftId: 0, status: 'none'),
+            orElse: () => shiftList.isNotEmpty
+                ? shiftList.first
+                : RekapShift(id: 0, shiftId: 0, status: 'none'),
           );
 
-          // SINKRONISASI KAS AWAL (Lokal > Server)
-          int kasAwal = localOpeningBalance > 0 
-              ? localOpeningBalance 
+          int kasAwal = localOpeningBalance > 0
+              ? localOpeningBalance
               : (activeShift?.uangAwal?.toInt() ?? 0);
-          
           int bersih = 0;
           int count = 0;
 
-          // --- PERBAIKAN: Logika Perhitungan dengan Waktu Lokal (WIB) ---
+          // --- LOGIKA DATA ---
+          Map<String, int> productSalesQty = {};
+          Map<String, int> paymentAmount = {"CASH": 0, "CARD": 0, "QRIS": 0};
+
           if (activeShift != null && activeShift.startedAt != null) {
             DateTime startShiftWIB = activeShift.startedAt!.toLocal();
-            
             final df = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
+
             for (var order in allOrders) {
               try {
                 DateTime orderTime = df.parse(order.date);
                 if (orderTime.isAfter(startShiftWIB)) {
-                  bersih += order.totalPrice.round();
+                  int orderTotal = order.totalPrice.round();
+                  bersih += orderTotal;
                   count++;
+
+                  String method = order.paymentMethod.toUpperCase();
+                  if (paymentAmount.containsKey(method)) {
+                    paymentAmount[method] =
+                        (paymentAmount[method] ?? 0) + orderTotal;
+                  }
+
+                  for (var item in order.items) {
+                    productSalesQty[item.itemName] =
+                        (productSalesQty[item.itemName] ?? 0) + item.quantity;
+                  }
                 }
               } catch (e) {
                 debugPrint("Error parsing date: $e");
@@ -119,21 +136,57 @@ class _ShiftScreenState extends State<ShiftScreen> {
             }
           }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                _loadInitialData();
-              });
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                children: [
-                  _buildProfileHeader(
-                      context, cashierName, activeShift, kasAwal, count, bersih),
-                ],
-              ),
+          var filteredProducts =
+              productSalesQty.entries.where((e) => e.value >= 10).toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+
+          var topProducts = filteredProducts.take(5).toList();
+
+          // KITA MENGHAPUS REFRESH INDICATOR DAN MENGUNCI LAYAR PENUH
+          return SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(), // Layar 100% statis
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildProfileHeader(
+                  context,
+                  cashierName,
+                  activeShift,
+                  kasAwal,
+                  count,
+                  bersih,
+                ),
+                const SizedBox(height: 24),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth > 800) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 6,
+                            child: _buildProdukTerlaris(topProducts),
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            flex: 4,
+                            child: _buildMetodeBayar(paymentAmount, bersih),
+                          ),
+                        ],
+                      );
+                    } else {
+                      return Column(
+                        children: [
+                          _buildProdukTerlaris(topProducts),
+                          const SizedBox(height: 24),
+                          _buildMetodeBayar(paymentAmount, bersih),
+                        ],
+                      );
+                    }
+                  },
+                ),
+              ],
             ),
           );
         },
@@ -141,54 +194,35 @@ class _ShiftScreenState extends State<ShiftScreen> {
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context, String name,
-      RekapShift? shift, int awal, int count, int bersih) {
-    
-    // --- PERBAIKAN: Format Jam WIB ---
+  Widget _buildProfileHeader(
+    BuildContext context,
+    String name,
+    RekapShift? shift,
+    int awal,
+    int count,
+    int bersih,
+  ) {
     String loginTime = shift?.startedAt != null
         ? DateFormat('HH:mm').format(shift!.startedAt!.toLocal())
         : "--:--";
-
-    bool isActuallyLate = false;
-    String statusText = "Tepat Waktu";
-
-    if (shift != null && shift.startedAt != null && shift.masterInfo != null) {
-      try {
-        final timeParts = shift.masterInfo!.startTime.split(':');
-        final loginTimeLocal = shift.startedAt!.toLocal();
-        
-        // Membandingkan jadwal pada tanggal yang sama dengan waktu login
-        final scheduledTime = DateTime(
-          loginTimeLocal.year,
-          loginTimeLocal.month,
-          loginTimeLocal.day,
-          int.parse(timeParts[0]),
-          int.parse(timeParts[1]),
-        );
-        
-        // Toleransi 10 menit
-        if (loginTimeLocal.isAfter(scheduledTime.add(const Duration(minutes: 10)))) {
-          isActuallyLate = true;
-          statusText = "Telat";
-        }
-      } catch (e) {
-        isActuallyLate = shift.isLate;
-        statusText = shift.lateStatusText;
-      }
-    }
+    bool isActuallyLate = shift?.isLate ?? false;
+    String statusText = isActuallyLate ? "Telat" : "Tepat Waktu";
 
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(24)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: Column(
         children: [
           Row(
             children: [
               const CircleAvatar(
-                  radius: 30,
-                  backgroundColor: AppStyle.bgLightBlue,
-                  child: Icon(Icons.person, color: AppStyle.primaryBlue)),
+                radius: 30,
+                backgroundColor: AppStyle.bgLightBlue,
+                child: Icon(Icons.person, color: AppStyle.primaryBlue),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -196,51 +230,81 @@ class _ShiftScreenState extends State<ShiftScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(name,
-                            style: AppStyle.titleText.copyWith(fontSize: 20)),
+                        Text(
+                          name,
+                          style: AppStyle.titleText.copyWith(fontSize: 20),
+                        ),
                         const SizedBox(width: 8),
                         if (shift != null && shift.status != 'none')
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: isActuallyLate
                                   ? Colors.red.shade50
                                   : Colors.green.shade50,
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                  color:
-                                      isActuallyLate ? Colors.red : Colors.green),
+                                color: isActuallyLate
+                                    ? Colors.red
+                                    : Colors.green,
+                              ),
                             ),
-                            child: Text(statusText,
-                                style: TextStyle(
-                                    color: isActuallyLate
-                                        ? Colors.red
-                                        : Colors.green,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold)),
+                            child: Text(
+                              statusText,
+                              style: TextStyle(
+                                color: isActuallyLate
+                                    ? Colors.red
+                                    : Colors.green,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                       ],
                     ),
                     Text(
-                        "Shift: ${shift?.masterInfo?.name ?? '-'} • Masuk: $loginTime WIB",
-                        style: AppStyle.subTitleText),
+                      "${shift?.masterInfo?.name ?? '-'} • Masuk: $loginTime WIB",
+                      style: AppStyle.subTitleText,
+                    ),
                   ],
                 ),
               ),
+              // --- TOMBOL REFRESH MANUAL ---
+              Container(
+                decoration: BoxDecoration(
+                  color: AppStyle.bgLightBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  onPressed: () {
+                    // Logika untuk memanggil ulang data API dan Storage
+                    setState(() {
+                      _loadInitialData(); 
+                    });
+                  },
+                  icon: const Icon(Icons.refresh_rounded, color: AppStyle.primaryBlue),
+                  tooltip: "Refresh Data",
+                ),
+              ),
+              const SizedBox(width: 16),
+              // --- TOMBOL TUTUP SHIFT ---
               ElevatedButton.icon(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => const ClosingCashDialog(),
-                  );
-                },
+                onPressed: () => showDialog(
+                  context: context,
+                  builder: (context) => const ClosingCashDialog(),
+                ),
                 icon: const Icon(Icons.logout_rounded, size: 18),
                 label: const Text("Tutup Shift"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -256,13 +320,25 @@ class _ShiftScreenState extends State<ShiftScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _infoItem(
-                  "Kas Awal", "Rp ${_formatNumber(awal)}", Icons.wallet, Colors.blue),
+                "Kas Awal",
+                "Rp ${_formatNumber(awal)}",
+                Icons.wallet,
+                Colors.blue,
+              ),
               _infoItem("Transaksi", "$count", Icons.payments, Colors.orange),
-              _infoItem("Kas Bersih", "Rp ${_formatNumber(bersih)}",
-                  Icons.shopping_bag, Colors.green),
-              _infoItem("Total Akhir", "Rp ${_formatNumber(awal + bersih)}",
-                  Icons.summarize, AppStyle.primaryBlue,
-                  isBold: true),
+              _infoItem(
+                "Kas Bersih",
+                "Rp ${_formatNumber(bersih)}",
+                Icons.shopping_bag,
+                Colors.green,
+              ),
+              _infoItem(
+                "Total Akhir",
+                "Rp ${_formatNumber(awal + bersih)}",
+                Icons.summarize,
+                AppStyle.primaryBlue,
+                isBold: true,
+              ),
             ],
           ),
         ],
@@ -270,19 +346,190 @@ class _ShiftScreenState extends State<ShiftScreen> {
     );
   }
 
-  Widget _infoItem(String label, String value, IconData icon, Color color,
-      {bool isBold = false}) {
+  Widget _infoItem(
+    String label,
+    String value,
+    IconData icon,
+    Color color, {
+    bool isBold = false,
+  }) {
     return Column(
       children: [
         Icon(icon, color: color, size: 20),
         const SizedBox(height: 8),
-        Text(value,
-            style: TextStyle(
-                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-                fontSize: 16,
-                color: isBold ? AppStyle.primaryBlue : Colors.black87)),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            fontSize: 16,
+            color: isBold ? AppStyle.primaryBlue : Colors.black87,
+          ),
+        ),
         Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
       ],
+    );
+  }
+
+  Widget _buildProdukTerlaris(List<MapEntry<String, int>> topProducts) {
+    return Container(
+      height: 380, // Kotak kiri tinggi tetap
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Produk Terlaris",
+            style: AppStyle.titleText.copyWith(fontSize: 18),
+          ),
+          const SizedBox(height: 16),
+          if (topProducts.isEmpty)
+            const Expanded(
+              child: Center(
+                child: Text(
+                  "Belum ada produk mencapai 10 porsi",
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: topProducts.asMap().entries.map((mapEntry) {
+                    final index = mapEntry.key;
+                    final entry = mapEntry.value;
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == topProducts.length - 1 ? 0 : 16,
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: AppStyle.primaryBlue,
+                            child: Text(
+                              "${index + 1}",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              entry.key,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            "${entry.value}",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetodeBayar(Map<String, int> paymentAmount, int totalMoney) {
+    final Map<String, Color> methodColors = {
+      "CASH": Colors.blue,
+      "CARD": Colors.yellow.shade700, 
+      "QRIS": Colors.red,
+    };
+
+    return Container(
+      height: 380, // Kotak kanan tinggi tetap
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Metode Bayar",
+            style: AppStyle.titleText.copyWith(fontSize: 18),
+          ),
+          const Text(
+            "Total pendapatan",
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: paymentAmount.entries.map((entry) {
+                  final double percentage = totalMoney > 0
+                      ? (entry.value / totalMoney)
+                      : 0;
+
+                  final Color color =
+                      methodColors[entry.key.toUpperCase()] ?? Colors.grey;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              entry.key,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              "Rp ${_formatNumber(entry.value)}",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: percentage,
+                            backgroundColor: Colors.grey.shade100,
+                            valueColor: AlwaysStoppedAnimation<Color>(color),
+                            minHeight: 8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

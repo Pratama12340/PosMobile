@@ -6,8 +6,9 @@ class DiskonPanel extends StatelessWidget {
   final Discount? selectedDiscount;
   final List<Discount> availableDiscounts;
   final double discountAmount;
+  final double subtotal; 
   final String Function(double) formatCurrency;
-  final VoidCallback onTap;
+  final Function(Discount) onSelected;
   final VoidCallback onRemove;
 
   const DiskonPanel({
@@ -15,56 +16,277 @@ class DiskonPanel extends StatelessWidget {
     required this.selectedDiscount,
     required this.availableDiscounts,
     required this.discountAmount,
+    required this.subtotal,
     required this.formatCurrency,
-    required this.onTap,
+    required this.onSelected,
     required this.onRemove,
   });
 
+  // FUNGSI UNTUK MEMUNCULKAN SIDE PANEL DARI KANAN
+  void _showSideDiscountPanel(BuildContext context) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Dismiss",
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) {
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            elevation: 20,
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.45, // Menutupi 45% layar kanan
+              height: double.infinity,
+              color: const Color(0xFFF8F9FA),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header Panel
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(25, 50, 25, 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Voucher Diskon",
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, fontFamily: 'Poppins'),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Colors.red, size: 28),
+                          onPressed: () => Navigator.pop(context),
+                        )
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  
+                  // List Voucher Berbentuk Card
+                  Expanded(
+                    child: availableDiscounts.isEmpty
+                        ? const Center(child: Text("Tidak ada diskon tersedia"))
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(20),
+                            itemCount: availableDiscounts.length,
+                            itemBuilder: (context, index) {
+                              final d = availableDiscounts[index];
+                              bool isEligible = subtotal >= d.minPurchase.toDouble();
+
+                              return Opacity(
+                                opacity: isEligible ? 1.0 : 0.5,
+                                child: _VoucherCard(
+                                  discount: d,
+                                  isEligible: isEligible,
+                                  formatCurrency: formatCurrency,
+                                  onTap: () {
+                                    if (isEligible) {
+                                      onSelected(d);
+                                      Navigator.pop(context);
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return SlideTransition(
+          position: Tween(begin: const Offset(1, 0), end: const Offset(0, 0)).animate(anim1),
+          child: child,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    bool hasDiscount = selectedDiscount != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
+          onTap: () => _showSideDiscountPanel(context),
+          borderRadius: BorderRadius.circular(12),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+            width: double.infinity, // AGAR PENUH SEJAJAR DENGAN TOTAL HARGA
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
             decoration: BoxDecoration(
-              color: selectedDiscount != null ? AppStyle.primaryBlue.withOpacity(0.05) : Colors.transparent,
-              border: Border.all(color: AppStyle.primaryBlue.withOpacity(0.2)),
-              borderRadius: BorderRadius.circular(8),
+              color: hasDiscount ? Colors.orange.withOpacity(0.08) : Colors.white,
+              border: Border.all(
+                color: hasDiscount ? Colors.orange.withOpacity(0.3) : Colors.black12,
+              ),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.confirmation_number_outlined, size: 16, color: AppStyle.primaryBlue),
-                    const SizedBox(width: 8),
+                    Icon(
+                      hasDiscount ? Icons.confirmation_number : Icons.local_offer_outlined,
+                      size: 18,
+                      color: hasDiscount ? Colors.orange : Colors.black45,
+                    ),
+                    const SizedBox(width: 10),
                     Text(
-                      selectedDiscount == null ? "Pilih Diskon" : selectedDiscount!.name,
-                      style: const TextStyle(color: AppStyle.primaryBlue, fontSize: 13, fontWeight: FontWeight.bold),
+                      hasDiscount ? selectedDiscount!.name : "Pilih Diskon",
+                      style: TextStyle(
+                        color: hasDiscount ? Colors.orange[900] : Colors.black87,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
-                Text(
-                  "- ${formatCurrency(discountAmount)}",
-                  style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Text(
+                      "- ${formatCurrency(discountAmount)}",
+                      style: const TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    if (hasDiscount)
+                      GestureDetector(
+                        onTap: onRemove,
+                        child: const Icon(Icons.cancel, size: 20, color: Colors.red),
+                      )
+                    else
+                      const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black26),
+                  ],
                 ),
               ],
             ),
           ),
         ),
-        if (selectedDiscount != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, left: 4),
-            child: GestureDetector(
-              onTap: onRemove,
-              child: const Text("Hapus Diskon", style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
-            ),
-          ),
       ],
+    );
+  }
+}
+
+// WIDGET KARTU VOUCHER CUSTOM (GAMBAR 2)
+class _VoucherCard extends StatelessWidget {
+  final Discount discount;
+  final bool isEligible;
+  final String Function(double) formatCurrency;
+  final VoidCallback onTap;
+
+  const _VoucherCard({
+    required this.discount,
+    required this.isEligible,
+    required this.formatCurrency,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        height: 100,
+        child: CustomPaint(
+          painter: _TicketPainter(),
+          child: Row(
+            children: [
+              // Sisi Kiri (Ikon/Logo)
+              Container(
+                width: 70,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.confirmation_number_rounded,
+                  color: isEligible ? AppStyle.primaryBlue : Colors.grey,
+                  size: 30,
+                ),
+              ),
+              // Garis Putus-putus
+              _DashedLine(),
+              // Sisi Kanan (Detail)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        discount.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        discount.type == 'percentage' 
+                            ? "${discount.value.toInt()}% OFF" 
+                            : "POTONGAN ${formatCurrency(discount.value.toDouble())}",
+                        style: TextStyle(
+                          color: isEligible ? AppStyle.primaryBlue : Colors.grey,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        // FIX: Tambahkan .toDouble() agar tidak error
+                        "Min. Belanja: ${formatCurrency(discount.minPurchase.toDouble())}",
+                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Pelukis Efek Potongan Tiket
+class _TicketPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    Path path = Path();
+    path.lineTo(0, size.height);
+    path.lineTo(size.width, size.height);
+    path.lineTo(size.width, 0);
+    
+    // Potongan setengah lingkaran di kiri & kanan tengah
+    path.addOval(Rect.fromCircle(center: Offset(0, size.height / 2), radius: 8));
+    path.addOval(Rect.fromCircle(center: Offset(size.width, size.height / 2), radius: 8));
+    path.fillType = PathFillType.evenOdd;
+
+    canvas.drawShadow(path, Colors.black.withOpacity(0.3), 3, false);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+
+class _DashedLine extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(8, (index) => Container(
+        width: 1.2,
+        height: 4,
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        color: Colors.grey.withOpacity(0.3),
+      )),
     );
   }
 }

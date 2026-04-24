@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../style.dart';
-import '../services/storage_service.dart';
 import '../services/api_service.dart';
 import '../models/product_models.dart';
 import '../models/order_model.dart';
 import '../widgets/cart_panel.dart';
-import 'SuccessPaymentPage.dart';
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
-  const HomeScreen({super.key, required this.searchController});
+  final Function(bool)? onCartToggled; // Menambahkan callback toggle
+
+  const HomeScreen({
+    super.key, 
+    required this.searchController,
+    this.onCartToggled,
+  });
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  HomeScreenState createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   final Map<int, OrderItem> _cart = {};
-  
-  // STRUKTUR DRAFT BARU: Menyimpan keranjang beserta info customer & meja
   final List<Map<String, dynamic>> _drafts = [];
 
-  // Variabel untuk menyimpan data yang sedang aktif di panel
   String? _currentCustomerName;
   String? _currentTableNumber;
 
@@ -31,6 +32,29 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _categories = [];
   bool _isLoading = true;
   String _selectedCategory = "All Menu";
+  
+  // Flag untuk kontrol visibilitas panel kanan
+  bool _isCartVisible = false;
+
+  // Fungsi yang dipanggil dari MainNavigation via GlobalKey
+  // MODIFIKASI: Otomatis simpan ke draft saat ditutup paksa oleh Sidebar
+  void closeCart() {
+    setState(() {
+      if (_cart.isNotEmpty) {
+        _drafts.add({
+          'cart': Map<int, OrderItem>.from(_cart),
+          'customerName': _currentCustomerName ?? "",
+          'tableNumber': _currentTableNumber ?? "",
+        });
+        
+        _cart.clear();
+        _currentCustomerName = null;
+        _currentTableNumber = null;
+        widget.onCartToggled?.call(false);
+      }
+      _isCartVisible = false;
+    });
+  }
 
   String formatHarga(double price) => NumberFormat.currency(
         locale: 'id_ID',
@@ -99,7 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // FUNGSI SIMPAN DRAFT: Menyimpan nama dan meja ke list
   void _saveToDraft(String customerName, String tableNumber) {
     setState(() {
       if (_cart.isNotEmpty) {
@@ -109,10 +132,11 @@ class _HomeScreenState extends State<HomeScreen> {
           'tableNumber': tableNumber,
         });
         
-        // Bersihkan state setelah disimpan
         _cart.clear();
         _currentCustomerName = null;
         _currentTableNumber = null;
+        _isCartVisible = false; // Tutup panel setelah save draft
+        widget.onCartToggled?.call(false);
       }
     });
   }
@@ -135,7 +159,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             Expanded(child: _buildCategoryChips()),
                             const SizedBox(width: 15),
-                            // Tombol draf muncul jika keranjang kosong tapi ada draf tersimpan
                             if (_cart.isEmpty && _drafts.isNotEmpty)
                               _buildDraftDropdownButton(),
                           ],
@@ -165,8 +188,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                // Tampilkan panel jika ada barang atau sedang mengedit info customer
-                if (_cart.isNotEmpty || _currentCustomerName != null || _currentTableNumber != null)
+                
+                // PANEL KANAN (CART) dengan Logika Mutually Exclusive
+                if (_isCartVisible && (_cart.isNotEmpty || _currentCustomerName != null || _currentTableNumber != null))
                   CartPanel(
                     cart: _cart,
                     formatCurrency: formatHarga,
@@ -195,6 +219,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (_cart.isEmpty) {
                               _currentCustomerName = null;
                               _currentTableNumber = null;
+                              _isCartVisible = false;
+                              widget.onCartToggled?.call(false);
                             }
                           }
                         }
@@ -206,12 +232,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (_cart.isEmpty) {
                           _currentCustomerName = null;
                           _currentTableNumber = null;
+                          _isCartVisible = false;
+                          widget.onCartToggled?.call(false);
                         }
                       });
                     },
                     onCheckoutSuccess: (res) {
                       setState(() {
-                        // Reset stok lokal
                         _cart.forEach((productId, cartItem) {
                           int productIndex = _allProducts.indexWhere((p) => p.id == productId);
                           if (productIndex != -1) {
@@ -220,10 +247,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           }
                         });
                         
-                        // RESET TOTAL: Bersihkan keranjang dan form setelah bayar
                         _cart.clear(); 
                         _currentCustomerName = null;
                         _currentTableNumber = null;
+                        _isCartVisible = false; // Reset panel
+                        widget.onCartToggled?.call(false);
                         _applyFilters(); 
                       });
                     },
@@ -242,31 +270,50 @@ class _HomeScreenState extends State<HomeScreen> {
       onSelected: (int index) {
         setState(() {
           final selectedDraft = _drafts[index];
-          // KEMBALIKAN DATA: Masukkan kembali barang, nama, dan meja
           _cart.addAll(selectedDraft['cart'] as Map<int, OrderItem>);
           _currentCustomerName = selectedDraft['customerName'];
           _currentTableNumber = selectedDraft['tableNumber'];
           _drafts.removeAt(index);
+          
+          // Membuka panel cart saat draft dipilih
+          _isCartVisible = true;
+          widget.onCartToggled?.call(true);
         });
       },
       itemBuilder: (context) => List.generate(_drafts.length, (index) {
         final draft = _drafts[index];
-        final cartItems = draft['cart'] as Map<int, OrderItem>;
-        int totalItems = cartItems.values.fold(0, (sum, item) => sum + item.quantity);
-        
-        // AMBIL NAMA CUSTOMER SAJA
         String customerName = draft['customerName']?.toString().trim() ?? "";
         String label = customerName.isEmpty ? "Draft ${index + 1}" : customerName;
 
         return PopupMenuItem<int>(
           value: index,
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween, // Agar tombol X di kanan
             children: [
-              const Icon(Icons.person_outline, size: 18, color: Colors.grey),
-              const SizedBox(width: 10),
-              Text(
-                label, // <--- HANYA NAMA CUSTOMER
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.person_outline, size: 18, color: Colors.grey),
+                  const SizedBox(width: 10),
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              // TOMBOL HAPUS (X)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _drafts.removeAt(index);
+                  });
+                  Navigator.pop(context); // Menutup menu dropdown setelah menghapus
+                },
+                child: const Icon(
+                  Icons.close, 
+                  size: 18, 
+                  color: Colors.red,
+                ),
               ),
             ],
           ),
@@ -299,7 +346,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- Fungsi Lain Tetap Sama ---
   Widget _buildCategoryChips() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -380,6 +426,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   GestureDetector(
                     onTap: isOutOfStock ? null : () => setState(() {
+                      // Aktifkan panel kanan dan beri tahu scaffold untuk tutup sidebar
+                      _isCartVisible = true;
+                      widget.onCartToggled?.call(true);
+
                       if (_cart.containsKey(p.id)) {
                         _cart[p.id]!.quantity++;
                       } else {

@@ -5,7 +5,11 @@ import '../services/api_service.dart';
 import '../widgets/receipt_dialog.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  // Menambahkan searchController agar bisa menerima input dari Main Navigation
+  final TextEditingController searchController;
+
+  const HistoryScreen({super.key, required this.searchController});
+
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
@@ -16,7 +20,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
+    // Menambahkan listener agar layar refresh saat user mengetik di search bar
+    widget.searchController.addListener(_onSearchChanged);
     _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    // Menghapus listener saat widget dihancurkan untuk menghindari memory leak
+    widget.searchController.removeListener(_onSearchChanged);
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {}); // Memicu build ulang untuk memfilter list
   }
 
   void _loadHistory() {
@@ -47,6 +64,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return const Center(child: Text("Belum ada data"));
           }
 
+          // LOGIKA FILTERING: Memfilter data berdasarkan No. Invoice atau Nama Pelanggan
+          final query = widget.searchController.text.toLowerCase();
+          final filteredOrders = snapshot.data!.where((order) {
+            return order.invoiceNo.toLowerCase().contains(query) ||
+                   order.customerName.toLowerCase().contains(query);
+          }).toList();
+
+          if (filteredOrders.isEmpty) {
+            return const Center(child: Text("Data tidak ditemukan"));
+          }
+
           return GridView.builder(
             padding: const EdgeInsets.all(32),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -55,9 +83,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               mainAxisSpacing: 20,
               mainAxisExtent: 100,
             ),
-            itemCount: snapshot.data!.length,
+            itemCount: filteredOrders.length, // Menggunakan data yang sudah difilter
             itemBuilder: (context, index) {
-              final order = snapshot.data![index];
+              final order = filteredOrders[index]; // Menggunakan data yang sudah difilter
               final sideColor = _getSideColor(order.paymentMethod);
 
               return Container(
@@ -72,12 +100,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   ],
                 ),
-                // PERBAIKAN: Hanya ada satu properti child di sini
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: Row(
                     children: [
-                      // Sisi Kiri: Garis Tebal + Nomor Urut
                       Container(
                         width: 45,
                         decoration: BoxDecoration(
@@ -102,7 +128,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      // Konten Tengah: Detail Pesanan
                       Expanded(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -146,7 +171,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ],
                         ),
                       ),
-                      // Konten Kanan: Harga & Badge Metode Pembayaran
                       Padding(
                         padding: const EdgeInsets.only(right: 12),
                         child: Column(
@@ -181,7 +205,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ],
                         ),
                       ),
-                      // Tombol Aksi: Lihat Struk
                       Material(
                         color: Colors.transparent,
                         child: InkWell(
@@ -191,7 +214,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               builder: (context) =>
                                   ReceiptDialog(orderId: order.id),
                             );
-                            _loadHistory(); // Refresh data setelah dialog tutup
+                            _loadHistory();
                           },
                           child: Container(
                             height: double.infinity,

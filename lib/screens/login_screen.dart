@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // TAMBAHAN IMPORT
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main_navigation.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
@@ -124,14 +124,13 @@ class _LoginScreenState extends State<LoginScreen> {
         print("Cabang pilihan App: $_outletId");
         print("Cabang asli User di DB: $userOutletId");
 
-        // 1. Validasi Cabang (Verifikasi Outlet)
+        // 1. Validasi Cabang
         if (userOutletId != _outletId) {
           _handleLoginError("Akses Ditolak: Akun Anda terdaftar di Cabang lain.");
           return; 
         }
 
-        // 2. Validasi Shift Aktif (Verifikasi Shift)
-        // Mengecek apakah ada jadwal shift untuk user ini di jam sekarang
+        // 2. Validasi Shift Aktif
         final String? newShiftId = result['data']['shift_id']?.toString();
         if (newShiftId == null || newShiftId == 'null' || newShiftId.isEmpty) {
           _handleLoginError("Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.");
@@ -139,41 +138,41 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         // =============================================================
-        // LOGIKA BYPASS KAS AWAL (DIPERBAIKI SECARA PERMANEN)
+        // LOGIKA BYPASS KAS AWAL (PERBAIKAN TANGGAL & USER)
         // =============================================================
         final String? oldShiftId = await StorageService.getCurrentShiftId();
-        
-        // Menggunakan ID Karyawan untuk mendeteksi orang yang berbeda
-        // Ini menghindari bug memori terhapus saat karyawan klik tombol "Logout"
         final prefs = await SharedPreferences.getInstance();
+        
         final int lastUserId = prefs.getInt('last_shift_user_id') ?? 0;
         final int currentUserId = int.tryParse(userFromServer['id'].toString()) ?? 0;
+        
+        // Cek Tanggal Hari Ini (Format: YYYY-MM-DD)
+        final String todayDate = DateTime.now().toString().split(' ')[0];
+        final String lastShiftDate = prefs.getString('last_shift_date') ?? '';
 
         bool isKasirOpened = await StorageService.getShiftStatus() ?? false;
 
-        // 🌟 PERBAIKAN 1: Jika Shift-nya beda ATAU ID User-nya beda -> Wajib isi Kas Awal lagi!
-        if (oldShiftId != newShiftId || lastUserId != currentUserId) {
-            print("🔄 Shift atau Karyawan baru terdeteksi. Mereset status kasir...");
+        // Validasi: Jika Ganti Shift OR Ganti Orang OR Ganti Hari -> WAJIB KAS AWAL
+        if (oldShiftId != newShiftId || lastUserId != currentUserId || lastShiftDate != todayDate) {
+            print("🔄 Sesi Baru, Hari Baru, atau User Baru Terdeteksi. Reset Status Kasir.");
             isKasirOpened = false;
             await StorageService.saveShiftStatus(false);
+            
+            // Simpan data referensi baru
+            await prefs.setString('last_shift_date', todayDate);
+            await prefs.setInt('last_shift_user_id', currentUserId);
         } else {
-            if (isKasirOpened) print("⏩ Kasir sudah dibuka di shift ini. Bypass Kas Awal.");
+            if (isKasirOpened) print("⏩ Kasir sudah dibuka hari ini oleh user ini. Bypass Kas Awal.");
         }
-
-        // Simpan ID User yang berhasil login untuk pengecekan berikutnya
-        await prefs.setInt('last_shift_user_id', currentUserId);
         // =============================================================
 
-        // Simpan Token di memori
+        // Simpan Token
         final String? tokenFromServer = result['data']['token'];
         if (tokenFromServer != null) {
           await StorageService.saveToken(tokenFromServer);
-          print("🔑 Token Akses Berhasil Disimpan!");
         }
 
-        // 🌟 PERBAIKAN 2: Cegah penimpaan Waktu Start Shift
-        // Jika sedang bypass, JANGAN simpan ulang waktu login,
-        // agar waktu awal shift tidak rusak.
+        // Simpan Waktu Login hanya jika benar-benar baru buka (bukan bypass)
         if (!isKasirOpened) {
           DateTime now = DateTime.now();
           String loginTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
@@ -183,7 +182,6 @@ class _LoginScreenState extends State<LoginScreen> {
         final String newCashierName = userFromServer['name'] ?? "Cashier";
         await StorageService.saveCashierName(newCashierName);
 
-        // Jika berhasil mendapat shift_id, pastikan kita simpan juga ke Storage
         if (newShiftId != null && newShiftId != 'null') {
           await StorageService.saveCurrentShiftId(newShiftId);
         }
@@ -194,7 +192,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => MainNavigationScaffold(requireCashInput: !isKasirOpened)),
+            MaterialPageRoute(
+              builder: (context) => MainNavigationScaffold(requireCashInput: !isKasirOpened)
+            ),
           );
         }
       } else {
@@ -248,7 +248,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // HAPUS GestureDetector dari sini, ganti jadi Text biasa
                         Text("Sign In", style: AppStyle.titleText.copyWith(color: AppStyle.primaryBlue)),
                         const SizedBox(height: 5),
                         Text("Masukkan 6 digit PIN akses", style: AppStyle.subTitleText),
@@ -270,20 +269,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 35),
                         _buildNumPad(),
                         
-                        // TOMBOL RESET OUTLET DIPINDAH KE SINI
                         const SizedBox(height: 15),
                         TextButton(
                           onPressed: _showResetOutletDialog,
-                          child: Text(
+                          child: const Text(
                             "Ganti Outlet?", 
                             style: TextStyle(
-                              color: const Color.fromARGB(255, 20, 20, 20), 
+                              color: Color.fromARGB(255, 20, 20, 20), 
                               fontWeight: FontWeight.w600,
                               fontSize: 12,
                             ),
                           ),
                         ),
-
                       ],
                     ),
                   ),

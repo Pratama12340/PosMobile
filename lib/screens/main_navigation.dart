@@ -6,7 +6,6 @@ import 'shif_screen.dart';
 import 'setting_screen.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
-import '../services/api_service.dart'; 
 import '../widgets/opening_cash_dialog.dart';
 
 class MainNavigationScaffold extends StatefulWidget {
@@ -20,6 +19,9 @@ class MainNavigationScaffold extends StatefulWidget {
 class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   bool _isSidebarVisible = false;
+  
+  // Key untuk mengakses fungsi di dalam HomeScreen (untuk menutup cart)
+  final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
   
   String _cashierName = "Loading...";
   String _outletName = "Loading..."; 
@@ -66,6 +68,15 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   void dispose() {
     _globalSearchController.dispose();
     super.dispose();
+  }
+
+  // Fungsi untuk menutup sidebar saat Cart dibuka (dipanggil dari HomeScreen)
+  void _closeSidebar() {
+    if (_isSidebarVisible) {
+      setState(() {
+        _isSidebarVisible = false;
+      });
+    }
   }
 
   void _handleLogout(BuildContext context) {
@@ -118,12 +129,19 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                     child: IndexedStack(
                       index: _currentIndex,
                       children: [
-                        // Index 0
-                        HomeScreen(searchController: _globalSearchController),
+                        // Index 0: HomeScreen
+                        HomeScreen(
+                          key: _homeKey,
+                          searchController: _globalSearchController,
+                          // Callback agar saat Cart dibuka, Sidebar tertutup
+                          onCartToggled: (isOpen) {
+                            if (isOpen) _closeSidebar();
+                          },
+                        ),
                         // Index 1
                         ShiftScreen(searchController: _globalSearchController),
                         // Index 2
-                        HistoryScreen(),
+                        HistoryScreen(searchController: _globalSearchController),
                         // Index 3
                         SettingScreen(searchController: _globalSearchController),
                       ],
@@ -149,7 +167,15 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         children: [
           IconButton(
             icon: const Icon(Icons.menu, color: AppStyle.textMain, size: 30),
-            onPressed: () => setState(() => _isSidebarVisible = !_isSidebarVisible),
+            onPressed: () {
+              setState(() {
+                _isSidebarVisible = !_isSidebarVisible;
+                // JIKA SIDEBAR DIBUKA: Perintahkan HomeScreen untuk menutup Cart
+                if (_isSidebarVisible) {
+                  _homeKey.currentState?.closeCart();
+                }
+              });
+            },
           ),
           const SizedBox(width: 10),
           Text(
@@ -246,6 +272,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             setState(() {
               _currentIndex = index;
               _globalSearchController.clear();
+              // Opsional: Tutup sidebar otomatis saat menu diklik (UX lebih baik)
+              _isSidebarVisible = false;
             });
           }
         },

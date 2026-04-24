@@ -123,43 +123,100 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  Widget _buildReceiptSummary(double sub, double tx, double disc, double grand) {
+  // Tombol Diskon Gabung dengan Informasi Potongan Harga
+  Widget _buildDiscountButton(double discAmount) {
+    bool hasDiscount = _selectedDiscount != null;
+    
+    return Align(
+      alignment: Alignment.centerLeft, // Menjaga agar tidak terlalu lebar
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _showDiscountList = true),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: hasDiscount ? Colors.orange.withOpacity(0.1) : Colors.grey.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: hasDiscount ? Colors.orange.withOpacity(0.4) : Colors.black12,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min, // Agar lebar sesuai konten
+              children: [
+                Icon(
+                  hasDiscount ? Icons.confirmation_number_rounded : Icons.local_offer_outlined,
+                  size: 16,
+                  color: hasDiscount ? Colors.orange : Colors.black45,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    hasDiscount 
+                      ? "${_selectedDiscount!.name} (-${widget.formatCurrency(discAmount)})" 
+                      : "Tambah Diskon",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: hasDiscount ? FontWeight.bold : FontWeight.w500,
+                      color: hasDiscount ? Colors.orange[900] : Colors.black54,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (hasDiscount)
+                  GestureDetector(
+                    onTap: () => setState(() => _selectedDiscount = null),
+                    child: const Icon(Icons.cancel, size: 16, color: Colors.red),
+                  )
+                else
+                  const Icon(Icons.add_circle, size: 16, color: AppStyle.primaryBlue),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReceiptSummary(double sub, double baseAmount, double disc, double grand) {
     return Column(
       children: [
         _rowInf("Sub Total", sub),
         const SizedBox(height: 8),
-        _rowInf("Pajak ($_totalTaxPercentage%)", tx),
+
+        // Diskon & Potongan Harga dalam satu baris/kotak
+        _buildDiscountButton(disc),
+        
         const SizedBox(height: 8),
-        GestureDetector(
-          onTap: () => setState(() => _showDiscountList = true),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Text("Diskon", style: TextStyle(color: Colors.black45, fontSize: 12)),
-                  if (_selectedDiscount != null) ...[
-                    const SizedBox(width: 6),
-                    Text("(${_selectedDiscount!.name})", style: const TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 4),
-                    GestureDetector(onTap: () => setState(() => _selectedDiscount = null), child: const Icon(Icons.cancel, size: 14, color: Colors.red)),
-                  ] else ...[
-                    const SizedBox(width: 6),
-                    const Text("(Pilih Diskon)", style: TextStyle(color: AppStyle.primaryBlue, fontSize: 10, decoration: TextDecoration.underline)),
-                  ]
-                ],
-              ),
-              Text(disc > 0 ? "- ${widget.formatCurrency(disc)}" : widget.formatCurrency(0),
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: disc > 0 ? Colors.red : Colors.black)),
-            ],
-          ),
-        ),
-        const Divider(height: 24),
+        const Divider(color: Color(0xFFEEEEEE), height: 1),
+        const SizedBox(height: 8),
+        
+        // Pajak
+        ..._availableTaxes.map((tax) {
+          double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+          double individualTaxAmount = (tax['type'] == 'percentage') 
+              ? (baseAmount * (rate / 100)) 
+              : rate;
+          
+          String label = tax['name'] ?? "Pajak";
+          if (tax['type'] == 'percentage') label += " (${rate.toString().replaceAll('.0', '')}%)";
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _rowInf(label, individualTaxAmount),
+          );
+        }).toList(),
+
+        const Divider(height: 20, thickness: 1),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Total", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, fontFamily: 'Poppins')),
-            Text(widget.formatCurrency(grand), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppStyle.primaryBlue, fontFamily: 'Poppins')),
+            const Text("Total", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, fontFamily: 'Poppins')),
+            Text(widget.formatCurrency(grand), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppStyle.primaryBlue, fontFamily: 'Poppins')),
           ],
         ),
       ],
@@ -197,7 +254,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28)),
         child: Row(
           children: [
-            // SISI KIRI: PEMBAYARAN
+            // SISI KIRI
             Expanded(
               flex: 5,
               child: Padding(
@@ -243,28 +300,21 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 ),
               ),
             ),
-            // SISI KANAN: RINGKASAN PESANAN
+            // SISI KANAN
             Expanded(
               flex: 4,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(30, 20, 30, 30),
+                padding: const EdgeInsets.fromLTRB(30, 15, 30, 25), // Padding atas diperkecil untuk menaikkan posisi
                 decoration: const BoxDecoration(
                   color: Color(0xFFFBFBFB),
-                  borderRadius: BorderRadius.only(
-                    topRight: Radius.circular(28),
-                    bottomRight: Radius.circular(28),
-                  ),
+                  borderRadius: BorderRadius.only(topRight: Radius.circular(28), bottomRight: Radius.circular(28)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Align(alignment: Alignment.topRight, child: IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close))),
-                    
-                    // INFORMASI TRANSAKSI (CUSTOMER & MEJA DIMAJUKAN KE KIRI)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Informasi Kasir
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -272,36 +322,25 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                             Text("$currentDate | $currentTime WIB", style: const TextStyle(fontSize: 11, color: Colors.black54)),
                           ],
                         ),
-                        
-                        // Jarak tetap untuk memajukan posisi kolom Customer
-                        const SizedBox(width: 70), 
-
-                        // Informasi Customer & Meja (Sejajar Atas-Bawah, Rata Kiri)
+                        const SizedBox(width: 50), 
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              widget.customerName.isEmpty ? "Customer: -" : "Customer: ${widget.customerName}", 
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              widget.tableNumber.isEmpty ? "Meja: -" : "Meja: ${widget.tableNumber}", 
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)
-                            ),
+                            Text(widget.customerName.isEmpty ? "Customer: -" : "Customer: ${widget.customerName}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
+                            const SizedBox(height: 2),
+                            Text(widget.tableNumber.isEmpty ? "Meja: -" : "Meja: ${widget.tableNumber}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
                           ],
                         )
                       ],
                     ),
-                    
-                    const Divider(height: 30),
+                    const Divider(height: 20), // Jarak Divider diperkecil
                     Expanded(
                       child: ListView.builder(
                         itemCount: widget.cart.length,
                         itemBuilder: (context, index) {
                           var item = widget.cart.values.elementAt(index);
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.only(bottom: 12), // Jarak antar item diperkecil
                             child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
@@ -318,13 +357,15 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.all(15),
+                      padding: const EdgeInsets.all(12), // Padding ringkasan diperkecil
                       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: const Color(0xFFEEEEEE))),
-                      child: _showDiscountList ? _buildDiscountPickerMenu(subTotal) : _buildReceiptSummary(subTotal, taxAmount, discountAmount, grandTotal),
+                      child: _showDiscountList 
+                          ? _buildDiscountPickerMenu(subTotal) 
+                          : _buildReceiptSummary(subTotal, baseAmount, discountAmount, grandTotal),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 15), // Jarak ke tombol proses diperkecil
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppStyle.primaryBlue, minimumSize: const Size(double.infinity, 60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppStyle.primaryBlue, minimumSize: const Size(double.infinity, 55), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
                       onPressed: (_paymentMethod == 'Cash' && _amountTendered < grandTotal) || _isLoading ? null : _processPayment,
                       child: _isLoading
                           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
@@ -360,12 +401,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       double change = _amountTendered - grandTotal;
 
       var mappedItems = widget.cart.values.map((item) {
-        return {
-          'product_id': item.productId,
-          'qty': item.quantity,
-          'price': item.unitPrice.toInt(),
-          'notes': item.notes ?? '' 
-        };
+        return {'product_id': item.productId, 'qty': item.quantity, 'price': item.unitPrice.toInt(), 'notes': item.notes ?? ''};
       }).toList();
 
       Map<String, dynamic> payload = {
@@ -413,7 +449,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     }
   }
 
-  Widget _rowInf(String l, double v) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(l, style: const TextStyle(color: Colors.black45, fontSize: 12)), Text(widget.formatCurrency(v), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))]));
+  Widget _rowInf(String l, double v) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(l, style: const TextStyle(color: Colors.black45, fontSize: 11)), Text(widget.formatCurrency(v), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11))]));
   
   Widget _payBtn(String l, IconData i) { 
     bool s = _paymentMethod == l; 
@@ -444,11 +480,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   
   Widget _buildChangeDisplay(double c) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), 
-    decoration: BoxDecoration(
-      color: Colors.green.shade50, 
-      borderRadius: BorderRadius.circular(15),
-      border: Border.all(color: Colors.green.withOpacity(0.1))
-    ), 
+    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withOpacity(0.1))), 
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween, 
       children: [

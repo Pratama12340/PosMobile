@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
+import '../services/storage_service.dart'; // Pastikan import ini sesuai dengan path projectmu
 
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
@@ -17,12 +18,23 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   bool isEditMode = false;
   final TextEditingController _noteController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  
+  String _currentUserName = ""; // Variabel untuk menyimpan nama dari storage
   double _taxRate = 0;
 
   @override
   void initState() {
     super.initState();
     _detailFuture = ApiService.fetchHistoryDetail(widget.orderId);
+    _loadCurrentUserData(); // Ambil nama kasir dari storage saat init
+  }
+
+  // Fungsi untuk mengambil nama kasir dari StorageService
+  Future<void> _loadCurrentUserData() async {
+    String name = await StorageService.getCashierName();
+    setState(() {
+      _currentUserName = name;
+    });
   }
 
   void _triggerRefresh() {
@@ -83,7 +95,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               key: _formKey,
               child: Row(
                 children: [
-                  // --- SISI KIRI: RINCIAN PESANAN ---
+                  // --- SISI KIRI ---
                   Expanded(
                     flex: 4,
                     child: Container(
@@ -97,7 +109,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildHeaderCustom(), // Perbaikan Overflow di sini
+                          _buildHeaderCustom(),
                           const SizedBox(height: 24),
                           _buildCashierInfoBox(),
                           const SizedBox(height: 32),
@@ -170,19 +182,18 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
-  // --- Header Fix Overflow ---
   Widget _buildHeaderCustom() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded( // Mencegah teks INV terlalu panjang menabrak tombol
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 localOrder!.invoiceNo, 
                 style: const TextStyle(fontSize: 26, color: Color(0xFF4285F4), fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis, // Jika sangat panjang, akan dipotong titik-titik
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
               Text("${localOrder!.date} • Outlet 1", style: const TextStyle(color: Colors.grey, fontSize: 14)),
@@ -216,8 +227,9 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildInfoColumn("KASIR", localOrder!.cashierName),
-          _buildInfoColumn("TIPE", localOrder!.tableNo, isRight: true),
+          // Gunakan _currentUserName jika nama di data order kosong
+          _buildInfoColumn("CUSTOMER", localOrder!.customerName == "Staff" ? _currentUserName : localOrder!.customerName),
+          _buildInfoColumn("TABLE", localOrder!.tableNo, isRight: true),
         ],
       ),
     );
@@ -238,14 +250,21 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item.itemName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 4),
-                Text("${item.quantity} x ${style.formatHarga(item.unitPrice)}", style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                const SizedBox(height: 2),
+                Text("${item.quantity} x ${style.formatHarga(item.unitPrice)}", style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                if (item.notes.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text("Note: ${item.notes}", 
+                      style: const TextStyle(fontSize: 12, color: Colors.orange, fontStyle: FontStyle.italic)),
+                  ),
               ],
             ),
           ),
@@ -287,13 +306,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
-  // --- SISI KANAN: LOG PERUBAHAN ---
   Widget _buildTimelineLogs() {
     return ListView.builder(
       itemCount: localOrder!.logs.length,
       itemBuilder: (context, index) {
         final log = localOrder!.logs[index];
-        // Ubah "Void 3x Item" menjadi "- 3 Item"
         String formattedTitle = log.title.replaceAll(RegExp(r'Void (\d+)x'), '- \1');
 
         return Row(
@@ -314,7 +331,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(localOrder!.cashierName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      // LOGIC: Jika actor di API adalah "Staff", gunakan nama user dari StorageService
+                      Text(
+                        log.actor == "Staff" ? _currentUserName : log.actor, 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)
+                      ),
                       Text(log.date, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                     ],
                   ),
@@ -326,7 +347,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.grey.withOpacity(0.1)),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,6 +369,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
+  // --- FUNGSI EDIT & SAVE TETAP SAMA ---
   Widget _buildEditToggleButton() {
     return OutlinedButton.icon(
       onPressed: () => setState(() => isEditMode = !isEditMode),

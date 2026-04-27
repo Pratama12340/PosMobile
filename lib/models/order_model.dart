@@ -27,7 +27,7 @@ class OrderLog {
 
 class OrderItem {
   final int id, productId;
-  int originalQty; // 👈 PERBAIKAN 1: Hapus 'final' agar bisa disesuaikan di keranjang
+  int originalQty; 
   int activeQty;   
   
   final String itemName;
@@ -37,11 +37,9 @@ class OrderItem {
 
   int get quantity => activeQty;
   
-  // 👈 PERBAIKAN 2: Sesuaikan setter agar tidak mengunci saat menambah pesanan baru
+  
   set quantity(int val) {
     activeQty = val;
-    // Jika activeQty bertambah melebihi originalQty (seperti di keranjang belanja),
-    // maka originalQty harus mengikuti agar tidak dianggap 'void' (negatif) saat kirim ke backend.
     if (activeQty > originalQty) {
       originalQty = activeQty;
     }
@@ -93,6 +91,7 @@ class Order {
   final double subtotalPrice, discountAmount, taxAmount, totalPrice, paidAmount, changeAmount;
   final List<OrderItem> items;
   final List<OrderLog> logs;
+  final List<dynamic>? taxBreakdown;
 
   Order({
     required this.id,
@@ -100,6 +99,7 @@ class Order {
     required this.invoiceNo, required this.date, required this.cashierName,
     required this.customerName, required this.tableNo, required this.paymentMethod, required this.status,
     required this.subtotalPrice, required this.discountAmount, required this.taxAmount,
+    this.taxBreakdown,
     required this.totalPrice, required this.paidAmount, required this.changeAmount,
     required this.items, required this.logs,
   });
@@ -145,6 +145,7 @@ class Order {
       subtotalPrice: double.tryParse((d['subtotal_price'] ?? '0').toString()) ?? 0.0,
       discountAmount: double.tryParse((d['discount_amount'] ?? '0').toString()) ?? 0.0,
       taxAmount: double.tryParse((d['tax_amount'] ?? '0').toString()) ?? 0.0,
+      taxBreakdown: json['tax_breakdown'],
       totalPrice: double.tryParse((d['total_price'] ?? '0').toString()) ?? 0.0,
       paidAmount: double.tryParse((d['paid_amount'] ?? d['amount_paid'] ?? '0').toString()) ?? 0.0,
       changeAmount: double.tryParse((d['change_amount'] ?? '0').toString()) ?? 0.0,

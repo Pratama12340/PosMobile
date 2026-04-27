@@ -305,13 +305,18 @@ class ApiService {
     required int orderId,
     required List<OrderItem> items,
     required String reason,
+    required double taxAmount,  // 👈 Tambahkan parameter ini
+    required double totalPrice, // 👈 Tambahkan parameter ini
   }) async {
     try {
       final headers = await _getHeaders();
 
+      // Memasukkan tax_amount dan total_price ke dalam body data
       final Map<String, dynamic> bodyData = {
         'reason': reason,
         'items': items.map((item) => item.toJson()).toList(),
+        'tax_amount': taxAmount,   // 👈 Kirim nilai pajak terbaru
+        'total_price': totalPrice, // 👈 Kirim nilai total terbaru
       };
 
       print("\n--- [API REQUEST] PROSES UPDATE ORDER (VOID) ---");
@@ -328,7 +333,7 @@ class ApiService {
       print("Body: ${response.body}");
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print("✅ [API SUCCESS] Update Berhasil.");
+        print("✅ [API SUCCESS] Update Berhasil ke Database.");
         return true;
       } else {
         print("❌ [API FAILED] Server menolak update.");

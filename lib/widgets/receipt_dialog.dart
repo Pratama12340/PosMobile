@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
-import '../services/storage_service.dart'; // Pastikan import ini sesuai dengan path projectmu
+import '../services/storage_service.dart';
 
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
@@ -19,22 +19,30 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   final TextEditingController _noteController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   
-  String _currentUserName = ""; // Variabel untuk menyimpan nama dari storage
-  double _taxRate = 0;
+  String _currentUserName = ""; 
+  List<dynamic> _masterTaxes = []; // Menyimpan rincian tipe pajak dari database
 
   @override
   void initState() {
     super.initState();
     _detailFuture = ApiService.fetchHistoryDetail(widget.orderId);
-    _loadCurrentUserData(); // Ambil nama kasir dari storage saat init
+    _loadCurrentUserData();
+    _loadTaxSettings(); 
   }
 
-  // Fungsi untuk mengambil nama kasir dari StorageService
   Future<void> _loadCurrentUserData() async {
     String name = await StorageService.getCashierName();
-    setState(() {
-      _currentUserName = name;
-    });
+    setState(() { _currentUserName = name; });
+  }
+
+  // Mengambil master pajak dari database agar rincian bisa dipecah
+  void _loadTaxSettings() async {
+    final taxes = await ApiService.getTaxes();
+    if (mounted) {
+      setState(() {
+        _masterTaxes = taxes;
+      });
+    }
   }
 
   void _triggerRefresh() {
@@ -44,18 +52,37 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     });
   }
 
-  double get calculatedSubtotal {
+  // --- LOGIKA PERHITUNGAN DINAMIS ---
+
+  double get currentSubtotalPrice {
     if (localOrder == null) return 0;
     double total = 0;
     for (var item in localOrder!.items) {
-      total += (item.quantity * item.unitPrice);
+      total += (item.activeQty * item.unitPrice);
     }
     return total;
   }
 
-  double get dynamicTax {
+  double get baseAmount {
     if (localOrder == null) return 0;
-    return calculatedSubtotal * _taxRate;
+    return currentSubtotalPrice - localOrder!.discountAmount;
+  }
+
+  // Menghitung ulang total pajak berdasarkan rincian master
+  double get currentTaxAmount {
+    if (localOrder == null || _masterTaxes.isEmpty) return 0;
+    double totalTax = 0;
+    for (var tax in _masterTaxes) {
+      double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+      totalTax += (tax['type'] == 'percentage') ? (baseAmount * (rate / 100)) : rate;
+    }
+    return totalTax;
+  }
+
+  double get currentTotalPrice {
+    if (localOrder == null) return 0;
+    double total = baseAmount + currentTaxAmount;
+    return total < 0 ? 0 : total;
   }
 
   @override
@@ -67,19 +94,19 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         if (snapshot.connectionState == ConnectionState.waiting && localOrder == null) {
           return const Dialog(child: SizedBox(height: 300, child: Center(child: CircularProgressIndicator())));
         }
+        
         if (snapshot.hasData && localOrder == null) {
           localOrder = snapshot.data;
-          double initialSubtotal = 0;
-          for (var item in localOrder!.items) {
-            initialSubtotal += item.subtotal;
-          }
-          if (initialSubtotal > 0) {
-            _taxRate = localOrder!.taxAmount / initialSubtotal;
-          }
         }
+        
         if (localOrder == null) return const Dialog(child: Center(child: Text("Data tidak ditemukan")));
 
         bool showRightSide = localOrder!.logs.isNotEmpty || isEditMode;
+        
+        // Nilai yang ditampilkan di UI
+        double displaySubtotal = isEditMode ? currentSubtotalPrice : localOrder!.subtotalPrice;
+        double displayBase = displaySubtotal - localOrder!.discountAmount;
+        double displayTotal = isEditMode ? currentTotalPrice : localOrder!.totalPrice;
 
         return Dialog(
           backgroundColor: const Color(0xFFF8FAFC),
@@ -95,15 +122,12 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               key: _formKey,
               child: Row(
                 children: [
-                  // --- SISI KIRI ---
                   Expanded(
                     flex: 4,
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: showRightSide 
-                          ? const BorderRadius.horizontal(left: Radius.circular(24))
-                          : BorderRadius.circular(24),
+                        borderRadius: showRightSide ? const BorderRadius.horizontal(left: Radius.circular(24)) : BorderRadius.circular(24),
                       ),
                       padding: const EdgeInsets.all(32),
                       child: Column(
@@ -127,19 +151,47 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                             ),
                           ),
                           const Divider(height: 24, thickness: 1),
-                          _buildSummaryRow("Subtotal", style.formatHarga(calculatedSubtotal)),
+                          
+                          // --- SUMMARY PAYMENTS ---
+                          _buildSummaryRow("Subtotal", style.formatHarga(displaySubtotal)),
+                          
                           if (localOrder!.discountAmount > 0)
                             _buildSummaryRow("Diskon", "-${style.formatHarga(localOrder!.discountAmount)}", color: Colors.red),
-                          if (dynamicTax > 0 || _taxRate > 0)
-                            _buildSummaryRow("Pajak", style.formatHarga(dynamicTax)),
+                          
+                          // MEMECAH TAX_AMOUNT MENJADI RINCIAN (PPN, SERVICE, DLL)
+                          if (_masterTaxes.isNotEmpty)
+                            ..._masterTaxes.map((tax) {
+                              double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+                              // Hitung nominal berdasarkan base amount saat ini
+                              double amt = (tax['type'] == 'percentage') ? (displayBase * (rate / 100)) : rate;
+                              
+                              String label = tax['name'] ?? "Pajak";
+                              if (tax['type'] == 'percentage') label += " (${rate.toString().replaceAll('.0', '')}%)";
+                              
+                              return _buildSummaryRow(label, style.formatHarga(amt));
+                            }).toList()
+                          else if (localOrder!.taxAmount > 0)
+                            // Jika master gagal dimuat, tampilkan total dari history sebagai fallback
+                            _buildSummaryRow("Pajak", style.formatHarga(localOrder!.taxAmount)),
+
                           const Divider(height: 32, thickness: 1),
-                          _buildTotalSectionCustom(style),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Total Tagihan", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(style.formatHarga(displayTotal), style: const TextStyle(fontSize: 32, color: Color(0xFF4CAF50), fontWeight: FontWeight.bold)),
+                                  Text("Metode: ${localOrder!.paymentMethod}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                ],
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
                   ),
-
-                  // --- SISI KANAN: LOG PERUBAHAN ---
                   if (showRightSide)
                     Expanded(
                       flex: 3,
@@ -182,6 +234,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
+  // --- UI HELPER COMPONENTS ---
+
   Widget _buildHeaderCustom() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,32 +244,19 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                localOrder!.invoiceNo, 
-                style: const TextStyle(fontSize: 26, color: Color(0xFF4285F4), fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
-              ),
+              Text(localOrder!.invoiceNo, style: const TextStyle(fontSize: 26, color: Color(0xFF4285F4), fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
               const SizedBox(height: 4),
               Text("${localOrder!.date} • Outlet 1", style: const TextStyle(color: Colors.grey, fontSize: 14)),
             ],
           ),
         ),
         const SizedBox(width: 12),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.print, size: 20, color: Colors.white),
-              label: const Text("Cetak", style: TextStyle(color: Colors.white, fontSize: 16)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4285F4),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-          ],
-        )
+        ElevatedButton.icon(
+          onPressed: () {},
+          icon: const Icon(Icons.print, size: 20, color: Colors.white),
+          label: const Text("Cetak", style: TextStyle(color: Colors.white, fontSize: 16)),
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4285F4), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+        ),
       ],
     );
   }
@@ -227,7 +268,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Gunakan _currentUserName jika nama di data order kosong
           _buildInfoColumn("CUSTOMER", localOrder!.customerName == "Staff" ? _currentUserName : localOrder!.customerName),
           _buildInfoColumn("TABLE", localOrder!.tableNo, isRight: true),
         ],
@@ -258,19 +298,18 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               children: [
                 Text(item.itemName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
-                Text("${item.quantity} x ${style.formatHarga(item.unitPrice)}", style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                Text("${item.activeQty} x ${style.formatHarga(item.unitPrice)}", style: const TextStyle(fontSize: 13, color: Colors.grey)),
                 if (item.notes.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text("Note: ${item.notes}", 
-                      style: const TextStyle(fontSize: 12, color: Colors.orange, fontStyle: FontStyle.italic)),
+                    child: Text("Note: ${item.notes}", style: const TextStyle(fontSize: 12, color: Colors.orange, fontStyle: FontStyle.italic)),
                   ),
               ],
             ),
           ),
           if (isEditMode) _buildQtyController(item),
           const SizedBox(width: 20),
-          Text(style.formatHarga(item.quantity * item.unitPrice), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(style.formatHarga(item.activeQty * item.unitPrice), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -289,30 +328,17 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
-  Widget _buildTotalSectionCustom(AppStyle style) {
-    double totalDisplay = calculatedSubtotal + dynamicTax - localOrder!.discountAmount;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text("Total Tagihan", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(style.formatHarga(totalDisplay), style: const TextStyle(fontSize: 32, color: Color(0xFF4CAF50), fontWeight: FontWeight.bold)),
-            Text("Metode: ${localOrder!.paymentMethod}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
-        ),
-      ],
-    );
-  }
-
   Widget _buildTimelineLogs() {
     return ListView.builder(
       itemCount: localOrder!.logs.length,
       itemBuilder: (context, index) {
         final log = localOrder!.logs[index];
-        String formattedTitle = log.title.replaceAll(RegExp(r'Void (\d+)x'), '- \1');
-
+        
+        String formattedTitle = log.title.replaceAllMapped(
+          RegExp(r'Void (\d+)x'), 
+          (match) => '- ${match.group(1)}'
+        );
+        
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -331,11 +357,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // LOGIC: Jika actor di API adalah "Staff", gunakan nama user dari StorageService
-                      Text(
-                        log.actor == "Staff" ? _currentUserName : log.actor, 
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)
-                      ),
+                      Text(log.actor == "Staff" ? _currentUserName : log.actor, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       Text(log.date, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                     ],
                   ),
@@ -369,7 +391,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
-  // --- FUNGSI EDIT & SAVE TETAP SAMA ---
   Widget _buildEditToggleButton() {
     return OutlinedButton.icon(
       onPressed: () => setState(() => isEditMode = !isEditMode),
@@ -382,9 +403,9 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   Widget _buildQtyController(OrderItem item) {
     return Row(
       children: [
-        IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent), onPressed: () => setState(() => item.quantity > 0 ? item.quantity-- : null)),
-        Text("${item.quantity}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        IconButton(icon: const Icon(Icons.add_circle_outline, color: Color(0xFF4285F4)), onPressed: () => setState(() => item.quantity++)),
+        IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent), onPressed: () => setState(() => item.activeQty > 0 ? item.activeQty-- : null)),
+        Text("${item.activeQty}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        IconButton(icon: const Icon(Icons.add_circle_outline, color: Color(0xFF4285F4)), onPressed: () => setState(() => item.activeQty++)),
       ],
     );
   }
@@ -394,7 +415,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       controller: _noteController,
       maxLines: 2,
       decoration: InputDecoration(
-        hintText: "Tulis alasan perubahan secara detail...",
+        hintText: "Tulis alasan perubahan...",
         filled: true,
         fillColor: const Color(0xFFF1F5F9),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -423,6 +444,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           orderId: localOrder!.orderId,
           items: localOrder!.items,
           reason: _noteController.text,
+          taxAmount: currentTaxAmount,
+          totalPrice: currentTotalPrice,
         );
         Navigator.pop(context);
         if (success) {

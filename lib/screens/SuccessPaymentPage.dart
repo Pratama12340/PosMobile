@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/order_model.dart';
-import '../style.dart'; // Pastikan import style Anda untuk warna yang konsisten
+import '../style.dart'; 
 
 class SuccessPaymentPage extends StatelessWidget {
   final String orderId;
@@ -11,7 +11,7 @@ class SuccessPaymentPage extends StatelessWidget {
   final double change;
   final Map<int, OrderItem> cart;
   final String tableNumber;
-  final String customerName; // Tambahan parameter Nama Customer
+  final String customerName; 
   final String cashierName;
   final String outletName;
   final String Function(double) formatCurrency;
@@ -25,7 +25,7 @@ class SuccessPaymentPage extends StatelessWidget {
     required this.change,
     required this.cart,
     required this.tableNumber,
-    required this.customerName, // Tambahan di constructor
+    required this.customerName, 
     required this.cashierName,
     required this.outletName,
     required this.formatCurrency,
@@ -34,7 +34,7 @@ class SuccessPaymentPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F3F9), // Background abu muda agar kartu terlihat floating
+      backgroundColor: const Color(0xFFF1F3F9), 
       body: Center(
         child: SingleChildScrollView(
           child: Container(
@@ -57,7 +57,6 @@ class SuccessPaymentPage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Icon Centang
                 const Icon(
                   Icons.check_circle_rounded,
                   color: Color(0xFF4CAF50),
@@ -77,7 +76,7 @@ class SuccessPaymentPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Order ID: $orderId",
+                  "$orderId",
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
@@ -93,7 +92,7 @@ class SuccessPaymentPage extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: AppStyle.primaryBlue, // Menggunakan warna biru Aranus POS
+                      color: AppStyle.primaryBlue, 
                       fontFamily: 'Poppins',
                     ),
                   ),

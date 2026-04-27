@@ -430,9 +430,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       // 1. Kirim data ke backend
       final res = await ApiService.submitOrder(payload);
 
+      print("DEBUG: Response dari Server: $res");
+
       if (res['success'] && context.mounted) {
-        // 2. Ambil Invoice Number asli dari response Backend
-        String realOrderId = res['data']?['invoice_number'] ?? widget.orderId;
+        print("DEBUG: Data Invoice: ${res['data']}");
+        String realOrderId = res['data']?['order']?['invoice_number'] ?? widget.orderId;
+
+        print("DEBUG: Invoice resmi yang diambil: $realOrderId");
 
         Navigator.pop(context, {'status': 'success'});
         

@@ -4,14 +4,15 @@ import '../style.dart';
 import '../services/api_service.dart';
 import '../models/product_models.dart';
 import '../models/order_model.dart';
+import '../models/discount_model.dart'; // Pastikan model diskon diimport
 import '../widgets/cart_panel.dart';
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
-  final Function(bool)? onCartToggled; // Menambahkan callback toggle
+  final Function(bool)? onCartToggled;
 
   const HomeScreen({
-    super.key, 
+    super.key,
     required this.searchController,
     this.onCartToggled,
   });
@@ -33,11 +34,8 @@ class HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _selectedCategory = "All Menu";
   
-  // Flag untuk kontrol visibilitas panel kanan
   bool _isCartVisible = false;
 
-  // Fungsi yang dipanggil dari MainNavigation via GlobalKey
-  // MODIFIKASI: Otomatis simpan ke draft saat ditutup paksa oleh Sidebar
   void closeCart() {
     setState(() {
       if (_cart.isNotEmpty) {
@@ -86,19 +84,57 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadInitialData() async {
     try {
+      // 1. Ambil Kategori, Produk, dan Diskon secara paralel dari API masing-masing
       final results = await Future.wait([
         ApiService.getCategories(),
         ApiService.getProducts(),
+        ApiService.getDiscounts(), // Memanggil API Diskon terpisah
       ]);
+
       if (mounted) {
+        List<dynamic> categoriesData = results[0] as List;
+        List<Product> productsData = results[1] as List<Product>;
+        List<Discount> discountsData = results[2] as List<Discount>;
+
+        // 👇 TAMBAHKAN PRINT DI SINI 👇
+        print("--- CEK DATA API ---");
+        print("Jumlah Produk: ${productsData.length}");
+        print("Jumlah Diskon: ${discountsData.length}");
+
+        // 2. MAPPING: Pasangkan data diskon ke produk berdasarkan productId
+        for (var product in productsData) {
+          try {
+            // Mencari diskon yang memiliki productId yang sama dengan id produk
+            product.discount = discountsData.firstWhere(
+              (d) => d.productId == product.id,
+            );
+
+            // 👇 TAMBAHKAN PRINT UNTUK MELIHAT YANG BERHASIL DI-MAP 👇
+            print("✅ Mapping Berhasil: ${product.name} (ID: ${product.id}) -> Diskon: ${product.discount?.name}");
+
+          } catch (e) {
+            product.discount = null; // Tidak ada diskon yang cocok
+          }
+        }
+
         setState(() {
-          _categories = results[0] as List;
-          _allProducts = results[1] as List<Product>;
+          _categories = categoriesData;
+          _allProducts = productsData;
           _isLoading = false;
         });
+
+        // Debug untuk verifikasi mapping di terminal
+        print("--- DEBUG MAPPING DISKON ---");
+        for (var p in _allProducts) {
+          if (p.discount != null) {
+            print("Produk: ${p.name} | Diskon: ${p.discount!.name} (${p.discount!.value})");
+          }
+        }
+
         _applyFilters();
       }
     } catch (e) {
+      print("Error Loading Data: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -135,7 +171,7 @@ class HomeScreenState extends State<HomeScreen> {
         _cart.clear();
         _currentCustomerName = null;
         _currentTableNumber = null;
-        _isCartVisible = false; // Tutup panel setelah save draft
+        _isCartVisible = false;
         widget.onCartToggled?.call(false);
       }
     });
@@ -188,8 +224,6 @@ class HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                
-                // PANEL KANAN (CART) dengan Logika Mutually Exclusive
                 if (_isCartVisible && (_cart.isNotEmpty || _currentCustomerName != null || _currentTableNumber != null))
                   CartPanel(
                     cart: _cart,
@@ -250,7 +284,7 @@ class HomeScreenState extends State<HomeScreen> {
                         _cart.clear(); 
                         _currentCustomerName = null;
                         _currentTableNumber = null;
-                        _isCartVisible = false; // Reset panel
+                        _isCartVisible = false;
                         widget.onCartToggled?.call(false);
                         _applyFilters(); 
                       });
@@ -274,8 +308,6 @@ class HomeScreenState extends State<HomeScreen> {
           _currentCustomerName = selectedDraft['customerName'];
           _currentTableNumber = selectedDraft['tableNumber'];
           _drafts.removeAt(index);
-          
-          // Membuka panel cart saat draft dipilih
           _isCartVisible = true;
           widget.onCartToggled?.call(true);
         });
@@ -288,7 +320,7 @@ class HomeScreenState extends State<HomeScreen> {
         return PopupMenuItem<int>(
           value: index,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween, // Agar tombol X di kanan
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -301,13 +333,12 @@ class HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              // TOMBOL HAPUS (X)
               GestureDetector(
                 onTap: () {
                   setState(() {
                     _drafts.removeAt(index);
                   });
-                  Navigator.pop(context); // Menutup menu dropdown setelah menghapus
+                  Navigator.pop(context);
                 },
                 child: const Icon(
                   Icons.close, 
@@ -381,6 +412,23 @@ class HomeScreenState extends State<HomeScreen> {
 
   Widget _buildProductCard(Product p) {
     bool isOutOfStock = p.stock <= 0;
+    
+    // 1. Logika Bestseller (Sesuai instruksi: Nanti dulu, jadi kita biarkan false jika tidak ada data)
+    bool isBestseller = p.isBestseller == true; 
+    
+    // 2. Logika Diskon (Fokus Utama saat ini)
+    bool isDiskon = p.discount != null; 
+    
+    double priceAfterDiscount = p.price.toDouble();
+    if (isDiskon) {
+      if (p.discount!.type == 'percentage') {
+        priceAfterDiscount = p.price * (1 - (p.discount!.value / 100));
+      } else {
+        // Tipe Nominal
+        priceAfterDiscount = (p.price - p.discount!.value).toDouble();
+      }
+    }
+
     String imageUrl = p.image.trim();
     if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
       imageUrl = "https://api.etres.my.id/storage/${imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl}";
@@ -398,10 +446,45 @@ class HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(20),
         child: Stack(
           children: [
+            // GAMBAR PRODUK
             Positioned.fill(
               child: imageUrl.isEmpty ? imagePlaceholder : Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (c, e, s) => imagePlaceholder),
             ),
+            // OVERLAY GELAP
             Positioned.fill(child: Container(color: Colors.black.withOpacity(0.3))),
+            
+            // PITA DIAGONAL (DISKON / TERLARIS)
+            if (isDiskon || isBestseller)
+              Positioned(
+                top: 12,
+                left: -28,
+                child: Transform.rotate(
+                  angle: -0.785398, // -45 derajat
+                  child: Container(
+                    width: 110,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      // Warna Teal untuk Diskon, Coral untuk Bestseller
+                      color: isDiskon ? const Color(0xFF2E7D8A) : const Color(0xFFE57373),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2))
+                      ],
+                    ),
+                    child: Text(
+                      isDiskon ? "DISKON" : "TERLARIS",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // BADGE STOK (POJOK KANAN ATAS)
             Positioned(
               top: 10, right: 10,
               child: Container(
@@ -410,6 +493,8 @@ class HomeScreenState extends State<HomeScreen> {
                 child: Text(isOutOfStock ? "HABIS" : "STOK: ${p.stock}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
               ),
             ),
+
+            // INFORMASI NAMA & HARGA (BAWAH)
             Positioned(
               bottom: 15, left: 15, right: 15,
               child: Row(
@@ -420,20 +505,40 @@ class HomeScreenState extends State<HomeScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1),
-                        Text(formatHarga(p.price.toDouble()), style: const TextStyle(color: Colors.white)),
+                        if (isDiskon) ...[
+                          // Tampilkan Harga Asli dengan Garis Coret
+                          Text(
+                            formatHarga(p.price.toDouble()),
+                            style: const TextStyle(
+                              color: Colors.white70, 
+                              fontSize: 10, 
+                              decoration: TextDecoration.lineThrough
+                            ),
+                          ),
+                          // Tampilkan Harga Diskon
+                          Text(formatHarga(priceAfterDiscount), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ] else
+                          Text(formatHarga(p.price.toDouble()), style: const TextStyle(color: Colors.white)),
                       ],
                     ),
                   ),
                   GestureDetector(
                     onTap: isOutOfStock ? null : () => setState(() {
-                      // Aktifkan panel kanan dan beri tahu scaffold untuk tutup sidebar
                       _isCartVisible = true;
                       widget.onCartToggled?.call(true);
 
                       if (_cart.containsKey(p.id)) {
                         _cart[p.id]!.quantity++;
                       } else {
-                        _cart[p.id] = OrderItem(id: p.id, productId: p.id, itemName: p.name, originalQty: 1, activeQty: 1, unitPrice: p.price.toDouble());
+                        _cart[p.id] = OrderItem(
+                          id: p.id, 
+                          productId: p.id, 
+                          itemName: p.name, 
+                          originalQty: 1, 
+                          activeQty: 1, 
+                          // Pastikan harga yang masuk ke keranjang adalah harga setelah diskon
+                          unitPrice: isDiskon ? priceAfterDiscount : p.price.toDouble()
+                        );
                       }
                     }),
                     child: Container(

@@ -7,6 +7,7 @@ import '../style.dart';
 import '../services/api_service.dart';
 import '../screens/SuccessPaymentPage.dart';
 import '../services/storage_service.dart';
+import 'package:midtrans_sdk/midtrans_sdk.dart';
 
 class CheckoutDialog extends StatefulWidget {
   final Map<int, OrderItem> cart;
@@ -45,11 +46,35 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   List<dynamic> _availableTaxes = [];
   double _totalTaxPercentage = 0.0;
 
+  MidtransSDK? _midtrans;
+
   @override
   void initState() {
     super.initState();
     _loadDiscounts();
     _loadTaxes(); 
+    _initMidtrans();
+  }
+
+  void _initMidtrans() async {
+    _midtrans = await MidtransSDK.init(
+      config: MidtransConfig(
+        clientKey: "SB-Mid-client-xxxxxxxxx", // TODO: WAJIB Ganti dengan Client Key Midtrans-mu!
+        merchantBaseUrl: "https://api.etres.my.id/api/v1/",
+        colorTheme: ColorTheme(
+          colorPrimary: AppStyle.primaryBlue,
+          colorPrimaryDark: AppStyle.primaryBlue,
+          colorSecondary: Colors.orange,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _midtrans?.removeTransactionFinishedCallback();
+    _manualTenderController.dispose();
+    super.dispose();
   }
 
   void _loadDiscounts() async {
@@ -80,7 +105,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         : _selectedDiscount!.value.toDouble();
   }
 
-  // PANEL PILIHAN DISKON (MENUTUPI SISI KANAN)
+  // PANEL PILIHAN DISKON
   Widget _buildSideDiscountPanel(double sub) {
     return Container(
       color: const Color(0xFFF4F7F9),
@@ -120,7 +145,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  // DESAIN KARTU VOUCHER (MODEL TIKET)
+  // DESAIN KARTU VOUCHER
   Widget _buildVoucherCard(Discount d, bool eligible) {
     return GestureDetector(
       onTap: eligible ? () {
@@ -306,7 +331,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 ),
               ),
             ),
-            // SISI KANAN (DIUBAH MENJADI STACK)
+            // SISI KANAN
             Expanded(
               flex: 4,
               child: Container(
@@ -375,7 +400,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                           ],
                         ),
                       ),
-                      // Layer Pilihan Diskon (Overlay Sisi Kanan)
+                      // Layer Pilihan Diskon
                       if (_showDiscountList) _buildSideDiscountPanel(subTotal),
                     ],
                   ),
@@ -388,7 +413,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  Future<void> _processPayment() async {
+ Future<void> _processPayment() async {
     setState(() => _isLoading = true);
     try {
       final savedOutletId = await StorageService.getOutletId();
@@ -420,40 +445,120 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         'tax_amount': taxAmountFinal.toInt(),
         'tax_breakdown': _availableTaxes,
         'payment_method': _paymentMethod,
-        'paid_amount': _paymentMethod == 'Cash' ? _amountTendered.toInt() : grandTotal.toInt(),
+        'paid_amount': _paymentMethod == 'Cash' ? _amountTendered.toInt() : 0,
         'change_amount': _paymentMethod == 'Cash' ? change.toInt() : 0,
         'discount_id': _selectedDiscount?.id,
         'items': mappedItems,
-        'status': 'paid',
+        'status': _paymentMethod == 'Cash' ? 'paid' : 'pending',
       };
 
-      // 1. Kirim data ke backend
+      // 1. Kirim data ke backend (Sudah termasuk generate URL Midtrans dari Laravel!)
       final res = await ApiService.submitOrder(payload);
 
-      print("DEBUG: Response dari Server: $res");
-
       if (res['success'] && context.mounted) {
-        print("DEBUG: Data Invoice: ${res['data']}");
         String realOrderId = res['data']?['order']?['invoice_number'] ?? widget.orderId;
 
-        print("DEBUG: Invoice resmi yang diambil: $realOrderId");
+        if (_paymentMethod == 'Cash') {
+          // --- ALUR CASH ---
+          Navigator.pop(context, {'status': 'success'});
+          
+          Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
+            orderId: realOrderId,
+            paymentMethod: _paymentMethod,
+            grandTotal: grandTotal,
+            amountPaid: _amountTendered,
+            change: change,
+            cart: widget.cart,
+            tableNumber: widget.tableNumber,
+            customerName: widget.customerName, 
+            cashierName: widget.cashierName,
+            outletName: "ARANUS POS",
+            formatCurrency: widget.formatCurrency,
+          )));
+        } else {
+          // --- ALUR MIDTRANS (Qris / Card) ---
+          
+          String? redirectUrl = res['data']?['redirect_url'];
+          String? clientKeyFromApi = res['data']?['client_key']; // Ambil key dari API
 
-        Navigator.pop(context, {'status': 'success'});
-        
-        // 3. Kirim realOrderId ke SuccessPaymentPage agar saat di-print sesuai database
-        Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
-          orderId: realOrderId,
-          paymentMethod: _paymentMethod,
-          grandTotal: grandTotal,
-          amountPaid: _paymentMethod == 'Cash' ? _amountTendered : grandTotal,
-          change: _paymentMethod == 'Cash' ? change : 0,
-          cart: widget.cart,
-          tableNumber: widget.tableNumber,
-          customerName: widget.customerName, 
-          cashierName: widget.cashierName,
-          outletName: "ARANUS POS",
-          formatCurrency: widget.formatCurrency,
-        )));
+          if (redirectUrl != null && redirectUrl.isNotEmpty) {
+            String snapToken = redirectUrl.split('/').last;
+
+            // Inisialisasi Dinamis: Jika API mengirim client_key, gunakan itu. 
+            // Jika tidak, gunakan fallback string kosong agar error tertangkap.
+            _midtrans = await MidtransSDK.init(
+              config: MidtransConfig(
+                clientKey: clientKeyFromApi ?? "", 
+                merchantBaseUrl: "https://api.etres.my.id/api/v1/",
+                colorTheme: ColorTheme(
+                  colorPrimary: AppStyle.primaryBlue,
+                  colorPrimaryDark: AppStyle.primaryBlue,
+                  colorSecondary: Colors.orange,
+                ),
+              ),
+            );
+
+            if (_midtrans == null) {
+              throw Exception("SDK Midtrans gagal dimuat. Pastikan API mengirimkan client_key yang valid.");
+            }
+
+            // --- PERBAIKAN CALLBACK MIDTRANS ---
+            _midtrans?.setTransactionFinishedCallback((result) {
+              if (!mounted) return;
+              
+              try {
+                // Di Flutter, jika user menutup gateway (back), statusnya biasanya null atau 'canceled'
+                String? status = result.status;
+                
+                if (status == null || status == 'cancel' || status == 'canceled') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Pembayaran dibatalkan pelanggan"), backgroundColor: Colors.orange)
+                  );
+                } 
+                // Jika sukses (settlement, capture, success)
+                else if (status == 'settlement' || status == 'capture' || status == 'success') {
+                  Navigator.pop(context, {'status': 'success'});
+                  Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
+                    orderId: realOrderId,
+                    paymentMethod: _paymentMethod,
+                    grandTotal: grandTotal,
+                    amountPaid: grandTotal, // Karena Midtrans selalu bayar pas (tanpa kembalian)
+                    change: 0,
+                    cart: widget.cart,
+                    tableNumber: widget.tableNumber,
+                    customerName: widget.customerName, 
+                    cashierName: widget.cashierName,
+                    outletName: "ARANUS POS",
+                    formatCurrency: widget.formatCurrency,
+                  )));
+                } 
+                // Jika tertunda (misal Transfer Bank tapi belum dibayar)
+                else if (status == 'pending') {
+                  Navigator.pop(context, {'status': 'pending'});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Pesanan berhasil! Menunggu pembayaran diselesaikan..."), backgroundColor: Colors.blue)
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Status pembayaran: $status"), backgroundColor: Colors.red)
+                  );
+                }
+              } catch (e) {
+                // Handle error jika proses parsing dari SDK Midtrans gagal
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Gateway ditutup."), backgroundColor: Colors.orange)
+                );
+              }
+            });
+
+            // BUKA TAMPILAN MIDTRANS SEKARANG
+            _midtrans?.startPaymentUiFlow(token: snapToken);
+
+          } else {
+            throw Exception("Gagal mendapatkan link pembayaran Midtrans dari server.");
+          }
+        }
+
       } else {
         throw Exception(res['message'] ?? "Gagal memproses pesanan");
       }

@@ -106,7 +106,6 @@ class ApiService {
         await StorageService.saveCurrentShiftId(shiftId);
 
         // Jika kebetulan backend mengirimkan data opening balance, kita simpan.
-        // Jika tidak ada (null), KITA JANGAN MENGHAPUSNYA agar tidak ter-reset saat logout.
         if (data['opening_balance'] != null) {
           int balance = int.tryParse(data['opening_balance'].toString()) ?? 0;
           await StorageService.saveOpeningBalance(balance);
@@ -259,7 +258,7 @@ class ApiService {
       final headers = await _getHeaders();
       final int? outletId = await StorageService.getOutletId();
       
-      // 🌟 PERBAIKAN: Ambil Shift ID saat ini agar Menu Terlaris difilter per shift
+      // Ambil Shift ID saat ini agar Menu Terlaris difilter per shift
       final String? shiftId = await StorageService.getCurrentShiftId(); 
 
       final response = await http.get(
@@ -483,7 +482,7 @@ class ApiService {
 
   // --- SHIFT KARYAWAN ---
 
-  // --- TAMBAHAN: CEK STATUS SHIFT ---
+  // --- 13. CEK STATUS SHIFT (Source of Truth) ---
   static Future<Map<String, dynamic>> checkShiftStatus(int outletId) async {
     print("\n[API REQUEST] --> CEK STATUS SHIFT");
     try {
@@ -515,6 +514,7 @@ class ApiService {
     }
   }
 
+  // --- 14. MULAI SHIFT (BUKA KASIR) ---
   static Future<Map<String, dynamic>> startShift(int nominal, int outletId) async {
     try {
       final headers = await _getHeaders();
@@ -533,7 +533,7 @@ class ApiService {
             int.tryParse(data['data']['opening_balance'].toString()) ?? nominal;
 
         await StorageService.saveOpeningBalance(openingBalanceFromServer);
-        // Set flag bahwa kasir sudah dibuka (sudah input kas awal)
+        // Set flag bahwa kasir sudah dibuka
         await StorageService.saveShiftStatus(true);
         
         return {'success': true, 'data': data};
@@ -549,7 +549,8 @@ class ApiService {
     }
   }
 
- static Future<Map<String, dynamic>> endShift(
+  // --- 15. AKHIRI SHIFT (TUTUP KASIR) ---
+  static Future<Map<String, dynamic>> endShift(
     int totalFisik,
     String notes,
   ) async {
@@ -576,22 +577,19 @@ class ApiService {
         await StorageService.saveShiftStatus(false);
         return {'success': true, 'data': data};
       } 
-      // 2. JIKA SERVER BILANG SHIFT SUDAH TIDAK ADA (BUG NYANGKUT)
+      // 2. JIKA SERVER BILANG SHIFT SUDAH TIDAK ADA (SYNC)
       else if (response.statusCode == 404) {
         print("⚠️ [API SYNC] Server mengatakan tidak ada shift aktif. Memaksa reset data lokal...");
         
-        // PAKSA hapus status di HP agar sinkron dengan server
         await StorageService.clearOpeningBalance();
         await StorageService.saveShiftStatus(false);
         
-        // Kita kembalikan nilai success: true agar dialog di UI mau menutup dan kembali ke halaman Login/Kas awal
         return {
           'success': true, 
           'message': 'Shift berhasil disinkronkan (Sudah tertutup di server).',
-          'is_forced_sync': true // Penanda opsional jika kamu ingin memberikan alert khusus di UI
+          'is_forced_sync': true 
         };
       } 
-      // 3. JIKA ERROR LAINNYA (MISAL 500 SERVER DOWN)
       else {
         return {
           'success': false,
@@ -645,6 +643,40 @@ class ApiService {
     } catch (e) {
       print("💥 [API ERROR] getMasterShifts: $e");
       return [];
+    }
+  }
+
+  // --- 16. MIDTRANS GET SNAP TOKEN ---
+  static Future<Map<String, dynamic>> getMidtransToken(String orderId) async {
+    print("\n[API REQUEST] --> GET MIDTRANS TOKEN");
+    print("Order ID: $orderId");
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/orders/$orderId/payments'),
+        headers: headers,
+      );
+
+      print("[API RESPONSE] <-- STATUS: ${response.statusCode}");
+      print("Body: ${response.body}");
+
+      final result = jsonDecode(response.body);
+      
+      if (response.statusCode == 200) {
+        // Asumsi struktur response backend: { success: true, data: { snap_token: "xxx" } }
+        return {
+          'success': true, 
+          'data': result['data'] ?? result 
+        };
+      } else {
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Gagal mendapatkan token Midtrans',
+        };
+      }
+    } catch (e) {
+      print("💥 [API ERROR] getMidtransToken: $e");
+      return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 }

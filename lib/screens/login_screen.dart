@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'main_navigation.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
@@ -29,17 +28,19 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _loadOutletData() async {
     await Future.delayed(const Duration(milliseconds: 100));
     final id = await StorageService.getOutletId();
-    
+
     if (id == null || id == 0) {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const OutletSelectionScreen()),
+          MaterialPageRoute(
+            builder: (context) => const OutletSelectionScreen(),
+          ),
         );
       }
       return;
     }
-    
+
     if (mounted) {
       setState(() {
         _outletId = id;
@@ -54,13 +55,23 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("Reset Outlet?", style: TextStyle(fontWeight: FontWeight.bold)),
-          content: const Text("Data outlet akan dihapus. Anda harus memilih outlet kembali."),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            "Reset Outlet?",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            "Data outlet akan dihapus. Anda harus memilih outlet kembali.",
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text("BATAL", style: TextStyle(color: Colors.grey.shade600)),
+              child: Text(
+                "BATAL",
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -69,12 +80,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   Navigator.pop(context);
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (context) => const OutletSelectionScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const OutletSelectionScreen(),
+                    ),
                   );
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-              child: const Text("YA, RESET", style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+              ),
+              child: const Text(
+                "YA, RESET",
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         );
@@ -111,89 +129,31 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       _outletId = currentId;
-      
+
+      // LANGSUNG PANGGIL API (Tidak perlu membaca state lokal manual)
       final result = await ApiService.loginPin(_pin, _outletId);
 
       if (!mounted) return;
 
       if (result['success'] == true) {
-        final userFromServer = result['data']['user'];
-        final int userOutletId = int.tryParse(userFromServer['outlet_id'].toString()) ?? 0;
+        // Backend sudah memastikan validasi (Outlet, Shift, dan Kas Awal)
+        // Kita cukup membaca apakah opening_balance dikirim atau tidak
+        final bool isKasirOpened = result['data']['opening_balance'] != null;
 
-        print("--- AUDIT KEAMANAN LOGIN ---");
-        print("Cabang pilihan App: $_outletId");
-        print("Cabang asli User di DB: $userOutletId");
-
-        // 1. Validasi Cabang
-        if (userOutletId != _outletId) {
-          _handleLoginError("Akses Ditolak: Akun Anda terdaftar di Cabang lain.");
-          return; 
-        }
-
-        // 2. Validasi Shift Aktif
-        final String? newShiftId = result['data']['shift_id']?.toString();
-        if (newShiftId == null || newShiftId == 'null' || newShiftId.isEmpty) {
-          _handleLoginError("Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.");
-          return;
-        }
-
-        // =============================================================
-        // LOGIKA BYPASS KAS AWAL (PERBAIKAN TANGGAL & USER)
-        // =============================================================
-        final String? oldShiftId = await StorageService.getCurrentShiftId();
-        final prefs = await SharedPreferences.getInstance();
-        
-        final int lastUserId = prefs.getInt('last_shift_user_id') ?? 0;
-        final int currentUserId = int.tryParse(userFromServer['id'].toString()) ?? 0;
-        
-        // Cek Tanggal Hari Ini (Format: YYYY-MM-DD)
-        final String todayDate = DateTime.now().toString().split(' ')[0];
-        final String lastShiftDate = prefs.getString('last_shift_date') ?? '';
-
-        bool isKasirOpened = await StorageService.getShiftStatus() ?? false;
-
-        // Validasi: Jika Ganti Shift OR Ganti Orang OR Ganti Hari -> WAJIB KAS AWAL
-        if (oldShiftId != newShiftId || lastUserId != currentUserId || lastShiftDate != todayDate) {
-            print("🔄 Sesi Baru, Hari Baru, atau User Baru Terdeteksi. Reset Status Kasir.");
-            isKasirOpened = false;
-            await StorageService.saveShiftStatus(false);
-            
-            // Simpan data referensi baru
-            await prefs.setString('last_shift_date', todayDate);
-            await prefs.setInt('last_shift_user_id', currentUserId);
-        } else {
-            if (isKasirOpened) print("⏩ Kasir sudah dibuka hari ini oleh user ini. Bypass Kas Awal.");
-        }
-        // =============================================================
-
-        // Simpan Token
-        final String? tokenFromServer = result['data']['token'];
-        if (tokenFromServer != null) {
-          await StorageService.saveToken(tokenFromServer);
-        }
-
-        // Simpan Waktu Login hanya jika benar-benar baru buka (bukan bypass)
+        // Jika belum buka kasir, simpan waktu login untuk penanda start shift
         if (!isKasirOpened) {
           DateTime now = DateTime.now();
-          String loginTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+          String loginTime =
+              "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
           await StorageService.saveLoginTime(loginTime);
         }
-
-        final String newCashierName = userFromServer['name'] ?? "Cashier";
-        await StorageService.saveCashierName(newCashierName);
-
-        if (newShiftId != null && newShiftId != 'null') {
-          await StorageService.saveCurrentShiftId(newShiftId);
-        }
-
-        String liveOutletName = await ApiService.fetchOutletNameLive();
-        await StorageService.saveOutletName(liveOutletName);
 
         if (mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => MainNavigationScaffold(requireCashInput: !isKasirOpened)
+              builder: (context) =>
+                  MainNavigationScaffold(requireCashInput: !isKasirOpened),
             ),
           );
         }
@@ -229,7 +189,13 @@ class _LoginScreenState extends State<LoginScreen> {
             decoration: BoxDecoration(
               color: AppStyle.white,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: [BoxShadow(color: AppStyle.primaryBlue.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+              boxShadow: [
+                BoxShadow(
+                  color: AppStyle.primaryBlue.withOpacity(0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -237,30 +203,46 @@ class _LoginScreenState extends State<LoginScreen> {
                   flex: 1,
                   child: Container(
                     padding: const EdgeInsets.all(40),
-                    child: SvgPicture.asset('assets/images/login.svg', height: 320),
+                    child: SvgPicture.asset(
+                      'assets/images/login.svg',
+                      height: 320,
+                    ),
                   ),
                 ),
                 Container(width: 1, height: 400, color: Colors.grey.shade100),
                 Expanded(
                   flex: 1,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 50),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 50,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text("Sign In", style: AppStyle.titleText.copyWith(color: AppStyle.primaryBlue)),
+                        Text(
+                          "Sign In",
+                          style: AppStyle.titleText.copyWith(
+                            color: AppStyle.primaryBlue,
+                          ),
+                        ),
                         const SizedBox(height: 5),
-                        Text("Masukkan 6 digit PIN akses", style: AppStyle.subTitleText),
+                        Text(
+                          "Masukkan 6 digit PIN akses",
+                          style: AppStyle.subTitleText,
+                        ),
                         const SizedBox(height: 35),
-                        
+
                         SizedBox(
-                          height: 30, 
+                          height: 30,
                           child: _isLoading
                               ? const Center(
                                   child: SizedBox(
-                                    width: 24, 
-                                    height: 24, 
-                                    child: CircularProgressIndicator(strokeWidth: 2)
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   ),
                                 )
                               : _buildPinDots(),
@@ -268,14 +250,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 35),
                         _buildNumPad(),
-                        
+
                         const SizedBox(height: 15),
                         TextButton(
                           onPressed: _showResetOutletDialog,
                           child: const Text(
-                            "Ganti Outlet?", 
+                            "Ganti Outlet?",
                             style: TextStyle(
-                              color: Color.fromARGB(255, 20, 20, 20), 
+                              color: Color.fromARGB(255, 20, 20, 20),
                               fontWeight: FontWeight.w600,
                               fontSize: 12,
                             ),
@@ -300,11 +282,15 @@ class _LoginScreenState extends State<LoginScreen> {
         bool isFilled = index < _pin.length;
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 8),
-          width: 14, height: 14,
+          width: 14,
+          height: 14,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: isFilled ? AppStyle.primaryBlue : Colors.grey.shade100,
-            border: Border.all(color: isFilled ? AppStyle.primaryBlue : Colors.grey.shade300, width: 2),
+            border: Border.all(
+              color: isFilled ? AppStyle.primaryBlue : Colors.grey.shade300,
+              width: 2,
+            ),
           ),
         );
       }),
@@ -315,15 +301,35 @@ class _LoginScreenState extends State<LoginScreen> {
     return Container(
       constraints: const BoxConstraints(maxWidth: 280),
       child: GridView.count(
-        shrinkWrap: true, crossAxisCount: 3, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 1.4,
+        shrinkWrap: true,
+        crossAxisCount: 3,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 1.4,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          _numButton('1'), _numButton('2'), _numButton('3'),
-          _numButton('4'), _numButton('5'), _numButton('6'),
-          _numButton('7'), _numButton('8'), _numButton('9'),
-          _actionButton('C', 'clear', const Color(0xFFFFEBEE), Colors.redAccent),
+          _numButton('1'),
+          _numButton('2'),
+          _numButton('3'),
+          _numButton('4'),
+          _numButton('5'),
+          _numButton('6'),
+          _numButton('7'),
+          _numButton('8'),
+          _numButton('9'),
+          _actionButton(
+            'C',
+            'clear',
+            const Color(0xFFFFEBEE),
+            Colors.redAccent,
+          ),
           _numButton('0'),
-          _actionButton('<', 'delete', const Color(0xFFE3F2FD), AppStyle.primaryBlue),
+          _actionButton(
+            '<',
+            'delete',
+            const Color(0xFFE3F2FD),
+            AppStyle.primaryBlue,
+          ),
         ],
       ),
     );
@@ -334,22 +340,37 @@ class _LoginScreenState extends State<LoginScreen> {
       onTap: () => _onNumPadTap(number),
       borderRadius: BorderRadius.circular(15),
       child: Container(
-        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade200)),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
         child: Center(child: Text(number, style: AppStyle.numPadText)),
       ),
     );
   }
 
-  Widget _actionButton(String label, String action, Color bgColor, Color textColor) {
+  Widget _actionButton(
+    String label,
+    String action,
+    Color bgColor,
+    Color textColor,
+  ) {
     return InkWell(
       onTap: () => _onNumPadTap(action),
       borderRadius: BorderRadius.circular(15),
       child: Container(
-        decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(15)),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(15),
+        ),
         child: Center(
           child: label == '<'
               ? Icon(Icons.backspace_outlined, color: textColor, size: 22)
-              : Text(label, style: AppStyle.numPadText.copyWith(color: textColor)),
+              : Text(
+                  label,
+                  style: AppStyle.numPadText.copyWith(color: textColor),
+                ),
         ),
       ),
     );

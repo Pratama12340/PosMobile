@@ -24,13 +24,11 @@ class StorageService {
     await prefs.setString(_keyToken, token);
   }
 
-  // PERBAIKAN: Me-return String? agar aman saat dicek (token != null) di ApiService
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyToken);
   }
 
-  // Tambahan keamanan untuk menghapus token saja
   static Future<void> removeToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyToken);
@@ -106,15 +104,13 @@ class StorageService {
 
   static Future<int> getOpeningBalance() async {
     final prefs = await SharedPreferences.getInstance();
-    final val = prefs.get(_keyOpeningCash); 
+    final Object? val = prefs.get(_keyOpeningCash); 
     
     if (val == null) return 0;
     
-    // Proteksi Multi-Type: Menangani jika tersimpan sebagai int, double, atau String
     if (val is int) return val;
     if (val is double) return val.toInt(); 
     if (val is String) {
-      // Jika tersimpan sebagai String (misal dari input text), bersihkan karakter non-angka
       return int.tryParse(val.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     }
     
@@ -126,7 +122,7 @@ class StorageService {
     await prefs.remove(_keyOpeningCash);
   }
 
-  // Alias fungsi lama agar tidak error di bagian code lain
+  // Alias fungsi lama agar tidak error di bagian code lain (Bekerja dengan Int)
   static Future<void> saveOpeningCash(double amount) async => saveOpeningBalance(amount.toInt());
   static Future<double> getOpeningCash() async {
     final val = await getOpeningBalance();
@@ -187,16 +183,18 @@ class StorageService {
 
   // --- 6. LOGIKA LOGOUT VS TUTUP KASIR ---
 
-  // Logout hanya menghapus sesi user, data shift tetap aman
+  // Logout hanya menghapus sesi user, data shift (ID & Status) TETAP DISIMPAN
+  // Agar saat user yang sama login lagi, dia tidak perlu input kas awal ulang.
   static Future<void> logoutKasir() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyToken);
     await prefs.remove(_keyCashierName);
     await prefs.remove(_keyUserRole);
     await prefs.remove(_keyProfilePhoto);
+    // CATATAN: Jangan hapus _keyIsShiftActive dan _keyCurrentShiftId di sini
   }
 
-  // Menghapus data operasional saat shift benar-benar selesai
+  // Menghapus data operasional saat shift benar-benar selesai (End Shift)
   static Future<void> tutupKasir() async {
     final prefs = await SharedPreferences.getInstance();
     await clearOpeningBalance(); 
@@ -206,5 +204,6 @@ class StorageService {
     await prefs.remove(_keyShiftName);
     await prefs.remove(_keyShiftSchedule);
     await prefs.remove(_keyLastShiftUserId); 
+    // CATATAN: Tetap simpan _keyOutletId agar user tidak perlu pilih outlet lagi
   }
 }

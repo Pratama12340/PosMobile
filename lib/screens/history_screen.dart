@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // 🔥 Tambahkan import ini untuk memformat tanggal
 import '../style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
@@ -43,10 +44,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Color _getSideColor(String method) {
-    if (method.contains('CASH')) return AppStyle.primaryBlue;
-    if (method.contains('QRIS')) return Colors.redAccent;
-    if (method.contains('DEBIT')) return Colors.green;
-    return Colors.amber;
+    String m = method.toUpperCase();
+    if (m.contains('CASH')) return AppStyle.primaryBlue;
+    if (m.contains('QRIS')) return Colors.redAccent;
+    if (m.contains('DEBIT') || m.contains('CARD')) return Colors.amber; // Disamakan dengan warna Card di gambar
+    return Colors.green;
   }
 
   @override
@@ -64,15 +66,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return const Center(child: Text("Belum ada data"));
           }
 
-          // LOGIKA FILTERING: Memfilter data berdasarkan No. Invoice atau Nama Pelanggan
+          // 🔥 LOGIKA FILTERING SHIFT & PENCARIAN
           final query = widget.searchController.text.toLowerCase();
+          
+          // Dapatkan string tanggal hari ini dengan format yang sama seperti di invoice (misal: 20260504)
+          final String todayStr = DateFormat('yyyyMMdd').format(DateTime.now());
+
           final filteredOrders = snapshot.data!.where((order) {
-            return order.invoiceNo.toLowerCase().contains(query) ||
-                   order.customerName.toLowerCase().contains(query);
+            // 1. Filter Shift: Cek apakah invoice mengandung tanggal hari ini
+            // Catatan: Jika backend/model Anda menyimpan shift_id, Anda bisa mengubah logika ini menjadi:
+            // bool isCurrentShift = order.shiftId == currentShiftId;
+            bool isCurrentShift = order.invoiceNo.contains(todayStr);
+
+            // 2. Filter Pencarian: Cek No Invoice atau Nama Customer
+            bool matchesSearch = order.invoiceNo.toLowerCase().contains(query) ||
+                                 order.customerName.toLowerCase().contains(query);
+
+            // Hanya tampilkan jika transaksi terjadi di shift (hari) ini DAN cocok dengan pencarian
+            return isCurrentShift && matchesSearch;
           }).toList();
 
           if (filteredOrders.isEmpty) {
-            return const Center(child: Text("Data tidak ditemukan"));
+            return const Center(child: Text("Data tidak ditemukan untuk shift ini"));
           }
 
           return GridView.builder(
@@ -83,9 +98,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               mainAxisSpacing: 20,
               mainAxisExtent: 100,
             ),
-            itemCount: filteredOrders.length, // Menggunakan data yang sudah difilter
+            itemCount: filteredOrders.length, 
             itemBuilder: (context, index) {
-              final order = filteredOrders[index]; // Menggunakan data yang sudah difilter
+              final order = filteredOrders[index]; 
               final sideColor = _getSideColor(order.paymentMethod);
 
               return Container(
@@ -118,7 +133,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                         child: Center(
                           child: Text(
-                            "${index + 1}",
+                            // Nomor urut akan otomatis menyesuaikan dengan jumlah data yang sudah difilter
+                            "${filteredOrders.length - index}",
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w900,
@@ -194,7 +210,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                order.paymentMethod,
+                                order.paymentMethod.toUpperCase(),
                                 style: TextStyle(
                                   color: sideColor,
                                   fontSize: 9,

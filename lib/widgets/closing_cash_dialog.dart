@@ -16,6 +16,7 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
   final TextEditingController _actualCashController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   bool _isLoading = false;
+  String? _errorMessage; // Tambahan state untuk inline error
 
   int get _rawAmount {
     String clean = _actualCashController.text.replaceAll('.', '');
@@ -33,32 +34,22 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
 
   Future<void> _processClosing() async {
     if (_actualCashController.text.isEmpty || _rawAmount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Harap masukkan total uang fisik di laci.")),
-      );
+      setState(() => _errorMessage = "Harap masukkan total uang fisik di laci.");
       return;
     }
 
-    setState(() => _isLoading = true);
-    debugPrint("--- MEMPROSES TUTUP SHIFT ---");
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null; // Reset error saat mulai proses
+    });
 
     try {
       final result = await ApiService.endShift(_rawAmount, _notesController.text);
 
       if (result['success']) {
-        debugPrint("API Berhasil: Shift Ditutup.");
-
-        // 2. Bersihkan data lokal
         await StorageService.tutupKasir();
-
         if (mounted) {
-          Navigator.pop(context); // Tutup dialog
-
-          // 🌟 PERBAIKAN NAVIGASI: Menggunakan Direct Navigation 
-          // Ini lebih aman karena tidak bergantung pada nama rute di main.dart
-          /* Catatan: Jika nama class Login Anda bukan 'LoginScreen', 
-          silakan ganti nama di bawah ini sesuai nama class di file login Anda.
-          */
+          Navigator.pop(context); 
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => const LoginScreen()), 
@@ -66,143 +57,230 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
           );
         }
       } else {
-        debugPrint("API Gagal: ${result['message']}");
         if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? "Gagal tutup shift"),
-              backgroundColor: AppStyle.errorRed,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          setState(() {
+            _isLoading = false;
+            _errorMessage = result['message'] ?? "Gagal tutup shift";
+          });
         }
       }
     } catch (e) {
-      debugPrint("TERJADI EXCEPTION: $e");
       if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Terjadi kesalahan koneksi: $e")),
-        );
+        setState(() {
+          _isLoading = false;
+          _errorMessage = "Terjadi kesalahan koneksi: $e";
+        });
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isTablet = screenWidth > 600;
+
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 450),
-        padding: const EdgeInsets.all(30),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.lock_clock, size: 60, color: AppStyle.errorRed),
-              const SizedBox(height: 20),
-              Text("Tutup Shift", style: AppStyle.titleText.copyWith(fontSize: 24)),
-              const SizedBox(height: 10),
-              const Text(
-                "Hitung semua uang fisik di laci dan masukkan totalnya di bawah ini:",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, height: 1.4),
+        // 🔥 UKURAN DISAMAKAN DENGAN KAS AWAL
+        width: isTablet ? screenWidth * 0.55 : 450,
+        constraints: const BoxConstraints(maxWidth: 650, maxHeight: 750),
+        padding: const EdgeInsets.all(35),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(35),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 30,
+              offset: const Offset(0, 15),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 🔥 IKON DISAMAKAN
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: AppStyle.bgLightBlue,
+                shape: BoxShape.circle,
               ),
-              const SizedBox(height: 25),
-              
-              TextField(
-                controller: _actualCashController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                enabled: !_isLoading,
-                style: AppStyle.numPadText.copyWith(fontSize: 30, color: AppStyle.textMain),
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: AppStyle.bgLightBlue,
-                  prefixIcon: const Padding(
-                    padding: EdgeInsets.only(left: 20, right: 10),
-                    child: Text(
-                      "Rp", 
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppStyle.primaryBlue)
-                    ),
-                  ),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: (value) {
-                  if (value.isNotEmpty) {
-                    String formatted = _formatNumber(value);
-                    _actualCashController.value = TextEditingValue(
-                      text: formatted,
-                      selection: TextSelection.collapsed(offset: formatted.length),
-                    );
-                  }
-                },
+              child: const Icon(
+                Icons.lock_reset_rounded,
+                color: AppStyle.primaryBlue,
+                size: 45,
               ),
+            ),
+            const SizedBox(height: 20),
+            Text("Tutup Shift", style: AppStyle.titleText.copyWith(fontSize: 28)),
+            const SizedBox(height: 10),
+            Text(
+              "Hitung semua uang fisik di laci dan masukkan totalnya di bawah ini untuk mengakhiri shift.",
+              textAlign: TextAlign.center,
+              style: AppStyle.subTitleText.copyWith(fontSize: 16, height: 1.5),
+            ),
+            const SizedBox(height: 30),
 
-              const SizedBox(height: 20),
-
-              TextField(
-                controller: _notesController,
-                maxLines: 2,
-                enabled: !_isLoading,
-                decoration: InputDecoration(
-                  hintText: "Tambahkan catatan (opsional)...",
-                  hintStyle: const TextStyle(fontSize: 14),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide(color: Colors.grey.shade200),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide(color: Colors.grey.shade200),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 30),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: _isLoading ? null : () => Navigator.pop(context),
-                      child: const Text("Batal", style: TextStyle(color: Colors.grey, fontSize: 16)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppStyle.primaryBlue,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
-                      onPressed: _isLoading ? null : _processClosing,
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            )
-                          : const Text(
-                              "Tutup Shift", 
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 🔥 Widget Inline Error (Lebar Penuh, Teks di Tengah)
+                    if (_errorMessage != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(15), 
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.red.shade700, 
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+
+                    // 🔥 INPUT NOMINAL DISAMAKAN
+                    TextField(
+                      controller: _actualCashController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      enabled: !_isLoading,
+                      style: AppStyle.numPadText.copyWith(
+                        fontSize: 34,
+                        color: AppStyle.textMain,
+                        letterSpacing: 2,
+                      ),
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: AppStyle.bgLightBlue,
+                        prefixIcon: const Padding(
+                          padding: EdgeInsets.only(left: 30, right: 10),
+                          child: Text(
+                            "Rp",
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppStyle.primaryBlue,
+                            ),
+                          ),
+                        ),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                        suffixIcon: const SizedBox(width: 65), // Menyeimbangkan posisi "Rp"
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 20),
+                      ),
+                      onChanged: (value) {
+                        // Hilangkan error saat mengetik
+                        if (_errorMessage != null) {
+                          setState(() => _errorMessage = null);
+                        }
+                        if (value.isNotEmpty) {
+                          String formatted = _formatNumber(value);
+                          _actualCashController.value = TextEditingValue(
+                            text: formatted,
+                            selection: TextSelection.collapsed(offset: formatted.length),
+                          );
+                        }
+                      },
                     ),
+                    const SizedBox(height: 20),
+                    // INPUT CATATAN
+                    TextField(
+                      controller: _notesController,
+                      maxLines: 2,
+                      enabled: !_isLoading,
+                      decoration: InputDecoration(
+                        hintText: "Tambahkan catatan (opsional)...",
+                        hintStyle: const TextStyle(fontSize: 14),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        if (_errorMessage != null) {
+                          setState(() => _errorMessage = null);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 30),
+
+            // 🔥 TOMBOL DISAMAKAN
+            SizedBox(
+              width: double.infinity,
+              height: 65,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppStyle.primaryBlue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                ],
-              )
-            ],
-          ),
+                  elevation: 0,
+                ),
+                onPressed: _isLoading ? null : _processClosing,
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                      )
+                    : const Text(
+                        "TUTUP SHIFT SEKARANG", 
+                        style: TextStyle(
+                          color: Colors.white, 
+                          fontSize: 18, 
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2
+                        )
+                      ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: _isLoading ? null : () => Navigator.pop(context),
+              child: const Text(
+                "Batal", 
+                style: TextStyle(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.w600)
+              ),
+            ),
+          ],
         ),
       ),
     );

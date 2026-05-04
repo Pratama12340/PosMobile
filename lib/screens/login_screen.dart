@@ -18,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final int _pinLength = 6;
   bool _isLoading = false;
   int _outletId = 0;
+  String? _errorMessage; 
 
   @override
   void initState() {
@@ -103,6 +104,10 @@ class _LoginScreenState extends State<LoginScreen> {
   void _onNumPadTap(String value) {
     if (_isLoading) return;
     setState(() {
+      if (_errorMessage != null) {
+        _errorMessage = null;
+      }
+
       if (value == 'clear') {
         _pin = '';
       } else if (value == 'delete') {
@@ -130,17 +135,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
       _outletId = currentId;
 
-      // LANGSUNG PANGGIL API (Tidak perlu membaca state lokal manual)
       final result = await ApiService.loginPin(_pin, _outletId);
 
       if (!mounted) return;
 
       if (result['success'] == true) {
-        // Backend sudah memastikan validasi (Outlet, Shift, dan Kas Awal)
-        // Kita cukup membaca apakah opening_balance dikirim atau tidak
         final bool isKasirOpened = result['data']['opening_balance'] != null;
 
-        // Jika belum buka kasir, simpan waktu login untuk penanda start shift
         if (!isKasirOpened) {
           DateTime now = DateTime.now();
           String loginTime =
@@ -170,10 +171,8 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _isLoading = false;
         _pin = '';
+        _errorMessage = message;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: AppStyle.errorRed),
-      );
     }
   }
 
@@ -231,7 +230,39 @@ class _LoginScreenState extends State<LoginScreen> {
                           "Masukkan 6 digit PIN akses",
                           style: AppStyle.subTitleText,
                         ),
-                        const SizedBox(height: 35),
+                        
+                        SizedBox(height: _errorMessage != null ? 15 : 25),
+
+                        // Widget Inline Error yang sudah diproporsionalkan
+                        if (_errorMessage != null)
+                          Container(
+                            width: 280, // Disamakan persis dengan maksimal lebar Numpad
+                            margin: const EdgeInsets.only(bottom: 15),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error_outline, color: Colors.red.shade700, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade700, 
+                                      fontSize: 12,
+                                      height: 1.2,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
 
                         SizedBox(
                           height: 30,
@@ -248,7 +279,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               : _buildPinDots(),
                         ),
 
-                        const SizedBox(height: 35),
+                        const SizedBox(height: 30),
                         _buildNumPad(),
 
                         const SizedBox(height: 15),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/discount_model.dart';
-import '../style.dart';
+import '../style.dart'; // Pastikan path ini benar di project kamu
 
 class DiskonPanel extends StatelessWidget {
   final Discount? selectedDiscount;
   final List<Discount> availableDiscounts;
+  final List<int> cartProductIds; // Ditambahkan: untuk mengecek menu di keranjang
   final double discountAmount;
   final double subtotal; 
   final String Function(double) formatCurrency;
@@ -15,6 +16,7 @@ class DiskonPanel extends StatelessWidget {
     super.key,
     required this.selectedDiscount,
     required this.availableDiscounts,
+    required this.cartProductIds, // Ditambahkan ke constructor
     required this.discountAmount,
     required this.subtotal,
     required this.formatCurrency,
@@ -22,7 +24,6 @@ class DiskonPanel extends StatelessWidget {
     required this.onRemove,
   });
 
-  // FUNGSI UNTUK MEMUNCULKAN SIDE PANEL DARI KANAN
   void _showSideDiscountPanel(BuildContext context) {
     showGeneralDialog(
       context: context,
@@ -36,13 +37,12 @@ class DiskonPanel extends StatelessWidget {
           child: Material(
             elevation: 20,
             child: Container(
-              width: MediaQuery.of(context).size.width * 0.45, // Menutupi 45% layar kanan
+              width: MediaQuery.of(context).size.width * 0.45,
               height: double.infinity,
               color: const Color(0xFFF8F9FA),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header Panel
                   Padding(
                     padding: const EdgeInsets.fromLTRB(25, 50, 25, 20),
                     child: Row(
@@ -61,7 +61,6 @@ class DiskonPanel extends StatelessWidget {
                   ),
                   const Divider(height: 1),
                   
-                  // List Voucher Berbentuk Card
                   Expanded(
                     child: availableDiscounts.isEmpty
                         ? const Center(child: Text("Tidak ada diskon tersedia"))
@@ -70,7 +69,16 @@ class DiskonPanel extends StatelessWidget {
                             itemCount: availableDiscounts.length,
                             itemBuilder: (context, index) {
                               final d = availableDiscounts[index];
-                              bool isEligible = subtotal >= d.minPurchase.toDouble();
+                              
+                              // Logika pengecekan yang diperbaiki
+                              bool isMinPurchaseMet = subtotal >= d.minPurchase;
+                              
+                              bool isProductEligible = true;
+                              if (d.scope == 'products' && d.productIds.isNotEmpty) {
+                                isProductEligible = cartProductIds.any((cartId) => d.productIds.contains(cartId));
+                              }
+
+                              bool isEligible = isMinPurchaseMet && isProductEligible;
 
                               return Opacity(
                                 opacity: isEligible ? 1.0 : 0.5,
@@ -82,6 +90,14 @@ class DiskonPanel extends StatelessWidget {
                                     if (isEligible) {
                                       onSelected(d);
                                       Navigator.pop(context);
+                                    } else {
+                                      String errorMsg = !isMinPurchaseMet 
+                                          ? "Minimal belanja belum tercapai: ${formatCurrency(d.minPurchase)}"
+                                          : "Voucher ini tidak berlaku untuk menu yang dipesan.";
+                                          
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text(errorMsg)),
+                                      );
                                     }
                                   },
                                 ),
@@ -115,7 +131,7 @@ class DiskonPanel extends StatelessWidget {
           onTap: () => _showSideDiscountPanel(context),
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            width: double.infinity, // AGAR PENUH SEJAJAR DENGAN TOTAL HARGA
+            width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
             decoration: BoxDecoration(
               color: hasDiscount ? Colors.orange.withOpacity(0.08) : Colors.white,
@@ -170,7 +186,6 @@ class DiskonPanel extends StatelessWidget {
   }
 }
 
-// WIDGET KARTU VOUCHER CUSTOM (GAMBAR 2)
 class _VoucherCard extends StatelessWidget {
   final Discount discount;
   final bool isEligible;
@@ -186,28 +201,27 @@ class _VoucherCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String scopeLabel = discount.scope == 'global' ? "Semua Menu" : "Menu Tertentu";
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
-        height: 100,
+        height: 110,
         child: CustomPaint(
           painter: _TicketPainter(),
           child: Row(
             children: [
-              // Sisi Kiri (Ikon/Logo)
               Container(
                 width: 70,
                 alignment: Alignment.center,
                 child: Icon(
                   Icons.confirmation_number_rounded,
-                  color: isEligible ? AppStyle.primaryBlue : Colors.grey,
+                  color: isEligible ? Colors.blue : Colors.grey, // Disesuaikan jika AppStyle tidak ada
                   size: 30,
                 ),
               ),
-              // Garis Putus-putus
               _DashedLine(),
-              // Sisi Kanan (Detail)
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -215,11 +229,33 @@ class _VoucherCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        discount.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              discount.name,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: discount.scope == 'global' ? Colors.green[50] : Colors.blue[50],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              scopeLabel,
+                              style: TextStyle(
+                                fontSize: 9, 
+                                fontWeight: FontWeight.bold,
+                                color: discount.scope == 'global' ? Colors.green[700] : Colors.blue[700]
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -227,16 +263,25 @@ class _VoucherCard extends StatelessWidget {
                             ? "${discount.value.toInt()}% OFF" 
                             : "POTONGAN ${formatCurrency(discount.value.toDouble())}",
                         style: TextStyle(
-                          color: isEligible ? AppStyle.primaryBlue : Colors.grey,
+                          color: isEligible ? Colors.blue : Colors.grey, // Disesuaikan
                           fontWeight: FontWeight.w900,
                           fontSize: 16,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        // FIX: Tambahkan .toDouble() agar tidak error
-                        "Min. Belanja: ${formatCurrency(discount.minPurchase.toDouble())}",
-                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "Min. Belanja: ${formatCurrency(discount.minPurchase)}",
+                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                          ),
+                          if (!isEligible)
+                            const Text(
+                              "Syarat Belum Terpenuhi", // Diubah sedikit agar mencakup salah produk juga
+                              style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold),
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -250,7 +295,6 @@ class _VoucherCard extends StatelessWidget {
   }
 }
 
-// Pelukis Efek Potongan Tiket
 class _TicketPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -263,12 +307,11 @@ class _TicketPainter extends CustomPainter {
     path.lineTo(size.width, size.height);
     path.lineTo(size.width, 0);
     
-    // Potongan setengah lingkaran di kiri & kanan tengah
     path.addOval(Rect.fromCircle(center: Offset(0, size.height / 2), radius: 8));
     path.addOval(Rect.fromCircle(center: Offset(size.width, size.height / 2), radius: 8));
     path.fillType = PathFillType.evenOdd;
 
-    canvas.drawShadow(path, Colors.black.withOpacity(0.3), 3, false);
+    canvas.drawShadow(path, Colors.black.withOpacity(0.2), 3, false);
     canvas.drawPath(path, paint);
   }
 

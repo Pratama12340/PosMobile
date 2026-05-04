@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
-import '../services/api_service.dart'; // TAMBAHAN: Import ApiService
+import '../services/api_service.dart';
 
 class OpeningCashDialog extends StatefulWidget {
   const OpeningCashDialog({super.key});
@@ -16,6 +16,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
   final List<int> _quickAmounts = [50000, 100000, 200000, 500000];
 
   bool _isSaving = false;
+  String? _errorMessage;
 
   int get _rawAmount {
     String clean = _cashController.text.replaceAll('.', '');
@@ -85,6 +86,37 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Widget Inline Error (Lebar Penuh, Teks di Tengah)
+                    if (_errorMessage != null)
+                      Container(
+                        width: double.infinity, // Membuat lebar box sama dengan input text
+                        margin: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(15), 
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center, // Memastikan icon & text tetap di tengah
+                          children: [
+                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center, // Memastikan teks panjang tetap rata tengah
+                                style: TextStyle(
+                                  color: Colors.red.shade700, 
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     TextField(
                       controller: _cashController,
                       keyboardType: TextInputType.number,
@@ -115,6 +147,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                           minWidth: 0,
                           minHeight: 0,
                         ),
+                        suffixIcon: const SizedBox(width: 65), 
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
@@ -124,6 +157,10 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                         ),
                       ),
                       onChanged: (value) {
+                        if (_errorMessage != null) {
+                          setState(() => _errorMessage = null);
+                        }
+                        
                         if (value.isNotEmpty) {
                           String formatted = _formatNumber(value);
                           _cashController.value = TextEditingValue(
@@ -165,6 +202,9 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                               ? null
                               : () {
                                   setState(() {
+                                    if (_errorMessage != null) {
+                                      _errorMessage = null;
+                                    }
                                     _cashController.text = _formatNumber(
                                       amount.toString(),
                                     );
@@ -197,14 +237,13 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                           print("\n[DIALOG] Memulai proses Buka Kasir...");
                           print("[DIALOG] Nominal Kas Awal: $_rawAmount");
                           
-                          setState(() => _isSaving = true);
+                          setState(() {
+                            _isSaving = true;
+                            _errorMessage = null;
+                          });
                           
                           try {
-                            // 1. Ambil Outlet ID dari Storage
                             final int outletId = await StorageService.getOutletId() ?? 0;
-
-                            // 2. Kirim Data Kas Awal ke Backend via API
-                            // Pastikan di ApiService kunci yang digunakan adalah 'opening_balance'
                             final apiResponse = await ApiService.startShift(_rawAmount, outletId);
                             
                             if (!mounted) return;
@@ -212,11 +251,9 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                             if (apiResponse['success'] == true) {
                               print("✔ Berhasil menyimpan Kas Awal ke Server Database.");
                               
-                              // 3. Simpan ke Local Storage untuk menandai kasir sudah dibuka
                               await StorageService.saveOpeningCash(_rawAmount.toDouble());
                               await StorageService.saveShiftStatus(true);
                               
-                              // Catat Waktu Buka Kasir sebagai Awal Shift Aktual
                               DateTime now = DateTime.now();
                               String exactStartTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
                               await StorageService.saveLoginTime(exactStartTime);
@@ -226,37 +263,26 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                               
                               Navigator.pop(context);
                             } else {
-                              // Gagal di server (biasanya error 422 karena key tidak cocok)
-                              setState(() => _isSaving = false);
+                              setState(() {
+                                _isSaving = false;
+                                _errorMessage = apiResponse['message'] ?? "Gagal menyimpan kas awal di server.";
+                              });
                               print("❌ GAGAL: ${apiResponse['message']}");
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(apiResponse['message'] ?? "Gagal menyimpan kas awal di server."),
-                                  backgroundColor: AppStyle.errorRed,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
                             }
                           } catch (e) {
-                            if (mounted) setState(() => _isSaving = false);
+                            if (mounted) {
+                              setState(() {
+                                _isSaving = false;
+                                _errorMessage = "Terjadi kesalahan koneksi jaringan.";
+                              });
+                            }
                             print("❌ ERROR pada OpeningCashDialog: $e");
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Terjadi kesalahan koneksi jaringan."),
-                                backgroundColor: AppStyle.errorRed,
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
                           }
                         } else {
                           print("⚠️ WARNING: Form Kas Awal masih kosong.");
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Harap masukkan nominal kas awal."),
-                              backgroundColor: AppStyle.errorRed,
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
+                          setState(() {
+                            _errorMessage = "Harap masukkan nominal kas awal.";
+                          });
                         }
                       },
                 child: _isSaving

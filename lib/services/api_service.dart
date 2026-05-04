@@ -679,4 +679,57 @@ class ApiService {
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
+
+  // --- 17. GET REPORTS ---
+  static Future<List<dynamic>> getReports() async {
+    print("\n[API REQUEST] --> GET REPORTS");
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/reports'),
+        headers: headers,
+      );
+
+      print("[API RESPONSE] <-- STATUS: ${response.statusCode}");
+      
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        if (result['data'] != null) {
+          return result['data'] is List
+              ? result['data']
+              : result['data']['data'] ?? [];
+        }
+      }
+      return [];
+    } catch (e) {
+      print("💥 [API ERROR] getReports: $e");
+      return [];
+    }
+  }
+
+  // --- 18. GET TABLES ---
+  static Future<List<dynamic>> getTables() async {
+    print("\n[API REQUEST] --> GET TABLES");
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/tables'),
+        headers: headers,
+      );
+
+      print("[API RESPONSE] <-- STATUS: ${response.statusCode}");
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        if (result['data'] != null) {
+          return result['data'] is List
+              ? result['data']
+              : result['data']['data'] ?? [];
+        }
+      }
+      return [];
+    } catch (e) {
+      print("💥 [API ERROR] getTables: $e");
+      return [];
+    }
+  }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:midtrans_sdk/midtrans_sdk.dart'; 
 import 'package:qr_flutter/qr_flutter.dart'; 
+
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../style.dart';
@@ -14,7 +16,7 @@ class CheckoutDialog extends StatefulWidget {
   final bool hasDiscountedItem; 
   final double totalAmount;
   final String orderId;
-  final int? tableId; // Menggunakan ID Meja
+  final int? tableId; 
   final String tableNumber;
   final String customerName; 
   final String cashierName;
@@ -44,29 +46,47 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   bool _isLoading = false;
   String? _errorMessage;
 
-  String? _qrisStringFromApi;
-  
-  String _selectedCardBrand = 'BCA'; 
-  final List<String> _cardBrands = ['BCA', 'Mandiri', 'BNI', 'BRI', 'Visa/Master'];
-  final TextEditingController _approvalCodeController = TextEditingController();
-
   bool _showDiscountList = false;
   Discount? _selectedDiscount;
   List<Discount> _availableDiscounts = [];
 
   List<dynamic> _availableTaxes = [];
 
+  MidtransSDK? _midtrans;
+
+  // --- VARIABEL UNTUK UI CARD & QRIS (YANG SEBELUMNYA HILANG) ---
+  String? _qrisStringFromApi;
+  String _selectedCardBrand = 'BCA'; 
+  final List<String> _cardBrands = ['BCA', 'Mandiri', 'BNI', 'BRI', 'Visa/Master'];
+  final TextEditingController _approvalCodeController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _loadDiscounts();
     _loadTaxes(); 
+    _initMidtrans();
+  }
+
+  void _initMidtrans() async {
+    _midtrans = await MidtransSDK.init(
+      config: MidtransConfig(
+        clientKey: "SB-Mid-client-xxxxxxxxx", // TODO: Ganti dengan Client Key Midtrans-mu!
+        merchantBaseUrl: "https://api.etres.my.id/api/v1/",
+        colorTheme: ColorTheme(
+          colorPrimary: AppStyle.primaryBlue,
+          colorPrimaryDark: AppStyle.primaryBlue,
+          colorSecondary: Colors.orange,
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
+    _midtrans?.removeTransactionFinishedCallback();
     _manualTenderController.dispose();
-    _approvalCodeController.dispose();
+    _approvalCodeController.dispose(); 
     super.dispose();
   }
 
@@ -387,6 +407,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           children: [
             Row(
               children: [
+                // SISI KIRI: METODE PEMBAYARAN
                 Expanded(
                   flex: 5,
                   child: Padding(
@@ -465,6 +486,8 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                             ),
                           ),
                           const Spacer(),
+                          const Text("Tekan tombol Buka Midtrans di sebelah kanan.", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 15),
                         ] 
                         else if (_paymentMethod == 'Qris') ...[
                           const Spacer(),
@@ -507,11 +530,14 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                               ],
                             ),
                           const Spacer(),
+                          const Text("Tekan tombol Buka Midtrans di sebelah kanan.", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
                         ]
                       ],
                     ),
                   ),
                 ),
+                
+                // SISI KANAN: RECEIPT SUMMARY
                 Expanded(
                   flex: 4,
                   child: Container(
@@ -580,12 +606,24 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                               ),
                               const SizedBox(height: 20),
 
+                              // --- TOMBOL PROSES (BISA UNTUK SEMUA METODE) ---
                               ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: AppStyle.primaryBlue, minimumSize: const Size(double.infinity, 60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                                onPressed: (_paymentMethod == 'Cash' && uangMasukInt < tagihanInt) || _isLoading ? null : _processPayment,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppStyle.primaryBlue, 
+                                  minimumSize: const Size(double.infinity, 60), 
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+                                ),
+                                onPressed: _isLoading 
+                                    ? null 
+                                    : (_paymentMethod == 'Cash' 
+                                        ? (uangMasukInt < tagihanInt ? null : _processPayment) 
+                                        : _processPayment), 
                                 child: _isLoading
                                     ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                    : const Text("PROSES PEMBAYARAN", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                    : Text(
+                                        _paymentMethod == 'Cash' ? "PROSES PEMBAYARAN" : "BUKA MIDTRANS", 
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
+                                      ),
                               ),
                             ],
                           ),
@@ -598,6 +636,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               ],
             ),
 
+            // ERROR BANNER
             if (_errorMessage != null)
               Positioned(
                 top: 24, 
@@ -646,7 +685,8 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
- Future<void> _processPayment() async {
+  // --- LOGIKA PEMBAYARAN MIDTRANS ---
+  Future<void> _processPayment() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null; 
@@ -654,7 +694,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     try {
       final savedOutletId = await StorageService.getOutletId();
       
-      if (savedOutletId == null || savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");
+      if (savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");
 
       double subTotal = widget.totalAmount;
       double discountAmount = _calculateDiscountValue(subTotal);
@@ -678,33 +718,26 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         };
       }).toList();
 
-      int finalPaidAmount = _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt;
+      int finalPaidAmount = _paymentMethod == 'Cash' ? uangMasukInt : 0;
       int finalChangeAmount = _paymentMethod == 'Cash' ? change : 0;
-
       int? finalDiscountId = _selectedDiscount?.id;
-
-      String additionalNotes = '';
-      if (_paymentMethod == 'Card') {
-        additionalNotes = "EDC/Brand: $_selectedCardBrand. Kode Approval: ${_approvalCodeController.text.isNotEmpty ? _approvalCodeController.text : '-'}";
-      }
 
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
         'invoice_number': "INV-${DateTime.now().millisecondsSinceEpoch}",
         'customer_name': widget.customerName, 
-        'table_id': widget.tableId, // ID asli meja untuk API
+        'table_id': widget.tableId, 
         'subtotal_price': subTotal.toInt(),
         'total_price': tagihanInt,
         'discount_amount': discountAmount.toInt(),
         'tax_amount': taxAmountFinal.toInt(),
         'tax_breakdown': taxBreakdown, 
-        'payment_method': _paymentMethod.toLowerCase(), 
+        'payment_method': _paymentMethod, 
         'paid_amount': finalPaidAmount,      
         'change_amount': finalChangeAmount, 
         'discount_id': finalDiscountId, 
         'items': mappedItems,
-        'status': 'paid',
-        'order_notes': additionalNotes,
+        'status': _paymentMethod == 'Cash' ? 'paid' : 'pending',
       };
 
       final res = await ApiService.submitOrder(payload);
@@ -715,22 +748,96 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         String realOrderId = res['data']?['order']?['invoice_number'] ?? widget.orderId;
         final cartSnapshot = Map<int, OrderItem>.from(widget.cart);
 
-        Navigator.of(context).pop({'status': 'success'});
-        Navigator.of(context).push(MaterialPageRoute(builder: (c) => SuccessPaymentPage(
-            orderId: realOrderId,
-            paymentMethod: _paymentMethod,
-            grandTotal: grandTotal,
-            taxAmount: taxAmountFinal,
-            discountAmount: discountAmount,
-            amountPaid: _paymentMethod == 'Cash' ? _amountTendered : grandTotal,
-            change: _paymentMethod == 'Cash' ? change.toDouble() : 0,
-            cart: cartSnapshot,
-            tableNumber: widget.tableNumber,
-            customerName: widget.customerName, 
-            cashierName: widget.cashierName,
-            outletName: "ARANUS POS",
-            formatCurrency: widget.formatCurrency,
-        )));
+        if (_paymentMethod == 'Cash') {
+          // --- ALUR CASH ---
+          Navigator.of(context).pop({'status': 'success'});
+          Navigator.of(context).push(MaterialPageRoute(builder: (c) => SuccessPaymentPage(
+              orderId: realOrderId,
+              paymentMethod: _paymentMethod,
+              grandTotal: grandTotal,
+              amountPaid: _amountTendered,
+              change: change.toDouble(),
+              cart: cartSnapshot,
+              tableNumber: widget.tableNumber,
+              customerName: widget.customerName, 
+              cashierName: widget.cashierName,
+              outletName: "ARANUS POS",
+              formatCurrency: widget.formatCurrency,
+              discountAmount: discountAmount,
+              taxAmount: taxAmountFinal,
+          )));
+        } else {
+          // --- ALUR MIDTRANS (Card / Qris) ---
+          String? redirectUrl = res['data']?['redirect_url'];
+          String? clientKeyFromApi = res['data']?['client_key'];
+
+          if (redirectUrl != null && redirectUrl.isNotEmpty) {
+            String snapToken = redirectUrl.split('/').last;
+
+            _midtrans = await MidtransSDK.init(
+              config: MidtransConfig(
+                clientKey: clientKeyFromApi ?? "", 
+                merchantBaseUrl: "https://api.etres.my.id/api/v1/",
+                colorTheme: ColorTheme(
+                  colorPrimary: AppStyle.primaryBlue,
+                  colorPrimaryDark: AppStyle.primaryBlue,
+                  colorSecondary: Colors.orange,
+                ),
+              ),
+            );
+
+            if (_midtrans == null) {
+              throw Exception("SDK Midtrans gagal dimuat. Pastikan API mengirimkan client_key yang valid.");
+            }
+
+            _midtrans?.setTransactionFinishedCallback((result) {
+              if (!mounted) return;
+              
+              try {
+                String status = result.status; 
+                
+                if (status == 'cancel' || status == 'canceled') {
+                  setState(() => _errorMessage = "Pembayaran dibatalkan oleh pelanggan.");
+                } 
+                else if (status == 'settlement' || status == 'capture' || status == 'success') {
+                  Navigator.pop(context, {'status': 'success'});
+                  Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
+                    orderId: realOrderId,
+                    paymentMethod: _paymentMethod,
+                    grandTotal: grandTotal,
+                    amountPaid: grandTotal, 
+                    change: 0,
+                    cart: cartSnapshot,
+                    tableNumber: widget.tableNumber,
+                    customerName: widget.customerName, 
+                    cashierName: widget.cashierName,
+                    outletName: "ARANUS POS",
+                    formatCurrency: widget.formatCurrency,
+                    discountAmount: discountAmount,
+                    taxAmount: taxAmountFinal,
+                  )));
+                } 
+                else if (status == 'pending') {
+                  Navigator.pop(context, {'status': 'pending'});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Pesanan berhasil dibuat. Menunggu pembayaran..."), backgroundColor: Colors.blue)
+                  );
+                } else {
+                  setState(() => _errorMessage = "Status pembayaran: $status");
+                }
+              } catch (e) {
+                setState(() => _errorMessage = "Gateway Midtrans ditutup tanpa menyelesaikan pembayaran.");
+              }
+            });
+
+            // Munculkan UI Midtrans
+            _midtrans?.startPaymentUiFlow(token: snapToken);
+
+          } else {
+            throw Exception("Gagal mendapatkan link pembayaran Midtrans dari server.");
+          }
+        }
+
       } else {
         throw Exception(res['message'] ?? "Gagal memproses pesanan");
       }
@@ -750,21 +857,31 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     bool s = _paymentMethod == l; 
     return Expanded(
       child: GestureDetector(
-        onTap: isEnabled ? () => setState(() {
-          if (_errorMessage != null) _errorMessage = null;
-          _paymentMethod = l;
-          if (l == 'Qris') {
-            _qrisStringFromApi = "00020101021138540016ID.CO.TELKOMSEL.WWW01189360091100142DUMMYQRCODE123456789";
-          } else {
-            _qrisStringFromApi = null;
-          }
-        }) : null, 
+        onTap: (isEnabled && !_isLoading) ? () {
+          setState(() {
+            if (_errorMessage != null) _errorMessage = null;
+            _paymentMethod = l;
+            if (l == 'Qris') {
+              // Menampilkan QR Dummy saat diklik
+              _qrisStringFromApi = "00020101021138540016ID.CO.TELKOMSEL.WWW01189360091100142DUMMYQRCODE123456789";
+            } else {
+              _qrisStringFromApi = null;
+            }
+          });
+        } : null, 
         child: Opacity(
           opacity: isEnabled ? 1.0 : 0.4,
           child: Container(
             height: 100, 
             decoration: BoxDecoration(color: s ? AppStyle.primaryBlue : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))), 
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(i, color: s ? Colors.white : AppStyle.textMain, size: 28), const SizedBox(height: 8), Text(l, style: TextStyle(color: s ? Colors.white : AppStyle.textMain, fontWeight: s ? FontWeight.bold : FontWeight.normal))])
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (_isLoading && s)
+                const SizedBox(height: 28, width: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              else
+                Icon(i, color: s ? Colors.white : AppStyle.textMain, size: 28), 
+              const SizedBox(height: 8), 
+              Text(l, style: TextStyle(color: s ? Colors.white : AppStyle.textMain, fontWeight: s ? FontWeight.bold : FontWeight.normal))
+            ])
           )
         )
       )

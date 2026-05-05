@@ -647,20 +647,13 @@ class ApiService {
   }
 
  // --- 16. MIDTRANS GET SNAP TOKEN ---
-  // 🔥 PERBAIKAN: Menambahkan parameter paymentMethod dan amount
   static Future<Map<String, dynamic>> getMidtransToken(String orderId, String paymentMethod, int amount) async {
-    print("\n[API REQUEST] --> GET MIDTRANS TOKEN");
-    print("Order ID: $orderId | Method: $paymentMethod | Amount: $amount");
     try {
       final headers = await _getHeaders();
-      
-      // 🔥 PERBAIKAN: Menambahkan payload body 'payments'
-      // Catatan: Saya mengasumsikan backend Anda menerima array of payments. 
-      // Jika error berubah menjadi field tidak dikenali, ubah "payments": [...] menjadi "payments": {...} (tanpa kurung siku).
       final requestBody = jsonEncode({
         "payments": [
           {
-           "method": paymentMethod,      // 👈 Diubah dari "payment_method"
+            "method": paymentMethod,
             "amount_paid": amount
           }
         ]
@@ -669,28 +662,43 @@ class ApiService {
       final response = await http.post(
         Uri.parse('$baseUrl/orders/$orderId/payments'),
         headers: headers,
-        body: requestBody, // 👈 Masukkan payload ke request
+        body: requestBody,
       );
 
-      print("[API RESPONSE] <-- STATUS: ${response.statusCode}");
-      print("Body: ${response.body}");
-
       final result = jsonDecode(response.body);
-      
-      if (response.statusCode == 200 || response.statusCode == 201) { // 👈 Terima 201 juga untuk antisipasi created
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return {
-          'success': true, 
-          'data': result['data'] ?? result 
-        };
-      } else {
-        return {
-          'success': false,
-          'message': result['message'] ?? 'Gagal mendapatkan token Midtrans',
+          'success': true,
+          'data': result['data'] ?? result
         };
       }
+      return {'success': false, 'message': result['message'] ?? 'Gagal mendapatkan token'};
     } catch (e) {
-      print("💥 [API ERROR] getMidtransToken: $e");
       return {'success': false, 'message': 'Koneksi error: $e'};
+    }
+  }
+
+  // --- 17. GET MIDTRANS CONFIG ---
+  // Ditambahkan agar CheckoutDialog bisa mengambil Client Key secara dinamis
+  static Future<Map<String, dynamic>> getMidtransConfig() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/midtrans-config'),
+        headers: headers,
+      );
+
+      final result = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'client_key': result['client_key'],
+          'merchant_base_url': result['merchant_base_url'],
+        };
+      }
+      return {'success': false, 'message': 'Gagal memuat konfigurasi'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
     }
   }
 

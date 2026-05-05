@@ -99,7 +99,7 @@ class _CartPanelState extends State<CartPanel> {
 
   Future<void> _loadCashierData() async {
     final name = await StorageService.getCashierName();
-    if (mounted) setState(() => _cashierName = name);
+    if (mounted) setState(() => _cashierName = name );
   }
 
   void _generateOrderData() {

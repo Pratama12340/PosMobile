@@ -19,17 +19,15 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkDeviceStatus() async {
-    await Future.delayed(const Duration(milliseconds: 1500)); // Animasi awal
+    await Future.delayed(const Duration(milliseconds: 1500)); 
 
     final int? outletId = await StorageService.getOutletId();
 
     if (!mounted) return;
 
     if (outletId == null) {
-      // 1. INSTALASI PERTAMA -> Wajib masuk pilih Outlet
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OutletSelectionScreen()));
     } else {
-      // 2. SUDAH PERNAH DISETING -> Langsung lompat ke Login PIN
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
     }
   }

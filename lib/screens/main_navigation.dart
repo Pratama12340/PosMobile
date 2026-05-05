@@ -20,7 +20,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   bool _isSidebarVisible = false;
   
-  // Key untuk mengakses fungsi di dalam HomeScreen (untuk menutup cart)
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
   
   String _cashierName = "Loading...";
@@ -56,10 +55,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     
     if (mounted) {
       setState(() {
-        _cashierName = results[0] as String;
-        _outletName = results[1] as String;
-        _profilePhoto = results[2] as String;
-        _userRole = results[3] as String;
+        _cashierName = results[0];
+        _outletName = results[1];
+        _profilePhoto = results[2];
+        _userRole = results[3];
       });
     }
   }
@@ -70,7 +69,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     super.dispose();
   }
 
-  // Fungsi untuk menutup sidebar saat Cart dibuka (dipanggil dari HomeScreen)
   void _closeSidebar() {
     if (_isSidebarVisible) {
       setState(() {
@@ -129,20 +127,15 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                     child: IndexedStack(
                       index: _currentIndex,
                       children: [
-                        // Index 0: HomeScreen
                         HomeScreen(
                           key: _homeKey,
                           searchController: _globalSearchController,
-                          // Callback agar saat Cart dibuka, Sidebar tertutup
                           onCartToggled: (isOpen) {
                             if (isOpen) _closeSidebar();
                           },
                         ),
-                        // Index 1
                         ShiftScreen(searchController: _globalSearchController),
-                        // Index 2
                         HistoryScreen(searchController: _globalSearchController),
-                        // Index 3
                         SettingScreen(searchController: _globalSearchController),
                       ],
                     ),
@@ -170,7 +163,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             onPressed: () {
               setState(() {
                 _isSidebarVisible = !_isSidebarVisible;
-                // JIKA SIDEBAR DIBUKA: Perintahkan HomeScreen untuk menutup Cart
                 if (_isSidebarVisible) {
                   _homeKey.currentState?.closeCart();
                 }
@@ -211,7 +203,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: AppStyle.primaryBlue.withOpacity(0.1),
+                backgroundColor: AppStyle.primaryBlue.withValues(alpha: 0.1),
                 backgroundImage: _profilePhoto.isNotEmpty 
                     ? NetworkImage("https://api.etres.my.id/storage/$_profilePhoto")
                     : null,
@@ -272,14 +264,13 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             setState(() {
               _currentIndex = index;
               _globalSearchController.clear();
-              // Opsional: Tutup sidebar otomatis saat menu diklik (UX lebih baik)
               _isSidebarVisible = false;
             });
           }
         },
         dense: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        tileColor: isActive ? AppStyle.primaryBlue.withOpacity(0.1) : Colors.transparent,
+        tileColor: isActive ? AppStyle.primaryBlue.withValues(alpha: 0.1) : Colors.transparent,
         leading: Icon(icon, color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textGrey)),
         title: Text(title, style: AppStyle.menuText.copyWith(
           color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textMain), 

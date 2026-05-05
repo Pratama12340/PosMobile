@@ -3,27 +3,24 @@ import '../style.dart';
 import 'printer_screen.dart';
 
 class SettingScreen extends StatefulWidget {
-  final TextEditingController searchController; // Tambahkan ini
-  const SettingScreen({super.key, required this.searchController}); // Tambahkan ini
+  final TextEditingController searchController; 
+  const SettingScreen({super.key, required this.searchController}); 
 
   @override
   State<SettingScreen> createState() => _SettingScreenState();
 }
 
 class _SettingScreenState extends State<SettingScreen> {
-  // Tambahkan variabel query jika nanti ingin memfilter daftar setting
   String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
-    // Tambahkan listener untuk mendeteksi ketikan di Search Bar
     widget.searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
-    // Hapus listener saat halaman ditutup
     widget.searchController.removeListener(_onSearchChanged);
     super.dispose();
   }
@@ -46,7 +43,6 @@ class _SettingScreenState extends State<SettingScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 10),
               children: [
-                // Contoh logika filter sederhana: hanya tampilkan jika cocok dengan pencarian
                 if ("koneksi printer".contains(_searchQuery))
                   _buildSettingItem(
                     context,
@@ -67,7 +63,6 @@ class _SettingScreenState extends State<SettingScreen> {
                     title: "Informasi Outlet",
                     subtitle: "Lihat detail lokasi cabang Anda",
                     onTap: () {
-                      // Logic untuk info outlet
                     },
                   ),
                 if ("tentang aplikasi".contains(_searchQuery))
@@ -77,7 +72,6 @@ class _SettingScreenState extends State<SettingScreen> {
                     title: "Tentang Aplikasi",
                     subtitle: "Versi 1.0.0 - Aranus POS",
                     onTap: () {
-                      // Logic untuk info aplikasi
                     },
                   ),
               ],

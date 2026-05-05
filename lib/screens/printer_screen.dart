@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../style.dart'; // Pastikan path import benar
+import '../style.dart'; 
 
 class PrinterScreen extends StatelessWidget {
   const PrinterScreen({super.key});
@@ -7,13 +7,13 @@ class PrinterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppStyle.bgLightBlue, // Menggunakan Style
+      backgroundColor: AppStyle.bgLightBlue, 
       appBar: AppBar(
         title: Text(
           "Koneksi Printer", 
           style: AppStyle.menuText.copyWith(color: Colors.white, fontWeight: FontWeight.bold)
         ),
-        backgroundColor: AppStyle.primaryBlue, // Menggunakan Style
+        backgroundColor: AppStyle.primaryBlue, 
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
@@ -53,7 +53,7 @@ class PrinterScreen extends StatelessWidget {
               Text(
                 "Pastikan Bluetooth printer Anda sudah menyala dan dalam jangkauan",
                 textAlign: TextAlign.center,
-                style: AppStyle.subTitleText, // Mengganti hintText ke subTitleText
+                style: AppStyle.subTitleText,
               ),
               const SizedBox(height: 35),
               SizedBox(
@@ -68,7 +68,6 @@ class PrinterScreen extends StatelessWidget {
                     ),
                   ),
                   onPressed: () {
-                    // Logika Scan Ulang
                   }, 
                   child: Text(
                     "Scan Ulang", 

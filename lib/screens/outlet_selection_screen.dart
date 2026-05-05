@@ -37,15 +37,12 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Simpan ke Storage
       await StorageService.saveOutletId(id);
       print("DEBUG: Berhasil menyimpan ID $id ke Storage");
 
-      // 2. Jeda Sinkronisasi (Penting agar Disk IO selesai)
       await Future.delayed(const Duration(milliseconds: 300));
 
       if (mounted) {
-        // 3. Pindah ke Login dan bersihkan stack navigasi
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),

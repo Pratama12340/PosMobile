@@ -9,7 +9,7 @@ class StorageService {
   static const String _keyUserRole = 'user_role';
   static const String _keyProfilePhoto = 'profile_photo';
   static const String _keyLoginTime = 'login_time';
-  static const String _keyOpeningCash = 'opening_cash'; // Key untuk Kas Awal
+  static const String _keyOpeningCash = 'opening_cash'; 
   
   // Key Shift (Data operasional yang dipertahankan saat logout)
   static const String _keyIsShiftActive = 'is_shift_active'; 

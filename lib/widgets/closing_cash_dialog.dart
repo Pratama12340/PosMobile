@@ -16,7 +16,7 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
   final TextEditingController _actualCashController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   bool _isLoading = false;
-  String? _errorMessage; // Tambahan state untuk inline error
+  String? _errorMessage; 
 
   int get _rawAmount {
     String clean = _actualCashController.text.replaceAll('.', '');
@@ -40,7 +40,7 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
 
     setState(() {
       _isLoading = true;
-      _errorMessage = null; // Reset error saat mulai proses
+      _errorMessage = null; 
     });
 
     try {
@@ -84,7 +84,6 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
       elevation: 0,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Container(
-        // 🔥 UKURAN DISAMAKAN DENGAN KAS AWAL
         width: isTablet ? screenWidth * 0.55 : 450,
         constraints: const BoxConstraints(maxWidth: 650, maxHeight: 750),
         padding: const EdgeInsets.all(35),
@@ -102,7 +101,6 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 🔥 IKON DISAMAKAN
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
@@ -130,7 +128,6 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 🔥 Widget Inline Error (Lebar Penuh, Teks di Tengah)
                     if (_errorMessage != null)
                       Container(
                         width: double.infinity,
@@ -161,7 +158,6 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                         ),
                       ),
 
-                    // 🔥 INPUT NOMINAL DISAMAKAN
                     TextField(
                       controller: _actualCashController,
                       keyboardType: TextInputType.number,
@@ -188,7 +184,7 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                           ),
                         ),
                         prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                        suffixIcon: const SizedBox(width: 65), // Menyeimbangkan posisi "Rp"
+                        suffixIcon: const SizedBox(width: 65), 
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
@@ -196,7 +192,6 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                         contentPadding: const EdgeInsets.symmetric(vertical: 20),
                       ),
                       onChanged: (value) {
-                        // Hilangkan error saat mengetik
                         if (_errorMessage != null) {
                           setState(() => _errorMessage = null);
                         }
@@ -210,7 +205,6 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                       },
                     ),
                     const SizedBox(height: 20),
-                    // INPUT CATATAN
                     TextField(
                       controller: _notesController,
                       maxLines: 2,
@@ -241,8 +235,6 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
             ),
             
             const SizedBox(height: 30),
-
-            // 🔥 TOMBOL DISAMAKAN
             SizedBox(
               width: double.infinity,
               height: 65,

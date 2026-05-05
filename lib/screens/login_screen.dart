@@ -233,10 +233,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         
                         SizedBox(height: _errorMessage != null ? 15 : 25),
 
-                        // Widget Inline Error yang sudah diproporsionalkan
                         if (_errorMessage != null)
                           Container(
-                            width: 280, // Disamakan persis dengan maksimal lebar Numpad
+                            width: 280,
                             margin: const EdgeInsets.only(bottom: 15),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(

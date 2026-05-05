@@ -1,8 +1,8 @@
 class Discount {
   final int id;
   final String name;
-  final String scope; // 'global' atau 'products'
-  final String type;  // 'percentage' atau 'nominal'
+  final String scope; 
+  final String type;  
   final double value;
   final List<int> productIds; 
   final List<int> categoryIds;
@@ -38,19 +38,17 @@ class Discount {
     );
   }
 
-  /// Fungsi untuk membersihkan data ID (baik format [4] atau "4,5" atau List asli)
+  
   static List<int> _parseIds(dynamic raw) {
     if (raw == null || raw.toString().toUpperCase() == 'NULL' || raw.toString().trim().isEmpty) {
       return [];
     }
     
     try {
-      // 1. Jika data sudah berupa List asli dari API
       if (raw is List) {
         return raw.map((e) => int.tryParse(e.toString()) ?? 0).where((e) => e != 0).toList();
       }
       
-      // 2. Jika data berupa String seperti "[4]" atau "4,5"
       String clean = raw.toString()
           .replaceAll('[', '')
           .replaceAll(']', '')

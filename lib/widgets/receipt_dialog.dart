@@ -20,7 +20,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   final _formKey = GlobalKey<FormState>();
   
   String _currentUserName = ""; 
-  List<dynamic> _masterTaxes = []; // Menyimpan rincian tipe pajak dari database
+  List<dynamic> _masterTaxes = []; 
 
   @override
   void initState() {
@@ -35,7 +35,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     setState(() { _currentUserName = name; });
   }
 
-  // Mengambil master pajak dari database agar rincian bisa dipecah
+  
   void _loadTaxSettings() async {
     final taxes = await ApiService.getTaxes();
     if (mounted) {
@@ -52,7 +52,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     });
   }
 
-  // --- LOGIKA PERHITUNGAN DINAMIS ---
 
   double get currentSubtotalPrice {
     if (localOrder == null) return 0;
@@ -68,7 +67,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return currentSubtotalPrice - localOrder!.discountAmount;
   }
 
-  // Menghitung ulang total pajak berdasarkan rincian master
   double get currentTaxAmount {
     if (localOrder == null || _masterTaxes.isEmpty) return 0;
     double totalTax = 0;
@@ -103,7 +101,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
         bool showRightSide = localOrder!.logs.isNotEmpty || isEditMode;
         
-        // Nilai yang ditampilkan di UI
         double displaySubtotal = isEditMode ? currentSubtotalPrice : localOrder!.subtotalPrice;
         double displayBase = displaySubtotal - localOrder!.discountAmount;
         double displayTotal = isEditMode ? currentTotalPrice : localOrder!.totalPrice;
@@ -152,17 +149,14 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           ),
                           const Divider(height: 24, thickness: 1),
                           
-                          // --- SUMMARY PAYMENTS ---
                           _buildSummaryRow("Subtotal", style.formatHarga(displaySubtotal)),
                           
                           if (localOrder!.discountAmount > 0)
                             _buildSummaryRow("Diskon", "-${style.formatHarga(localOrder!.discountAmount)}", color: Colors.red),
                           
-                          // MEMECAH TAX_AMOUNT MENJADI RINCIAN (PPN, SERVICE, DLL)
                           if (_masterTaxes.isNotEmpty)
                             ..._masterTaxes.map((tax) {
                               double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
-                              // Hitung nominal berdasarkan base amount saat ini
                               double amt = (tax['type'] == 'percentage') ? (displayBase * (rate / 100)) : rate;
                               
                               String label = tax['name'] ?? "Pajak";
@@ -171,7 +165,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                               return _buildSummaryRow(label, style.formatHarga(amt));
                             }).toList()
                           else if (localOrder!.taxAmount > 0)
-                            // Jika master gagal dimuat, tampilkan total dari history sebagai fallback
                             _buildSummaryRow("Pajak", style.formatHarga(localOrder!.taxAmount)),
 
                           const Divider(height: 32, thickness: 1),
@@ -233,8 +226,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       },
     );
   }
-
-  // --- UI HELPER COMPONENTS ---
 
   Widget _buildHeaderCustom() {
     return Row(

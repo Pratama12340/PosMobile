@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/order_model.dart';
 import '../style.dart'; 
 
@@ -38,7 +37,6 @@ class SuccessPaymentPage extends StatelessWidget {
       body: Center(
         child: SingleChildScrollView(
           child: Container(
-            // Memberikan batas lebar maksimal agar proporsional di layar lebar (Tablet/Web)
             constraints: const BoxConstraints(maxWidth: 600),
             margin: const EdgeInsets.all(40.0),
             padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 40),
@@ -47,7 +45,7 @@ class SuccessPaymentPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 30,
                   offset: const Offset(0, 10),
                 )
@@ -63,8 +61,6 @@ class SuccessPaymentPage extends StatelessWidget {
                   size: 120,
                 ),
                 const SizedBox(height: 24),
-                
-                // Judul
                 const Text(
                   "Pembayaran Berhasil!",
                   style: TextStyle(
@@ -76,15 +72,13 @@ class SuccessPaymentPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "$orderId",
+                  orderId,
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
                     fontFamily: 'Poppins',
                   ),
                 ),
-                
-                // Menampilkan Nama Customer jika ada
                 if (customerName.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
@@ -97,10 +91,7 @@ class SuccessPaymentPage extends StatelessWidget {
                     ),
                   ),
                 ],
-                
                 const SizedBox(height: 40),
-
-                // Box Kembalian (Hanya muncul jika Cash)
                 if (paymentMethod == 'Cash' || paymentMethod == 'Tunai')
                   Container(
                     width: double.infinity,
@@ -134,7 +125,6 @@ class SuccessPaymentPage extends StatelessWidget {
                     ),
                   )
                 else
-                  // Jika Non-Tunai, tampilkan Total yang dibayar
                   Column(
                     children: [
                       const Text("Total Pembayaran", style: TextStyle(color: Colors.grey, fontSize: 16)),
@@ -142,10 +132,7 @@ class SuccessPaymentPage extends StatelessWidget {
                         style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF4285F4))),
                     ],
                   ),
-
                 const SizedBox(height: 60),
-
-                // Tombol Aksi
                 Row(
                   children: [
                     Expanded(
@@ -184,7 +171,6 @@ class SuccessPaymentPage extends StatelessWidget {
         onPressed: isBack 
             ? () => Navigator.of(context).popUntil((route) => route.isFirst) 
             : () {
-                // Logika cetak struk di sini
               },
         icon: Icon(icon, size: 22),
         label: Text(

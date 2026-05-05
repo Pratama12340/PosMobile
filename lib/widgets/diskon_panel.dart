@@ -5,7 +5,7 @@ import '../models/discount_model.dart';
 class DiskonPanel extends StatelessWidget {
   final Discount? selectedDiscount;
   final List<Discount> availableDiscounts;
-  final List<int> cartProductIds; // Ditambahkan: untuk mengecek menu di keranjang
+  final List<int> cartProductIds; 
   final double discountAmount;
   final double subtotal; 
   final String Function(double) formatCurrency;
@@ -16,7 +16,7 @@ class DiskonPanel extends StatelessWidget {
     super.key,
     required this.selectedDiscount,
     required this.availableDiscounts,
-    required this.cartProductIds, // Ditambahkan ke constructor
+    required this.cartProductIds, 
     required this.discountAmount,
     required this.subtotal,
     required this.formatCurrency,
@@ -70,7 +70,7 @@ class DiskonPanel extends StatelessWidget {
                             itemBuilder: (context, index) {
                               final d = availableDiscounts[index];
                               
-                              // Logika pengecekan yang diperbaiki
+                              
                               bool isMinPurchaseMet = subtotal >= d.minPurchase;
                               
                               bool isProductEligible = true;
@@ -217,7 +217,7 @@ class _VoucherCard extends StatelessWidget {
                 alignment: Alignment.center,
                 child: Icon(
                   Icons.confirmation_number_rounded,
-                  color: isEligible ? Colors.blue : Colors.grey, // Disesuaikan jika AppStyle tidak ada
+                  color: isEligible ? Colors.blue : Colors.grey, 
                   size: 30,
                 ),
               ),
@@ -263,7 +263,7 @@ class _VoucherCard extends StatelessWidget {
                             ? "${discount.value.toInt()}% OFF" 
                             : "POTONGAN ${formatCurrency(discount.value.toDouble())}",
                         style: TextStyle(
-                          color: isEligible ? Colors.blue : Colors.grey, // Disesuaikan
+                          color: isEligible ? Colors.blue : Colors.grey, 
                           fontWeight: FontWeight.w900,
                           fontSize: 16,
                         ),
@@ -278,7 +278,7 @@ class _VoucherCard extends StatelessWidget {
                           ),
                           if (!isEligible)
                             const Text(
-                              "Syarat Belum Terpenuhi", // Diubah sedikit agar mencakup salah produk juga
+                              "Syarat Belum Terpenuhi", 
                               style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold),
                             ),
                         ],

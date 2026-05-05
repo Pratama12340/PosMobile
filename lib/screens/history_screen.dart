@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // 🔥 Tambahkan import ini untuk memformat tanggal
+import 'package:intl/intl.dart'; 
 import '../style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
 import '../widgets/receipt_dialog.dart';
 
 class HistoryScreen extends StatefulWidget {
-  // Menambahkan searchController agar bisa menerima input dari Main Navigation
   final TextEditingController searchController;
 
   const HistoryScreen({super.key, required this.searchController});
@@ -21,20 +20,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
-    // Menambahkan listener agar layar refresh saat user mengetik di search bar
     widget.searchController.addListener(_onSearchChanged);
     _loadHistory();
   }
 
   @override
   void dispose() {
-    // Menghapus listener saat widget dihancurkan untuk menghindari memory leak
     widget.searchController.removeListener(_onSearchChanged);
     super.dispose();
   }
 
   void _onSearchChanged() {
-    setState(() {}); // Memicu build ulang untuk memfilter list
+    setState(() {});
   }
 
   void _loadHistory() {
@@ -47,7 +44,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     String m = method.toUpperCase();
     if (m.contains('CASH')) return AppStyle.primaryBlue;
     if (m.contains('QRIS')) return Colors.redAccent;
-    if (m.contains('DEBIT') || m.contains('CARD')) return Colors.amber; // Disamakan dengan warna Card di gambar
+    if (m.contains('DEBIT') || m.contains('CARD')) return Colors.amber; 
     return Colors.green;
   }
 
@@ -66,23 +63,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return const Center(child: Text("Belum ada data"));
           }
 
-          // 🔥 LOGIKA FILTERING SHIFT & PENCARIAN
           final query = widget.searchController.text.toLowerCase();
           
-          // Dapatkan string tanggal hari ini dengan format yang sama seperti di invoice (misal: 20260504)
           final String todayStr = DateFormat('yyyyMMdd').format(DateTime.now());
 
           final filteredOrders = snapshot.data!.where((order) {
-            // 1. Filter Shift: Cek apakah invoice mengandung tanggal hari ini
-            // Catatan: Jika backend/model Anda menyimpan shift_id, Anda bisa mengubah logika ini menjadi:
-            // bool isCurrentShift = order.shiftId == currentShiftId;
             bool isCurrentShift = order.invoiceNo.contains(todayStr);
-
-            // 2. Filter Pencarian: Cek No Invoice atau Nama Customer
             bool matchesSearch = order.invoiceNo.toLowerCase().contains(query) ||
                                  order.customerName.toLowerCase().contains(query);
 
-            // Hanya tampilkan jika transaksi terjadi di shift (hari) ini DAN cocok dengan pencarian
             return isCurrentShift && matchesSearch;
           }).toList();
 
@@ -133,7 +122,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                         child: Center(
                           child: Text(
-                            // Nomor urut akan otomatis menyesuaikan dengan jumlah data yang sudah difilter
                             "${filteredOrders.length - index}",
                             style: const TextStyle(
                               color: Colors.white,

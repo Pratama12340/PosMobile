@@ -26,11 +26,11 @@ class _ShiftScreenState extends State<ShiftScreen> {
 
   void _loadInitialData() {
     _shiftDataFuture = Future.wait([
-      StorageService.getCashierName(), // [0]
-      ApiService.getShiftHistory(), // [1]
-      ApiService.fetchHistory(), // [2]
-      ApiService.getMasterShifts(), // [3]
-      StorageService.getOpeningBalance(), // [4]
+      StorageService.getCashierName(), 
+      ApiService.getShiftHistory(), 
+      ApiService.fetchHistory(), 
+      ApiService.getMasterShifts(), 
+      StorageService.getOpeningBalance(), 
     ]);
   }
 
@@ -50,7 +50,7 @@ class _ShiftScreenState extends State<ShiftScreen> {
     (Match m) => '${m[1]}.',
   );
 
-  // 🔥 FUNGSI VALIDASI & MODAL WARNING
+ 
   void _handleTutupShift(RekapShift? activeShift) async {
     bool isShiftBelumHabis = false;
 
@@ -74,20 +74,17 @@ class _ShiftScreenState extends State<ShiftScreen> {
     }
 
     if (isShiftBelumHabis) {
-      // 1. Tampilkan Modal Warning Terlebih Dahulu
       await showDialog(
         context: context,
         builder: (context) => _buildWarningModal(),
       );
-      
-      // 2. Setelah Modal Warning ditutup, baru tampilkan ClosingCashDialog
       _showClosingDialog();
     } else {
       _showClosingDialog();
     }
   }
 
-  // 🔥 WIDGET MODAL WARNING (Gaya Sonner/Modern)
+  
   Widget _buildWarningModal() {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

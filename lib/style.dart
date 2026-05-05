@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // <--- Tambahkan ini agar NumberFormat terbaca
+import 'package:intl/intl.dart'; 
 
 class AppStyle {
   // --- WARNA UTAMA ---
   static const Color primaryBlue = Color(0xFF4285F4);
 
-  // Tambahkan baris ini (Penting! Agar error di baris 101 hilang)
   static const Color bgLightBlue = Color(0xFFF3F8FE);
 
-  // Tambahkan baris ini (Penting! Agar error di baris 92 hilang)
+  
   static const Color errorRed = Colors.redAccent;
 
   static const Color textMain = Color(0xFF1A1C1E);
@@ -48,23 +47,23 @@ class AppStyle {
     color: white,
   );
 
-  // Tambahkan ini di dalam class AppStyle di file style.dart
+ 
   static const TextStyle menuText = TextStyle(
     fontFamily: fontPoppins,
     fontSize: 14,
-    fontWeight: FontWeight.w500, // Medium
+    fontWeight: FontWeight.w500, 
     color: textMain,
   );
 
-  // Tambahkan ini di dalam class AppStyle (di file style.dart)
+  
   static const TextStyle priceText = TextStyle(
-    fontFamily: fontNumbers, // Menggunakan JetBrains
+    fontFamily: fontNumbers, 
     fontSize: 14,
-    fontWeight: FontWeight.w800, // ExtraBold
+    fontWeight: FontWeight.w800, 
     color: primaryBlue,
   );
 
-  // Fungsi untuk memformat angka ke Rupiah dengan titik
+ 
   String formatHarga(double price) {
     final formatter = NumberFormat.currency(
       locale: 'id_ID',

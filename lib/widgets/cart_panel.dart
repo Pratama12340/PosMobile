@@ -4,11 +4,11 @@ import '../models/order_model.dart';
 import '../style.dart'; 
 import '../services/storage_service.dart';
 import 'checkout_dialog.dart';
-import 'tabel_panel.dart'; // 🔥 Import file tabel_panel.dart
+import 'tabel_panel.dart';
 
 class CartPanel extends StatefulWidget {
   final Map<int, OrderItem> cart;
-  final bool hasDiscountedItem; // 🔥 Tambahan parameter untuk deteksi diskon
+  final bool hasDiscountedItem; 
   final String Function(double) formatCurrency;
   
   final String? initialCustomerName;
@@ -23,7 +23,7 @@ class CartPanel extends StatefulWidget {
   const CartPanel({
     super.key,
     required this.cart,
-    this.hasDiscountedItem = false, // 🔥 Inisialisasi default agar aman
+    this.hasDiscountedItem = false,
     required this.formatCurrency,
     this.initialCustomerName,
     this.initialTableNumber,
@@ -42,15 +42,11 @@ class _CartPanelState extends State<CartPanel> {
   late TextEditingController _tableController;
   late TextEditingController _customerController;
   
-  // Map untuk mengelola controller catatan tiap item menu secara dinamis
   final Map<int, TextEditingController> _noteControllers = {};
   
-  String _currentTime = "";
-  String _currentDate = "";
   String _orderId = "";
   String _cashierName = "Loading...";
 
-  // 🔥 State untuk menampilkan modal overlay TablePanel
   bool _showTableSelection = false;
 
   @override
@@ -61,15 +57,13 @@ class _CartPanelState extends State<CartPanel> {
     
     _generateOrderData();
     _loadCashierData();
-    _syncNoteControllers(); // Inisialisasi catatan
+    _syncNoteControllers();
   }
 
-  // Sinkronisasi saat Draf dipilih atau Cart berubah
   @override
   void didUpdateWidget(covariant CartPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     
-    // Update Nama & Meja
     if (widget.initialCustomerName != oldWidget.initialCustomerName) {
       _customerController.text = widget.initialCustomerName ?? "";
     }
@@ -77,24 +71,20 @@ class _CartPanelState extends State<CartPanel> {
       _tableController.text = widget.initialTableNumber ?? "";
     }
 
-    // Update Catatan (Notes) untuk setiap item
     _syncNoteControllers();
   }
 
-  // Fungsi untuk menyinkronkan teks catatan di model ke dalam Controller
   void _syncNoteControllers() {
     widget.cart.forEach((id, item) {
       if (!_noteControllers.containsKey(id)) {
-        _noteControllers[id] = TextEditingController(text: item.notes ?? "");
+        _noteControllers[id] = TextEditingController(text: item.notes);
       } else {
-        // Hanya update jika teks di controller berbeda dengan di model (mencegah kursor lompat)
         if (_noteControllers[id]!.text != item.notes) {
-          _noteControllers[id]!.text = item.notes ?? "";
+          _noteControllers[id]!.text = item.notes;
         }
       }
     });
 
-    // Bersihkan controller yang itemnya sudah dihapus dari cart
     _noteControllers.removeWhere((id, controller) => !widget.cart.containsKey(id));
   }
 
@@ -106,8 +96,6 @@ class _CartPanelState extends State<CartPanel> {
   void _generateOrderData() {
     final now = DateTime.now();
     setState(() {
-      _currentDate = DateFormat('dd MMM yyyy').format(now);
-      _currentTime = DateFormat('HH:mm').format(now);
       _orderId = "ORD-${DateFormat('yyyyMMdd-HHmm').format(now)}";
     });
   }
@@ -116,7 +104,6 @@ class _CartPanelState extends State<CartPanel> {
   void dispose() {
     _tableController.dispose();
     _customerController.dispose();
-    // Dispose semua note controllers
     for (var controller in _noteControllers.values) {
       controller.dispose();
     }
@@ -135,13 +122,12 @@ class _CartPanelState extends State<CartPanel> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06), 
+            color: Colors.black.withValues(alpha: 0.06), 
             blurRadius: 20, 
             offset: const Offset(0, 8)
           )
         ],
       ),
-      // 🔥 BUNGKUS DENGAN CLIPRRECT & STACK UNTUK OVERLAY MODAL
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: Stack(
@@ -164,7 +150,7 @@ class _CartPanelState extends State<CartPanel> {
                             onPressed: () => widget.onSaveDraft(_customerController.text, _tableController.text),
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              backgroundColor: AppStyle.primaryBlue.withOpacity(0.1),
+                              backgroundColor: AppStyle.primaryBlue.withValues(alpha: 0.1),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             icon: const Icon(Icons.inventory_2_outlined, color: AppStyle.primaryBlue, size: 16),
@@ -175,8 +161,6 @@ class _CartPanelState extends State<CartPanel> {
                       const SizedBox(height: 15),
                       _buildInput(controller: _customerController, hint: "Nama Customer", icon: Icons.person_outline_rounded),
                       const SizedBox(height: 10),
-                      
-                      // 🔥 GANTI INPUT MEJA DENGAN TOMBOL TRIGGER MODAL
                       _buildTableSelectorButton(), 
                     ],
                   ),
@@ -190,9 +174,8 @@ class _CartPanelState extends State<CartPanel> {
                       int id = widget.cart.keys.elementAt(index);
                       OrderItem item = widget.cart[id]!;
                       
-                      // Pastikan controller sudah ada sebelum build
                       if (!_noteControllers.containsKey(id)) {
-                        _noteControllers[id] = TextEditingController(text: item.notes ?? "");
+                        _noteControllers[id] = TextEditingController(text: item.notes);
                       }
 
                       return _buildCartItem(id, item, _noteControllers[id]!, key: ValueKey("cart_$id"));
@@ -202,8 +185,6 @@ class _CartPanelState extends State<CartPanel> {
                 _buildFooter(total),
               ],
             ),
-
-            // 🔥 TAMPILKAN OVERLAY TABLE PANEL JIKA _showTableSelection TRUE
             if (_showTableSelection)
               Positioned.fill(
                 child: TablePanel(
@@ -211,12 +192,12 @@ class _CartPanelState extends State<CartPanel> {
                   onTableSelected: (selectedTable) {
                     setState(() {
                       _tableController.text = selectedTable;
-                      _showTableSelection = false; // Tutup modal setelah memilih
+                      _showTableSelection = false; 
                     });
                   },
                   onClose: () {
                     setState(() {
-                      _showTableSelection = false; // Tutup modal saat klik X
+                      _showTableSelection = false; 
                     });
                   },
                 ),
@@ -234,7 +215,7 @@ class _CartPanelState extends State<CartPanel> {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC), 
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppStyle.primaryBlue.withOpacity(0.1))
+        border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.1))
       ),
       child: Row(
         children: [
@@ -252,7 +233,6 @@ class _CartPanelState extends State<CartPanel> {
     );
   }
 
-  // 🔥 FUNGSI BARU: Tombol Pilihan Meja yang akan memunculkan TablePanel
   Widget _buildTableSelectorButton() {
     bool hasSelectedTable = _tableController.text.isNotEmpty;
 
@@ -264,7 +244,7 @@ class _CartPanelState extends State<CartPanel> {
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC), 
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppStyle.primaryBlue.withOpacity(0.1))
+          border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.1))
         ),
         child: Row(
           children: [
@@ -325,7 +305,6 @@ class _CartPanelState extends State<CartPanel> {
             children: [
               Expanded(
                 child: TextField(
-                  // Gunakan Controller agar teks muncul saat Draft dibuka
                   controller: noteController,
                   onChanged: (v) => item.notes = v,
                   style: const TextStyle(fontSize: 11),
@@ -369,7 +348,6 @@ class _CartPanelState extends State<CartPanel> {
   }
 
   Widget _buildFooter(double total) {
-    // 🔥 CEK APAKAH MEJA KOSONG
     bool isTableEmpty = _tableController.text.trim().isEmpty;
 
     return Container(
@@ -393,10 +371,8 @@ class _CartPanelState extends State<CartPanel> {
                 backgroundColor: AppStyle.primaryBlue, 
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
                 elevation: 0,
-                // Optional: Mengubah warna tombol jika disabled agar lebih jelas
                 disabledBackgroundColor: Colors.grey.shade300,
               ),
-              // 🔥 LOGIKA DIPERBARUI DI SINI
               onPressed: (widget.cart.isEmpty || isTableEmpty) ? null : () async {
                 final result = await showDialog<Map<String, dynamic>>(
                   context: context,

@@ -86,10 +86,9 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Widget Inline Error (Lebar Penuh, Teks di Tengah)
                     if (_errorMessage != null)
                       Container(
-                        width: double.infinity, // Membuat lebar box sama dengan input text
+                        width: double.infinity, 
                         margin: const EdgeInsets.only(bottom: 20),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
@@ -98,14 +97,14 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                           border: Border.all(color: Colors.red.shade200),
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center, // Memastikan icon & text tetap di tengah
+                          mainAxisAlignment: MainAxisAlignment.center, 
                           children: [
                             Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
                                 _errorMessage!,
-                                textAlign: TextAlign.center, // Memastikan teks panjang tetap rata tengah
+                                textAlign: TextAlign.center, 
                                 style: TextStyle(
                                   color: Colors.red.shade700, 
                                   fontSize: 13,

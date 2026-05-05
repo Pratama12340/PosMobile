@@ -1,4 +1,3 @@
-// Model untuk data Master Shift (Jadwal Kerja)
 class ShiftMaster {
   final int id;
   final String name;
@@ -17,7 +16,6 @@ class ShiftMaster {
   }
 }
 
-// Model untuk data Transaksi/Riwayat Shift (Tabel shift_karyawans)
 class RekapShift {
   final int? id;
   final int? outletId;
@@ -28,7 +26,6 @@ class RekapShift {
   final DateTime? endedAt;
   final String? status;
   
-  // Objek pendukung untuk menampung info jadwal dari tabel shifts
   ShiftMaster? masterInfo;
 
   RekapShift({
@@ -43,16 +40,13 @@ class RekapShift {
     this.masterInfo,
   });
 
-  // LOGIC: Cek apakah user telat saat mulai shift (startedAt)
   bool get isLate {
     if (startedAt == null || masterInfo == null) return false;
 
-    // Memecah jam jadwal (Contoh: "08:30:00" -> hour: 8, min: 30)
     List<String> timeParts = masterInfo!.startTime.split(':');
     int scheduledHour = int.parse(timeParts[0]);
     int scheduledMinute = int.parse(timeParts[1]);
 
-    // Bandingkan jam login aktual dengan jadwal
     if (startedAt!.hour > scheduledHour) {
       return true;
     } else if (startedAt!.hour == scheduledHour && startedAt!.minute > scheduledMinute) {

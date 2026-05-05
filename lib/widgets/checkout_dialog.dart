@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:midtrans_sdk/midtrans_sdk.dart'; 
-import 'package:qr_flutter/qr_flutter.dart'; 
+import 'package:webview_flutter/webview_flutter.dart'; // ✅ Import Webview Flutter
 
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
@@ -52,41 +51,19 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
   List<dynamic> _availableTaxes = [];
 
-  MidtransSDK? _midtrans;
-
-  // --- VARIABEL UNTUK UI CARD & QRIS (YANG SEBELUMNYA HILANG) ---
-  String? _qrisStringFromApi;
-  String _selectedCardBrand = 'BCA'; 
-  final List<String> _cardBrands = ['BCA', 'Mandiri', 'BNI', 'BRI', 'Visa/Master'];
-  final TextEditingController _approvalCodeController = TextEditingController();
+  // --- CONTROLLER UNTUK MENAMPILKAN MIDTRANS DI DALAM UI ---
+  WebViewController? _webViewController;
 
   @override
   void initState() {
     super.initState();
     _loadDiscounts();
     _loadTaxes(); 
-    _initMidtrans();
-  }
-
-  void _initMidtrans() async {
-    _midtrans = await MidtransSDK.init(
-      config: MidtransConfig(
-        clientKey: "SB-Mid-client-xxxxxxxxx", // TODO: Ganti dengan Client Key Midtrans-mu!
-        merchantBaseUrl: "https://api.etres.my.id/api/v1/",
-        colorTheme: ColorTheme(
-          colorPrimary: AppStyle.primaryBlue,
-          colorPrimaryDark: AppStyle.primaryBlue,
-          colorSecondary: Colors.orange,
-        ),
-      ),
-    );
   }
 
   @override
   void dispose() {
-    _midtrans?.removeTransactionFinishedCallback();
     _manualTenderController.dispose();
-    _approvalCodeController.dispose(); 
     super.dispose();
   }
 
@@ -449,88 +426,23 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                           const Spacer(),
                           if (change >= 0) _buildChangeDisplay(change.toDouble()), 
                         ] 
-                        else if (_paymentMethod == 'Card') ...[
-                          const SizedBox(height: 10),
-                          const SizedBox(height: 20),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Wrap(
-                              spacing: 15, 
-                              runSpacing: 15,
-                              alignment: WrapAlignment.center,
-                              children: _cardBrands.map((brand) => _cardBrandBtn(brand)).toList(),
-                            ),
-                          ),
-                          const SizedBox(height: 35),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: TextField(
-                              controller: _approvalCodeController,
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 2),
-                              textAlign: TextAlign.center,
-                              decoration: InputDecoration(
-                                labelText: "Kode Approval EDC (Opsional)",
-                                labelStyle: const TextStyle(letterSpacing: 0, fontSize: 14, color: Colors.black54),
-                                floatingLabelAlignment: FloatingLabelAlignment.center,
-                                filled: true,
-                                fillColor: const Color(0xFFF8F9FA),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(15), 
-                                  borderSide: BorderSide(color: Colors.grey.shade300)
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(15), 
-                                  borderSide: const BorderSide(color: AppStyle.primaryBlue, width: 2)
-                                ),
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          const Text("Tekan tombol Buka Midtrans di sebelah kanan.", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 15),
-                        ] 
-                        else if (_paymentMethod == 'Qris') ...[
-                          const Spacer(),
-                          if (_qrisStringFromApi != null)
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(16), 
+                        // ✅ JIKA CARD ATAU QRIS, TAMPILKAN WEBVIEW MIDTRANS DI SINI
+                        else if (_paymentMethod == 'Card' || _paymentMethod == 'Qris') ...[
+                          Expanded(
+                            child: _webViewController != null 
+                              ? Container(
+                                  margin: const EdgeInsets.only(top: 10),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(20), 
-                                    border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.3), width: 2),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.05),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 5),
-                                      )
-                                    ]
+                                    borderRadius: BorderRadius.circular(15),
+                                    border: Border.all(color: AppStyle.primaryBlue.withOpacity(0.3), width: 2),
                                   ),
-                                  child: QrImageView(
-                                    data: _qrisStringFromApi!,
-                                    version: QrVersions.auto,
-                                    size: 260.0,
-                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: WebViewWidget(controller: _webViewController!),
+                                )
+                              : const Center(
+                                  child: CircularProgressIndicator(color: AppStyle.primaryBlue),
                                 ),
-                                const SizedBox(height: 25),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(30),
-                                  ),
-                                  child: const Text(
-                                    "Silakan Scan QRIS", 
-                                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)
-                                  ),
-                                ),
-                              ],
-                            ),
-                          const Spacer(),
-                          const Text("Tekan tombol Buka Midtrans di sebelah kanan.", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+                          )
                         ]
                       ],
                     ),
@@ -606,25 +518,24 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                               ),
                               const SizedBox(height: 20),
 
-                              // --- TOMBOL PROSES (BISA UNTUK SEMUA METODE) ---
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppStyle.primaryBlue, 
-                                  minimumSize: const Size(double.infinity, 60), 
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+                              // ✅ TOMBOL PROSES SEKARANG HANYA MUNCUL JIKA METODE PEMBAYARAN = CASH
+                              if (_paymentMethod == 'Cash')
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppStyle.primaryBlue, 
+                                    minimumSize: const Size(double.infinity, 60), 
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+                                  ),
+                                  onPressed: _isLoading 
+                                      ? null 
+                                      : (uangMasukInt < tagihanInt ? null : _processPayment), 
+                                  child: _isLoading
+                                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                      : const Text(
+                                          "PROSES PEMBAYARAN", 
+                                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
+                                        ),
                                 ),
-                                onPressed: _isLoading 
-                                    ? null 
-                                    : (_paymentMethod == 'Cash' 
-                                        ? (uangMasukInt < tagihanInt ? null : _processPayment) 
-                                        : _processPayment), 
-                                child: _isLoading
-                                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                    : Text(
-                                        _paymentMethod == 'Cash' ? "PROSES PEMBAYARAN" : "BUKA MIDTRANS", 
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
-                                      ),
-                              ),
                             ],
                           ),
                         ),
@@ -652,7 +563,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       border: Border.all(color: Colors.red.shade200, width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
+                          color: Colors.black.withOpacity(0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
@@ -685,7 +596,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  // --- LOGIKA PEMBAYARAN MIDTRANS ---
+  // --- LOGIKA PEMBAYARAN WEBVIEW MIDTRANS ---
   Future<void> _processPayment() async {
     setState(() {
       _isLoading = true;
@@ -749,7 +660,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         final cartSnapshot = Map<int, OrderItem>.from(widget.cart);
 
         if (_paymentMethod == 'Cash') {
-          // --- ALUR CASH ---
+          // --- ALUR CASH (Tetap Normal) ---
           Navigator.of(context).pop({'status': 'success'});
           Navigator.of(context).push(MaterialPageRoute(builder: (c) => SuccessPaymentPage(
               orderId: realOrderId,
@@ -767,72 +678,59 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               taxAmount: taxAmountFinal,
           )));
         } else {
-          // --- ALUR MIDTRANS (Card / Qris) ---
+          // --- ALUR MIDTRANS VIA WEBVIEW ---
           String? redirectUrl = res['data']?['redirect_url'];
-          String? clientKeyFromApi = res['data']?['client_key'];
 
           if (redirectUrl != null && redirectUrl.isNotEmpty) {
-            String snapToken = redirectUrl.split('/').last;
-
-            _midtrans = await MidtransSDK.init(
-              config: MidtransConfig(
-                clientKey: clientKeyFromApi ?? "", 
-                merchantBaseUrl: "https://api.etres.my.id/api/v1/",
-                colorTheme: ColorTheme(
-                  colorPrimary: AppStyle.primaryBlue,
-                  colorPrimaryDark: AppStyle.primaryBlue,
-                  colorSecondary: Colors.orange,
-                ),
-              ),
-            );
-
-            if (_midtrans == null) {
-              throw Exception("SDK Midtrans gagal dimuat. Pastikan API mengirimkan client_key yang valid.");
-            }
-
-            _midtrans?.setTransactionFinishedCallback((result) {
-              if (!mounted) return;
-              
-              try {
-                String status = result.status; 
-                
-                if (status == 'cancel' || status == 'canceled') {
-                  setState(() => _errorMessage = "Pembayaran dibatalkan oleh pelanggan.");
-                } 
-                else if (status == 'settlement' || status == 'capture' || status == 'success') {
-                  Navigator.pop(context, {'status': 'success'});
-                  Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
-                    orderId: realOrderId,
-                    paymentMethod: _paymentMethod,
-                    grandTotal: grandTotal,
-                    amountPaid: grandTotal, 
-                    change: 0,
-                    cart: cartSnapshot,
-                    tableNumber: widget.tableNumber,
-                    customerName: widget.customerName, 
-                    cashierName: widget.cashierName,
-                    outletName: "ARANUS POS",
-                    formatCurrency: widget.formatCurrency,
-                    discountAmount: discountAmount,
-                    taxAmount: taxAmountFinal,
-                  )));
-                } 
-                else if (status == 'pending') {
-                  Navigator.pop(context, {'status': 'pending'});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Pesanan berhasil dibuat. Menunggu pembayaran..."), backgroundColor: Colors.blue)
-                  );
-                } else {
-                  setState(() => _errorMessage = "Status pembayaran: $status");
-                }
-              } catch (e) {
-                setState(() => _errorMessage = "Gateway Midtrans ditutup tanpa menyelesaikan pembayaran.");
-              }
+            setState(() {
+              _webViewController = WebViewController()
+                ..setJavaScriptMode(JavaScriptMode.unrestricted)
+                ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                ..setBackgroundColor(const Color(0x00000000))
+                ..setNavigationDelegate(
+                  NavigationDelegate(
+                    onPageFinished: (String url) {
+                      _webViewController?.runJavaScript("document.body.style.zoom = '0.75';");
+                    },
+                    onNavigationRequest: (NavigationRequest request) {
+                      // Mengizinkan Deep-Link aplikasi Gojek/ShopeePay jika diperlukan
+                      if (request.url.contains('gojek://') || request.url.contains('shopeepay://')) {
+                         return NavigationDecision.navigate;
+                      }
+                      
+                      // 👇 UBAH BAGIAN INI 👇
+                      // Menangkap URL dari Midtrans berdasarkan domain default atau status transaksi yang sukses
+                      if (request.url.contains('example.com') || 
+                          request.url.contains('status_code=200') || 
+                          request.url.contains('transaction_status=capture') || 
+                          request.url.contains('transaction_status=settlement')) {
+                         
+                         Navigator.pop(context, {'status': 'success'});
+                         Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
+                           orderId: realOrderId,
+                           paymentMethod: _paymentMethod,
+                           grandTotal: grandTotal,
+                           amountPaid: grandTotal, 
+                           change: 0,
+                           cart: cartSnapshot,
+                           tableNumber: widget.tableNumber,
+                           customerName: widget.customerName, 
+                           cashierName: widget.cashierName,
+                           outletName: "ARANUS POS",
+                           formatCurrency: widget.formatCurrency,
+                           discountAmount: discountAmount,
+                           taxAmount: taxAmountFinal,
+                         )));
+                         return NavigationDecision.prevent; // Hentikan WebView membuka example.com
+                      }
+                      // 👆 ================= 👆
+                      
+                      return NavigationDecision.navigate;
+                    },
+                  ),
+                )
+                ..loadRequest(Uri.parse(redirectUrl));
             });
-
-            // Munculkan UI Midtrans
-            _midtrans?.startPaymentUiFlow(token: snapToken);
-
           } else {
             throw Exception("Gagal mendapatkan link pembayaran Midtrans dari server.");
           }
@@ -857,17 +755,18 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     bool s = _paymentMethod == l; 
     return Expanded(
       child: GestureDetector(
-        onTap: (isEnabled && !_isLoading) ? () {
+        // ✅ JIKA KLIK CARD ATAU QRIS, OTOMATIS JALANKAN _processPayment!
+        onTap: (isEnabled && !_isLoading) ? () async {
           setState(() {
             if (_errorMessage != null) _errorMessage = null;
             _paymentMethod = l;
-            if (l == 'Qris') {
-              // Menampilkan QR Dummy saat diklik
-              _qrisStringFromApi = "00020101021138540016ID.CO.TELKOMSEL.WWW01189360091100142DUMMYQRCODE123456789";
-            } else {
-              _qrisStringFromApi = null;
-            }
+            _webViewController = null; // Reset Webview saat pindah menu
           });
+
+          // Panggil otomatis logika pembayaran jika memilih Midtrans
+          if (l != 'Cash') {
+            await _processPayment();
+          }
         } : null, 
         child: Opacity(
           opacity: isEnabled ? 1.0 : 0.4,
@@ -887,61 +786,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       )
     ); 
   }
-
-  Widget _cardBrandBtn(String brand) {
-    bool selected = _selectedCardBrand == brand;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedCardBrand = brand),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 140, 
-        height: 85,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: selected ? AppStyle.primaryBlue : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? AppStyle.primaryBlue : Colors.grey.shade300, 
-            width: 1.5
-          ),
-          boxShadow: selected ? [
-            BoxShadow(
-              color: AppStyle.primaryBlue.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            )
-          ] : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(
-                  Icons.credit_card_rounded, 
-                  color: selected ? Colors.white70 : Colors.grey, 
-                  size: 20
-                ),
-                if (selected) 
-                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
-              ],
-            ),
-            Text(
-              brand, 
-              style: TextStyle(
-                color: selected ? Colors.white : Colors.black87, 
-                fontWeight: FontWeight.w900, 
-                fontSize: 14,
-                fontFamily: 'Poppins'
-              )
-            ),
-          ],
-        ),
-      ),
-    );
-  }
   
   Widget _quickBtn(double v) => GestureDetector(
     onTap: () => setState(() { 
@@ -958,12 +802,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   
   Widget _buildChangeDisplay(double c) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), 
-    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withValues(alpha: 0.1))), 
+    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withOpacity(0.1))), 
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)), Text(widget.formatCurrency(c), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 24))])
   );
 }
 
-// Helpers diletakkan di luar class agar scope-nya benar
+// Helpers
 class _TicketPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -975,7 +819,7 @@ class _TicketPainter extends CustomPainter {
     path.addOval(Rect.fromCircle(center: Offset(0, size.height / 2), radius: 10));
     path.addOval(Rect.fromCircle(center: Offset(size.width, size.height / 2), radius: 10));
     path.fillType = PathFillType.evenOdd;
-    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.1), 4, false); 
+    canvas.drawShadow(path, Colors.black.withOpacity(0.1), 4, false); 
     canvas.drawPath(path, paint);
   }
   @override

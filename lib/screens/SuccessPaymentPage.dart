@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
 import '../style.dart'; 
+import '../services/printer_service.dart';
+import '../models/transaction_model.dart';
 
 class SuccessPaymentPage extends StatelessWidget {
   final String orderId;
   final String paymentMethod;
   final double grandTotal;
+  final double taxAmount;      
+  final double discountAmount; 
   final double amountPaid;
   final double change;
   final Map<int, OrderItem> cart;
@@ -20,6 +24,8 @@ class SuccessPaymentPage extends StatelessWidget {
     required this.orderId,
     required this.paymentMethod,
     required this.grandTotal,
+    required this.discountAmount,
+    required this.taxAmount,
     required this.amountPaid,
     required this.change,
     required this.cart,
@@ -171,6 +177,39 @@ class SuccessPaymentPage extends StatelessWidget {
         onPressed: isBack 
             ? () => Navigator.of(context).popUntil((route) => route.isFirst) 
             : () {
+                final printerService = TerminalPrinterService();
+
+                List<CartItem> itemsForPrinting = cart.values.map((item) {
+                  return CartItem(
+                    itemName: item.itemName,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                  );
+                }).toList();
+
+                final transaction = TransactionModel(
+                orderId: orderId,
+                cashierName: cashierName,
+                customerName: customerName,
+                tableNumber: tableNumber,
+                items: cart.values.map((item) => CartItem(
+                itemName: item.itemName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                )).toList(),
+                taxAmount: taxAmount,           // SEKARANG TERBACA
+                discountAmount: discountAmount, // SEKARANG TERBACA
+                totalDariHalaman: grandTotal,
+                );
+
+                printerService.printToTerminal(transaction);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Struk berhasil dikirim ke Terminal"),
+                    backgroundColor: Colors.blue,
+                  ),
+                );
               },
         icon: Icon(icon, size: 22),
         label: Text(

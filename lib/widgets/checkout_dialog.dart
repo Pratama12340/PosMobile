@@ -14,6 +14,7 @@ class CheckoutDialog extends StatefulWidget {
   final bool hasDiscountedItem; 
   final double totalAmount;
   final String orderId;
+  final int? tableId; // Menggunakan ID Meja
   final String tableNumber;
   final String customerName; 
   final String cashierName;
@@ -25,6 +26,7 @@ class CheckoutDialog extends StatefulWidget {
     required this.hasDiscountedItem, 
     required this.totalAmount,
     required this.orderId,
+    this.tableId,
     required this.tableNumber,
     required this.customerName, 
     required this.cashierName,
@@ -218,7 +220,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               ),
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(8, (index) => Container(width: 1, height: 4, margin: const EdgeInsets.symmetric(vertical: 2), color: Colors.grey.withOpacity(0.3))),
+                children: List.generate(8, (index) => Container(width: 1, height: 4, margin: const EdgeInsets.symmetric(vertical: 2), color: Colors.grey.withValues(alpha: 0.3))),
               ),
               Expanded(
                 child: Padding(
@@ -270,10 +272,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: isHighlighted ? Colors.orange.withOpacity(0.08) : Colors.grey.withOpacity(0.05),
+          color: isHighlighted ? Colors.orange.withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isHighlighted ? Colors.orange.withOpacity(0.3) : Colors.black12
+            color: isHighlighted ? Colors.orange.withValues(alpha: 0.3) : Colors.black12
           ),
         ),
         child: Row(
@@ -342,7 +344,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           String label = tax['name'] ?? "Pajak";
           if (tax['type'] == 'percentage') label += " (${rate.toString().replaceAll('.0', '')}%)";
           return Padding(padding: const EdgeInsets.only(bottom: 6), child: _rowInf(label, amt));
-        }).toList(),
+        }),
         const Divider(height: 24, thickness: 1),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -475,10 +477,10 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(20), 
-                                    border: Border.all(color: AppStyle.primaryBlue.withOpacity(0.3), width: 2),
+                                    border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.3), width: 2),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
+                                        color: Colors.black.withValues(alpha: 0.05),
                                         blurRadius: 10,
                                         offset: const Offset(0, 5),
                                       )
@@ -494,7 +496,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                                   decoration: BoxDecoration(
-                                    color: Colors.orange.withOpacity(0.1),
+                                    color: Colors.orange.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(30),
                                   ),
                                   child: const Text(
@@ -611,7 +613,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       border: Border.all(color: Colors.red.shade200, width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
@@ -652,8 +654,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     try {
       final savedOutletId = await StorageService.getOutletId();
       
-      if (!mounted) return;
-      
       if (savedOutletId == null || savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");
 
       double subTotal = widget.totalAmount;
@@ -692,7 +692,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         'outlet_id': savedOutletId,
         'invoice_number': "INV-${DateTime.now().millisecondsSinceEpoch}",
         'customer_name': widget.customerName, 
-        'table_id': widget.tableNumber.isEmpty ? null : widget.tableNumber,
+        'table_id': widget.tableId, // ID asli meja untuk API
         'subtotal_price': subTotal.toInt(),
         'total_price': tagihanInt,
         'discount_amount': discountAmount.toInt(),
@@ -709,42 +709,28 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
       final res = await ApiService.submitOrder(payload);
 
-      if (!context.mounted) return;
+      if (!mounted) return;
 
       if (res['success']) {
         String realOrderId = res['data']?['order']?['invoice_number'] ?? widget.orderId;
+        final cartSnapshot = Map<int, OrderItem>.from(widget.cart);
 
-        if (_paymentMethod == 'Cash') {
-          Navigator.pop(context, {'status': 'success'});
-          Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
+        Navigator.of(context).pop({'status': 'success'});
+        Navigator.of(context).push(MaterialPageRoute(builder: (c) => SuccessPaymentPage(
             orderId: realOrderId,
             paymentMethod: _paymentMethod,
             grandTotal: grandTotal,
-            amountPaid: _amountTendered,
-            change: change.toDouble(),
-            cart: widget.cart,
+            taxAmount: taxAmountFinal,
+            discountAmount: discountAmount,
+            amountPaid: _paymentMethod == 'Cash' ? _amountTendered : grandTotal,
+            change: _paymentMethod == 'Cash' ? change.toDouble() : 0,
+            cart: cartSnapshot,
             tableNumber: widget.tableNumber,
             customerName: widget.customerName, 
             cashierName: widget.cashierName,
             outletName: "ARANUS POS",
             formatCurrency: widget.formatCurrency,
-          )));
-        } else {
-          Navigator.pop(context, {'status': 'success'});
-          Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
-            orderId: realOrderId,
-            paymentMethod: _paymentMethod,
-            grandTotal: grandTotal,
-            amountPaid: grandTotal, 
-            change: 0,
-            cart: widget.cart,
-            tableNumber: widget.tableNumber,
-            customerName: widget.customerName, 
-            cashierName: widget.cashierName,
-            outletName: "ARANUS POS",
-            formatCurrency: widget.formatCurrency,
-          )));
-        }
+        )));
       } else {
         throw Exception(res['message'] ?? "Gagal memproses pesanan");
       }
@@ -767,13 +753,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         onTap: isEnabled ? () => setState(() {
           if (_errorMessage != null) _errorMessage = null;
           _paymentMethod = l;
-          
           if (l == 'Qris') {
             _qrisStringFromApi = "00020101021138540016ID.CO.TELKOMSEL.WWW01189360091100142DUMMYQRCODE123456789";
           } else {
             _qrisStringFromApi = null;
           }
-          
         }) : null, 
         child: Opacity(
           opacity: isEnabled ? 1.0 : 0.4,
@@ -787,14 +771,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     ); 
   }
 
-  // 🔥 WIDGET DIPERBARUI: Desain menyerupai Kartu
   Widget _cardBrandBtn(String brand) {
     bool selected = _selectedCardBrand == brand;
     return GestureDetector(
       onTap: () => setState(() => _selectedCardBrand = brand),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        width: 140, // Ukuran seperti kartu mini
+        width: 140, 
         height: 85,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -806,7 +789,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           ),
           boxShadow: selected ? [
             BoxShadow(
-              color: AppStyle.primaryBlue.withOpacity(0.3),
+              color: AppStyle.primaryBlue.withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 4),
             )
@@ -858,11 +841,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   
   Widget _buildChangeDisplay(double c) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), 
-    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withOpacity(0.1))), 
+    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withValues(alpha: 0.1))), 
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)), Text(widget.formatCurrency(c), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 24))])
   );
 }
 
+// Helpers diletakkan di luar class agar scope-nya benar
 class _TicketPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -874,7 +858,7 @@ class _TicketPainter extends CustomPainter {
     path.addOval(Rect.fromCircle(center: Offset(0, size.height / 2), radius: 10));
     path.addOval(Rect.fromCircle(center: Offset(size.width, size.height / 2), radius: 10));
     path.fillType = PathFillType.evenOdd;
-    canvas.drawShadow(path, Colors.black.withOpacity(0.1), 4, false);
+    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.1), 4, false); 
     canvas.drawPath(path, paint);
   }
   @override

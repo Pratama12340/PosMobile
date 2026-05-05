@@ -4,7 +4,7 @@ import '../models/order_model.dart';
 import '../style.dart'; 
 import '../services/storage_service.dart';
 import 'checkout_dialog.dart';
-import 'tabel_panel.dart';
+import 'tabel_panel.dart'; // Pastikan nama import ini sesuai dengan file kamu
 
 class CartPanel extends StatefulWidget {
   final Map<int, OrderItem> cart;
@@ -13,6 +13,7 @@ class CartPanel extends StatefulWidget {
   
   final String? initialCustomerName;
   final String? initialTableNumber;
+  final int? initialTableId; // Opsional jika kamu butuh inisialisasi dari draft
   
   final Function(int) onIncrease; 
   final Function(int) onDecrease;
@@ -27,6 +28,7 @@ class CartPanel extends StatefulWidget {
     required this.formatCurrency,
     this.initialCustomerName,
     this.initialTableNumber,
+    this.initialTableId,
     required this.onIncrease,
     required this.onDecrease,
     required this.onDelete,
@@ -48,12 +50,16 @@ class _CartPanelState extends State<CartPanel> {
   String _cashierName = "Loading...";
 
   bool _showTableSelection = false;
+  
+  // 🔥 TAMBAHAN: Variabel untuk menyimpan ID Meja
+  int? _selectedTableId;
 
   @override
   void initState() {
     super.initState();
     _customerController = TextEditingController(text: widget.initialCustomerName);
     _tableController = TextEditingController(text: widget.initialTableNumber);
+    _selectedTableId = widget.initialTableId; // Set nilai awal jika ada
     
     _generateOrderData();
     _loadCashierData();
@@ -69,6 +75,9 @@ class _CartPanelState extends State<CartPanel> {
     }
     if (widget.initialTableNumber != oldWidget.initialTableNumber) {
       _tableController.text = widget.initialTableNumber ?? "";
+    }
+    if (widget.initialTableId != oldWidget.initialTableId) {
+      _selectedTableId = widget.initialTableId;
     }
 
     _syncNoteControllers();
@@ -185,13 +194,15 @@ class _CartPanelState extends State<CartPanel> {
                 _buildFooter(total),
               ],
             ),
+            
             if (_showTableSelection)
               Positioned.fill(
                 child: TablePanel(
-                  currentTable: _tableController.text,
-                  onTableSelected: (selectedTable) {
+                  currentTableId: _selectedTableId, // Sudah sinkron dengan variabel state
+                  onTableSelected: (tableData) {
                     setState(() {
-                      _tableController.text = selectedTable;
+                      _selectedTableId = tableData['id'];         // Menyimpan ID Meja
+                      _tableController.text = tableData['name'];  // Menyimpan Nama Meja
                       _showTableSelection = false; 
                     });
                   },
@@ -348,7 +359,8 @@ class _CartPanelState extends State<CartPanel> {
   }
 
   Widget _buildFooter(double total) {
-    bool isTableEmpty = _tableController.text.trim().isEmpty;
+    // Validasi tombol checkout, tidak bisa diklik jika keranjang kosong atau meja belum dipilih
+    bool isTableEmpty = _selectedTableId == null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
@@ -381,7 +393,8 @@ class _CartPanelState extends State<CartPanel> {
                     hasDiscountedItem: widget.hasDiscountedItem, 
                     totalAmount: total,
                     orderId: _orderId,
-                    tableNumber: _tableController.text,
+                    tableNumber: _tableController.text, // Teks untuk UI struk
+                    tableId: _selectedTableId,          // 🔥 ID dikirim ke CheckoutDialog
                     customerName: _customerController.text, 
                     cashierName: _cashierName,
                     formatCurrency: widget.formatCurrency,

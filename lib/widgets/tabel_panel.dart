@@ -3,13 +3,15 @@ import '../style.dart';
 import '../services/api_service.dart';
 
 class TablePanel extends StatefulWidget {
-  final String currentTable;
-  final Function(String) onTableSelected;
+  // Ubah dari String ke int? untuk melacak ID meja yang sedang dipilih
+  final int? currentTableId; 
+  // Ubah callback agar mengirimkan Map berisi data lengkap meja
+  final Function(Map<String, dynamic>) onTableSelected;
   final VoidCallback onClose;
 
   const TablePanel({
     super.key,
-    required this.currentTable,
+    required this.currentTableId,
     required this.onTableSelected,
     required this.onClose,
   });
@@ -32,6 +34,7 @@ class _TablePanelState extends State<TablePanel> {
     try {
       final tables = await ApiService.getTables();
 
+      // Sorting tetap dipertahankan berdasarkan angka pada nama meja
       tables.sort((a, b) {
         String nameA = (a['name'] ?? '').toString();
         String nameB = (b['name'] ?? '').toString();
@@ -62,6 +65,7 @@ class _TablePanelState extends State<TablePanel> {
     List<dynamic> outdoorTables = [];
     List<dynamic> otherTables = [];
 
+    // Pengelompokan berdasarkan nama area
     for (var table in _availableTables) {
       String name = (table['name'] ?? '').toString().toLowerCase();
       if (name.contains('indor') || name.contains('indoor')) {
@@ -93,13 +97,11 @@ class _TablePanelState extends State<TablePanel> {
                         _buildTableGrid(indoorTables),
                         const SizedBox(height: 25),
                       ],
-
                       if (outdoorTables.isNotEmpty) ...[
                         _buildSectionTitle("Outdoor Area"),
                         _buildTableGrid(outdoorTables),
                         const SizedBox(height: 25),
                       ],
-
                       if (otherTables.isNotEmpty) ...[
                         _buildSectionTitle("Daftar Meja"),
                         _buildTableGrid(otherTables),
@@ -172,15 +174,22 @@ class _TablePanelState extends State<TablePanel> {
   }
 
   Widget _buildDynamicCard(dynamic table, double width) {
+    // Ambil ID, Nama, dan Kapasitas sesuai foto image_101dc6.png
+    int id = table['id'] ?? 0;
     String name = table['name']?.toString() ?? '-';
-    String cap =
-        table['capacity']?.toString() ?? '0'; 
+    String cap = table['capacity']?.toString() ?? '0';
 
     return _buildTableCard(
       title: name,
       capacity: cap,
-      isSelected: widget.currentTable == name,
-      onTap: () => widget.onTableSelected(name),
+      // Pengecekan isSelected sekarang menggunakan ID (lebih akurat daripada nama)
+      isSelected: widget.currentTableId == id,
+      // Saat ditekan, kirim Map berisi minimal id, name, dan capacity
+      onTap: () => widget.onTableSelected({
+        'id': id,
+        'name': name,
+        'capacity': int.tryParse(cap) ?? 0,
+      }),
       width: width,
     );
   }
@@ -209,7 +218,6 @@ class _TablePanelState extends State<TablePanel> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-
             Text(
               title,
               maxLines: 1,
@@ -218,7 +226,7 @@ class _TablePanelState extends State<TablePanel> {
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.black87,
                 fontWeight: FontWeight.w900,
-                fontSize: 16, 
+                fontSize: 16,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -229,8 +237,7 @@ class _TablePanelState extends State<TablePanel> {
               children: [
                 Icon(
                   Icons.person,
-                  size:
-                      15, 
+                  size: 15,
                   color: isSelected ? Colors.white70 : Colors.black45,
                 ),
                 const SizedBox(width: 4),
@@ -238,10 +245,9 @@ class _TablePanelState extends State<TablePanel> {
                   capacity,
                   style: TextStyle(
                     color: isSelected ? Colors.white70 : Colors.black54,
-                    fontSize: 13, 
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    height:
-                        1.1, 
+                    height: 1.1,
                   ),
                 ),
               ],

@@ -96,18 +96,19 @@ class HomeScreenState extends State<HomeScreen> {
       ]);
 
       if (mounted) {
-        List<dynamic> categoriesData = results[0] as List;
-        List<Product> productsData = results[1] as List<Product>;
-        List<Discount> discountsData = results[2] as List<Discount>;
-        List<dynamic> reportsData = results[3] as List<dynamic>;
-        List<Order> historyData = results[4] as List<Order>;
+        final List categoriesData = results[0];
+        final List<Product> productsData = results[1] as List<Product>;
+        final List<Discount> discountsData = results[2] as List<Discount>;
+        final List reportsData = results[3];
+        final List<Order> historyData = results[4] as List<Order>;
 
         Map<int, int> productSales = {};
 
-        // Scanner JSON agresif untuk Laporan
         void findSales(dynamic data) {
           if (data is List) {
-            for (var item in data) findSales(item);
+            for (var item in data) {
+              findSales(item);
+            }
           } else if (data is Map) {
             if (data.containsKey('product_id')) {
               int pId = int.tryParse(data['product_id']?.toString() ?? '0') ?? 0;
@@ -117,14 +118,15 @@ class HomeScreenState extends State<HomeScreen> {
               }
             }
             for (var value in data.values) {
-              if (value is List || value is Map) findSales(value);
+              if (value is List || value is Map) {
+                findSales(value);
+              }
             }
           }
         }
 
         findSales(reportsData);
 
-        // Backup menggunakan History jika Reports kosong
         if (productSales.isEmpty) {
           for (var order in historyData) {
             if (order.status == 'paid') {
@@ -217,7 +219,6 @@ class HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. CEK OTOMATIS: Adakah item di keranjang yang sedang promo/diskon?
     bool hasDiscountedItem = _cart.values.any((cartItem) {
       int index = _allProducts.indexWhere((p) => p.id == cartItem.productId);
       return index != -1 && _allProducts[index].discount != null;
@@ -399,7 +400,7 @@ class HomeScreenState extends State<HomeScreen> {
         width: 45, height: 45,
         decoration: BoxDecoration(
           color: Colors.white, borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Stack(
           alignment: Alignment.center,
@@ -489,13 +490,10 @@ class HomeScreenState extends State<HomeScreen> {
             Positioned.fill(
               child: imageUrl.isEmpty ? imagePlaceholder : Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (c, e, s) => imagePlaceholder),
             ),
-            Positioned.fill(child: Container(color: Colors.black.withOpacity(0.3))),
+            Positioned.fill(child: Container(color: Colors.black.withValues(alpha: 0.3))),
             
-            // =======================================================
-            // UI BADGE BARU: Diperkecil & Proporsional
-            // =======================================================
             Positioned(
-              top: 10, // Sejajar dengan posisi tag Stok
+              top: 10,
               left: 0,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -504,13 +502,13 @@ class HomeScreenState extends State<HomeScreen> {
                     ClipPath(
                       clipper: TagClipper(),
                       child: Container(
-                        color: const Color(0xFFD32F2F), // Merah
-                        padding: const EdgeInsets.only(left: 8, right: 22, top: 4, bottom: 4), // Padding dipadatkan
+                        color: const Color(0xFFD32F2F),
+                        padding: const EdgeInsets.only(left: 8, right: 22, top: 4, bottom: 4),
                         child: const Text(
                           "BESTSELLER",
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 10, // Font dikecilkan agar muat di layar sempit
+                            fontSize: 10,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 0.5,
                           ),
@@ -519,19 +517,19 @@ class HomeScreenState extends State<HomeScreen> {
                     ),
                   
                   if (isBestseller && isDiskon)
-                    const SizedBox(height: 4), // Jarak dirapatkan
+                    const SizedBox(height: 4),
                     
                   if (isDiskon)
                     ClipPath(
                       clipper: TagClipper(),
                       child: Container(
-                        color: const Color(0xFF24707A), // Tosca
-                        padding: const EdgeInsets.only(left: 8, right: 20, top: 4, bottom: 4), // Padding dipadatkan
+                        color: const Color(0xFF24707A),
+                        padding: const EdgeInsets.only(left: 8, right: 20, top: 4, bottom: 4),
                         child: const Text(
                           "DISKON",
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 9, // Font dikecilkan
+                            fontSize: 9,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 0.5,
                           ),
@@ -541,12 +539,11 @@ class HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            // =======================================================
 
             Positioned(
               top: 10, right: 10,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), // Padding dirampingkan sedikit
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 decoration: BoxDecoration(color: isOutOfStock ? Colors.red : AppStyle.primaryBlue, borderRadius: BorderRadius.circular(8)),
                 child: Text(isOutOfStock ? "HABIS" : "STOK: ${p.stock}", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
               ),
@@ -611,38 +608,22 @@ class HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// =========================================================
-// CUSTOM CLIPPER: UJUNG PANAH DENGAN SUDUT HALUS (ROUNDED)
-// =========================================================
 class TagClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
-    final double pointWidth = 12.0; // Seberapa maju ujung panahnya
-    final double radius = 4.0;      // Seberapa tumpul/lengkung ujungnya
-    
-    path.moveTo(0, 0); // Mulai dari pojok kiri atas
-    
-    // Garis lurus atas menuju titik sebelum ujung panah
+    final double pointWidth = 12.0;
+    final double radius = 4.0;
+    path.moveTo(0, 0);
     path.lineTo(size.width - pointWidth, 0); 
-    
-    // Garis miring atas menuju ujung panah (berhenti sebelum benar-benar di pucuk)
     path.lineTo(size.width - (radius / 2), (size.height / 2) - radius);
-    
-    // Kurva lengkung membulat di ujung panah (menghilangkan sudut kaku/tajam)
     path.quadraticBezierTo(
-      size.width, size.height / 2, // Titik kendali lengkungan
-      size.width - (radius / 2), (size.height / 2) + radius // Titik akhir lengkungan
+      size.width, size.height / 2,
+      size.width - (radius / 2), (size.height / 2) + radius
     );
-    
-    // Garis miring bawah menuju titik akhir panah
     path.lineTo(size.width - pointWidth, size.height);
-    
-    // Garis lurus bawah kembali ke kiri
     path.lineTo(0, size.height); 
-    
-    path.close(); // Tutup bentuk
-    
+    path.close();
     return path;
   }
 

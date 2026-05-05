@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/discount_model.dart';
-import '../style.dart'; // Pastikan path ini benar di project kamu
+
 
 class DiskonPanel extends StatelessWidget {
   final Discount? selectedDiscount;

@@ -646,15 +646,30 @@ class ApiService {
     }
   }
 
-  // --- 16. MIDTRANS GET SNAP TOKEN ---
-  static Future<Map<String, dynamic>> getMidtransToken(String orderId) async {
+ // --- 16. MIDTRANS GET SNAP TOKEN ---
+  // 🔥 PERBAIKAN: Menambahkan parameter paymentMethod dan amount
+  static Future<Map<String, dynamic>> getMidtransToken(String orderId, String paymentMethod, int amount) async {
     print("\n[API REQUEST] --> GET MIDTRANS TOKEN");
-    print("Order ID: $orderId");
+    print("Order ID: $orderId | Method: $paymentMethod | Amount: $amount");
     try {
       final headers = await _getHeaders();
+      
+      // 🔥 PERBAIKAN: Menambahkan payload body 'payments'
+      // Catatan: Saya mengasumsikan backend Anda menerima array of payments. 
+      // Jika error berubah menjadi field tidak dikenali, ubah "payments": [...] menjadi "payments": {...} (tanpa kurung siku).
+      final requestBody = jsonEncode({
+        "payments": [
+          {
+           "method": paymentMethod,      // 👈 Diubah dari "payment_method"
+            "amount_paid": amount
+          }
+        ]
+      });
+
       final response = await http.post(
         Uri.parse('$baseUrl/orders/$orderId/payments'),
         headers: headers,
+        body: requestBody, // 👈 Masukkan payload ke request
       );
 
       print("[API RESPONSE] <-- STATUS: ${response.statusCode}");
@@ -662,8 +677,7 @@ class ApiService {
 
       final result = jsonDecode(response.body);
       
-      if (response.statusCode == 200) {
-        // Asumsi struktur response backend: { success: true, data: { snap_token: "xxx" } }
+      if (response.statusCode == 200 || response.statusCode == 201) { // 👈 Terima 201 juga untuk antisipasi created
         return {
           'success': true, 
           'data': result['data'] ?? result 

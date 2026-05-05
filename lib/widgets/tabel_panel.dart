@@ -32,7 +32,6 @@ class _TablePanelState extends State<TablePanel> {
     try {
       final tables = await ApiService.getTables();
 
-      // Mengurutkan meja dari angka terkecil ke terbesar
       tables.sort((a, b) {
         String nameA = (a['name'] ?? '').toString();
         String nameB = (b['name'] ?? '').toString();
@@ -89,21 +88,18 @@ class _TablePanelState extends State<TablePanel> {
                 : ListView(
                     padding: const EdgeInsets.all(20),
                     children: [
-                      // 1. SEKSI INDOOR
                       if (indoorTables.isNotEmpty) ...[
                         _buildSectionTitle("Indoor Area"),
                         _buildTableGrid(indoorTables),
                         const SizedBox(height: 25),
                       ],
 
-                      // 2. SEKSI OUTDOOR
                       if (outdoorTables.isNotEmpty) ...[
                         _buildSectionTitle("Outdoor Area"),
                         _buildTableGrid(outdoorTables),
                         const SizedBox(height: 25),
                       ],
 
-                      // 3. SEKSI LAINNYA
                       if (otherTables.isNotEmpty) ...[
                         _buildSectionTitle("Daftar Meja"),
                         _buildTableGrid(otherTables),
@@ -178,7 +174,7 @@ class _TablePanelState extends State<TablePanel> {
   Widget _buildDynamicCard(dynamic table, double width) {
     String name = table['name']?.toString() ?? '-';
     String cap =
-        table['capacity']?.toString() ?? '0'; // Mengambil kembali kapasitas
+        table['capacity']?.toString() ?? '0'; 
 
     return _buildTableCard(
       title: name,
@@ -189,7 +185,6 @@ class _TablePanelState extends State<TablePanel> {
     );
   }
 
-  // 🔥 WIDGET KOTAK MEJA DIPERBARUI: Proporsi Icon dan Teks Diseimbangkan
   Widget _buildTableCard({
     required String title,
     required String capacity,
@@ -214,7 +209,7 @@ class _TablePanelState extends State<TablePanel> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // NAMA MEJA
+
             Text(
               title,
               maxLines: 1,
@@ -223,12 +218,11 @@ class _TablePanelState extends State<TablePanel> {
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.black87,
                 fontWeight: FontWeight.w900,
-                fontSize: 16, // Ukuran font nomor meja dipertegas
+                fontSize: 16, 
                 fontFamily: 'Poppins',
               ),
             ),
-            const SizedBox(height: 4), // Jarak antara nama meja dan kapasitas
-            // KAPASITAS (Icon dan Angka)
+            const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -236,7 +230,7 @@ class _TablePanelState extends State<TablePanel> {
                 Icon(
                   Icons.person,
                   size:
-                      15, // 🔥 Ikon dibesarkan sedikit agar seimbang dengan font
+                      15, 
                   color: isSelected ? Colors.white70 : Colors.black45,
                 ),
                 const SizedBox(width: 4),
@@ -244,10 +238,10 @@ class _TablePanelState extends State<TablePanel> {
                   capacity,
                   style: TextStyle(
                     color: isSelected ? Colors.white70 : Colors.black54,
-                    fontSize: 13, // 🔥 Ukuran angka diseimbangkan dengan ikon
+                    fontSize: 13, 
                     fontWeight: FontWeight.bold,
                     height:
-                        1.1, // 🔥 Ini kunci agar teks dan ikon sejajar lurus secara vertikal
+                        1.1, 
                   ),
                 ),
               ],

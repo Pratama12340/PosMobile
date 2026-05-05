@@ -9,12 +9,6 @@ import '../services/api_service.dart';
 import '../screens/SuccessPaymentPage.dart';
 import '../services/storage_service.dart';
 
-// =======================================================
-// CARA MENGAKTIFKAN MIDTRANS KEMBALI NANTI:
-// 1. Hapus tanda comment (//) pada import di bawah ini
-// =======================================================
-// import 'package:midtrans_sdk/midtrans_sdk.dart';
-
 class CheckoutDialog extends StatefulWidget {
   final Map<int, OrderItem> cart;
   final bool hasDiscountedItem; 
@@ -50,8 +44,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
   String? _qrisStringFromApi;
   
-  // 🔥 STATE BARU UNTUK PILIHAN BRAND KARTU
-  String _selectedCardBrand = 'BCA'; // Default terpilih
+  String _selectedCardBrand = 'BCA'; 
   final List<String> _cardBrands = ['BCA', 'Mandiri', 'BNI', 'BRI', 'Visa/Master'];
   final TextEditingController _approvalCodeController = TextEditingController();
 
@@ -60,7 +53,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   List<Discount> _availableDiscounts = [];
 
   List<dynamic> _availableTaxes = [];
-  double _totalTaxPercentage = 0.0;
 
   @override
   void initState() {
@@ -78,37 +70,28 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
   void _loadDiscounts() async {
     final discounts = await ApiService.getDiscounts();
-    if (mounted) {
-      setState(() {
-        _availableDiscounts = discounts;
-        
-        if (widget.hasDiscountedItem) {
-          List<int> cartProductIds = widget.cart.values.map((item) => item.productId).toList();
-          for (var d in discounts) {
-            if (d.scope == 'products' && d.productIds.any((id) => cartProductIds.contains(id))) {
-              _selectedDiscount = d; 
-              break;
-            }
+    if (!mounted) return;
+    setState(() {
+      _availableDiscounts = discounts;
+      
+      if (widget.hasDiscountedItem) {
+        List<int> cartProductIds = widget.cart.values.map((item) => item.productId).toList();
+        for (var d in discounts) {
+          if (d.scope == 'products' && d.productIds.any((id) => cartProductIds.contains(id))) {
+            _selectedDiscount = d; 
+            break;
           }
         }
-      });
-    }
+      }
+    });
   }
 
   void _loadTaxes() async {
     final taxes = await ApiService.getTaxes();
-    if (mounted) {
-      setState(() {
-        _availableTaxes = taxes;
-        _totalTaxPercentage = taxes.fold(0.0, (sum, tax) {
-          if (tax['type'] == 'percentage') {
-            double val = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0.0;
-            return sum + val;
-          }
-          return sum;
-        });
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _availableTaxes = taxes;
+    });
   }
 
   double _calculateDiscountValue(double subtotal) {
@@ -443,16 +426,14 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                           const Spacer(),
                           if (change >= 0) _buildChangeDisplay(change.toDouble()), 
                         ] 
-                        // 🔥 TAMPILAN PILIHAN BRAND KARTU MENGGUNAKAN WRAP
                         else if (_paymentMethod == 'Card') ...[
-                          const Spacer(),
-                          const Text("Pilih EDC / Brand Kartu", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87)),
+                          const SizedBox(height: 10),
                           const SizedBox(height: 20),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                             child: Wrap(
-                              spacing: 12,
-                              runSpacing: 12,
+                              spacing: 15, 
+                              runSpacing: 15,
                               alignment: WrapAlignment.center,
                               children: _cardBrands.map((brand) => _cardBrandBtn(brand)).toList(),
                             ),
@@ -572,7 +553,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                                                 children: [
                                                   Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                                   Text("${item.quantity} x ${widget.formatCurrency(item.unitPrice)}", style: const TextStyle(color: Colors.black45, fontSize: 11)),
-                                                  if (item.notes != null && item.notes!.trim().isNotEmpty)
+                                                  if (item.notes.trim().isNotEmpty)
                                                     Padding(
                                                       padding: const EdgeInsets.only(top: 2),
                                                       child: Text(
@@ -670,6 +651,9 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     });
     try {
       final savedOutletId = await StorageService.getOutletId();
+      
+      if (!mounted) return;
+      
       if (savedOutletId == null || savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");
 
       double subTotal = widget.totalAmount;
@@ -690,7 +674,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           'product_id': item.productId, 
           'qty': item.quantity, 
           'price': item.unitPrice.toInt(),
-          'notes': item.notes ?? '' 
+          'notes': item.notes 
         };
       }).toList();
 
@@ -699,7 +683,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
       int? finalDiscountId = _selectedDiscount?.id;
 
-      // Sisipkan tipe kartu dan kode approval ke dalam notes backend bila metode adalah Card
       String additionalNotes = '';
       if (_paymentMethod == 'Card') {
         additionalNotes = "EDC/Brand: $_selectedCardBrand. Kode Approval: ${_approvalCodeController.text.isNotEmpty ? _approvalCodeController.text : '-'}";
@@ -716,18 +699,19 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         'tax_amount': taxAmountFinal.toInt(),
         'tax_breakdown': taxBreakdown, 
         'payment_method': _paymentMethod.toLowerCase(), 
-        'paid_amount': finalPaidAmount,     
+        'paid_amount': finalPaidAmount,      
         'change_amount': finalChangeAmount, 
         'discount_id': finalDiscountId, 
         'items': mappedItems,
         'status': 'paid',
-        // Jika backend Anda memiliki field untuk notes order, tambahkan di sini:
-        // 'order_notes': additionalNotes,
+        'order_notes': additionalNotes,
       };
 
       final res = await ApiService.submitOrder(payload);
 
-      if (res['success'] && context.mounted) {
+      if (!context.mounted) return;
+
+      if (res['success']) {
         String realOrderId = res['data']?['order']?['invoice_number'] ?? widget.orderId;
 
         if (_paymentMethod == 'Cash') {
@@ -765,7 +749,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         throw Exception(res['message'] ?? "Gagal memproses pesanan");
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         String errorText = e.toString().replaceAll('Exception: ', '');
         setState(() => _errorMessage = errorText);
       }
@@ -803,25 +787,57 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     ); 
   }
 
-  // 🔥 WIDGET BARU UNTUK CHIP BRAND KARTU
+  // 🔥 WIDGET DIPERBARUI: Desain menyerupai Kartu
   Widget _cardBrandBtn(String brand) {
     bool selected = _selectedCardBrand == brand;
     return GestureDetector(
       onTap: () => setState(() => _selectedCardBrand = brand),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 140, // Ukuran seperti kartu mini
+        height: 85,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: selected ? AppStyle.primaryBlue : Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: selected ? AppStyle.primaryBlue : Colors.grey.shade300, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? AppStyle.primaryBlue : Colors.grey.shade300, 
+            width: 1.5
+          ),
+          boxShadow: selected ? [
+            BoxShadow(
+              color: AppStyle.primaryBlue.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ] : null,
         ),
-        child: Text(
-          brand, 
-          style: TextStyle(
-            color: selected ? Colors.white : Colors.black87, 
-            fontWeight: FontWeight.bold, 
-            fontSize: 15
-          )
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(
+                  Icons.credit_card_rounded, 
+                  color: selected ? Colors.white70 : Colors.grey, 
+                  size: 20
+                ),
+                if (selected) 
+                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+              ],
+            ),
+            Text(
+              brand, 
+              style: TextStyle(
+                color: selected ? Colors.white : Colors.black87, 
+                fontWeight: FontWeight.w900, 
+                fontSize: 14,
+                fontFamily: 'Poppins'
+              )
+            ),
+          ],
         ),
       ),
     );

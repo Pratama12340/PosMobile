@@ -3,6 +3,8 @@ import '../style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
+import '../services/printer_service.dart';
+import '../models/transaction_model.dart';
 
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
@@ -243,7 +245,53 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         ),
         const SizedBox(width: 12),
         ElevatedButton.icon(
-          onPressed: () {},
+          onPressed: () async {
+            final printerService = TerminalPrinterService();
+            
+            // 1. Ambil Info Outlet Live
+            final outletInfo = await ApiService.fetchOutletInfoLive();
+
+            // 2. Map Items History ke CartItem Printer
+            final List<CartItem> itemsForPrinting = localOrder!.items.map((item) {
+              return CartItem(
+                itemName: item.itemName,
+                quantity: item.activeQty,
+                unitPrice: item.unitPrice,
+                notes: item.notes,
+              );
+            }).toList();
+
+            // 3. Bangun Tax Breakdown
+            List<Map<String, dynamic>> taxDetails = _masterTaxes.map((tax) {
+              double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+              double amt = (tax['type'] == 'percentage') ? (baseAmount * (rate / 100)) : rate;
+              return {
+                'name': tax['name'],
+                'calculated_amount': amt,
+              };
+            }).toList();
+
+            // 4. Siapkan Model Transaksi
+            final transaction = TransactionModel(
+              orderId: localOrder!.invoiceNo,
+              outletName: outletInfo['name'] ?? "Outlet",
+              outletAddress: outletInfo['address'] ?? "-",
+              cashierName: _currentUserName,
+              customerName: localOrder!.customerName,
+              tableNumber: localOrder!.tableNo,
+              items: itemsForPrinting,
+              discountAmount: localOrder!.discountAmount,
+              taxBreakdown: taxDetails,
+              totalDariHalaman: isEditMode ? currentTotalPrice : localOrder!.totalPrice,
+            );
+
+            // 5. EKSEKUSI CETAK (HANYA STRUK PELANGGAN)
+            printerService.printToTerminal(transaction); 
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Struk Pelanggan Berhasil Dicetak"), backgroundColor: Colors.blue),
+            );
+          },
           icon: const Icon(Icons.print, size: 20, color: Colors.white),
           label: const Text("Cetak", style: TextStyle(color: Colors.white, fontSize: 16)),
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4285F4), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),

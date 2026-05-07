@@ -6,9 +6,11 @@ import '../models/transaction_model.dart';
 
 class SuccessPaymentPage extends StatelessWidget {
   final String orderId;
+  final String outletName;
+  final String outletAddress;
   final String paymentMethod;
   final double grandTotal;
-  final double taxAmount;      
+  final List<dynamic> taxBreakdown;    
   final double discountAmount; 
   final double amountPaid;
   final double change;
@@ -16,23 +18,23 @@ class SuccessPaymentPage extends StatelessWidget {
   final String tableNumber;
   final String customerName; 
   final String cashierName;
-  final String outletName;
   final String Function(double) formatCurrency;
 
   const SuccessPaymentPage({
     super.key,
     required this.orderId,
+    required this.outletName,
+    required this.outletAddress,
     required this.paymentMethod,
     required this.grandTotal,
     required this.discountAmount,
-    required this.taxAmount,
+    required this.taxBreakdown,
     required this.amountPaid,
     required this.change,
     required this.cart,
     required this.tableNumber,
     required this.customerName, 
     required this.cashierName,
-    required this.outletName,
     required this.formatCurrency,
   });
 
@@ -98,7 +100,9 @@ class SuccessPaymentPage extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 40),
-                if (paymentMethod == 'Cash' || paymentMethod == 'Tunai')
+                
+               
+                if (paymentMethod.toLowerCase() == 'cash' || paymentMethod == 'Tunai')
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 30),
@@ -134,11 +138,16 @@ class SuccessPaymentPage extends StatelessWidget {
                   Column(
                     children: [
                       const Text("Total Pembayaran", style: TextStyle(color: Colors.grey, fontSize: 16)),
-                      Text(formatCurrency(grandTotal), 
-                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF4285F4))),
+                      Text(
+                        formatCurrency(grandTotal), 
+                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF4285F4)),
+                      ),
                     ],
                   ),
+                
                 const SizedBox(height: 60),
+                
+               
                 Row(
                   children: [
                     Expanded(
@@ -147,7 +156,7 @@ class SuccessPaymentPage extends StatelessWidget {
                         "Transaksi Baru",
                         const Color(0xFF4CAF50),
                         Icons.add_shopping_cart_rounded,
-                        true,
+                        true, // isBack = true
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -157,7 +166,7 @@ class SuccessPaymentPage extends StatelessWidget {
                         "Cetak Struk",
                         const Color(0xFF4285F4),
                         Icons.print_rounded,
-                        false,
+                        false, 
                       ),
                     ),
                   ],
@@ -179,34 +188,40 @@ class SuccessPaymentPage extends StatelessWidget {
             : () {
                 final printerService = TerminalPrinterService();
 
-                List<CartItem> itemsForPrinting = cart.values.map((item) {
+                
+                final List<CartItem> itemsForPrinting = cart.values.map((item) {
                   return CartItem(
                     itemName: item.itemName,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
+                    notes: item.notes,
                   );
                 }).toList();
 
                 final transaction = TransactionModel(
-                orderId: orderId,
-                cashierName: cashierName,
-                customerName: customerName,
-                tableNumber: tableNumber,
-                items: cart.values.map((item) => CartItem(
-                itemName: item.itemName,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                )).toList(),
-                taxAmount: taxAmount,           // SEKARANG TERBACA
-                discountAmount: discountAmount, // SEKARANG TERBACA
-                totalDariHalaman: grandTotal,
+                  orderId: orderId,
+                  outletName: outletName,
+                  outletAddress: outletAddress,
+                  cashierName: cashierName,
+                  customerName: customerName,
+                  tableNumber: tableNumber,
+                  items: itemsForPrinting,
+                  taxBreakdown: List<Map<String, dynamic>>.from(taxBreakdown),          
+                  discountAmount: discountAmount, 
+                  totalDariHalaman: grandTotal,
                 );
 
+                
+                
+                
                 printerService.printToTerminal(transaction);
+                
+               
+                printerService.printKitchenToTerminal(transaction);
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text("Struk berhasil dikirim ke Terminal"),
+                    content: Text("Struk Pelanggan & Dapur Berhasil Dicetak"),
                     backgroundColor: Colors.blue,
                   ),
                 );

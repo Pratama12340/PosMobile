@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../style.dart'; 
 import 'printer_screen.dart';
+import 'profil_screen.dart'; 
 
 class SettingScreen extends StatefulWidget {
   final TextEditingController searchController; 
@@ -43,6 +44,7 @@ class _SettingScreenState extends State<SettingScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 10),
               children: [
+                // Item Koneksi Printer
                 if ("koneksi printer".contains(_searchQuery))
                   _buildSettingItem(
                     context,
@@ -56,6 +58,8 @@ class _SettingScreenState extends State<SettingScreen> {
                       );
                     },
                   ),
+
+                // Item Informasi Outlet -> Membuka ProfilHistory
                 if ("informasi outlet".contains(_searchQuery))
                   _buildSettingItem(
                     context,
@@ -63,8 +67,15 @@ class _SettingScreenState extends State<SettingScreen> {
                     title: "Informasi Outlet",
                     subtitle: "Lihat detail lokasi cabang Anda",
                     onTap: () {
+                      // Navigasi ke halaman profil_history.dart
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ProfilHistory()),
+                      );
                     },
                   ),
+
+                // Item Tentang Aplikasi
                 if ("tentang aplikasi".contains(_searchQuery))
                   _buildSettingItem(
                     context,
@@ -72,6 +83,7 @@ class _SettingScreenState extends State<SettingScreen> {
                     title: "Tentang Aplikasi",
                     subtitle: "Versi 1.0.0 - Aranus POS",
                     onTap: () {
+                      // Tambahkan aksi jika diperlukan
                     },
                   ),
               ],

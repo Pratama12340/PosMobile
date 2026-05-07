@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:webview_flutter/webview_flutter.dart'; // ✅ Import Webview Flutter
-
+import 'package:webview_flutter/webview_flutter.dart'; 
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../style.dart';
@@ -384,7 +383,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           children: [
             Row(
               children: [
-                // SISI KIRI: METODE PEMBAYARAN
                 Expanded(
                   flex: 5,
                   child: Padding(
@@ -421,12 +419,22 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                             },
                           ),
                           const SizedBox(height: 25),
-                          Wrap(spacing: 12, runSpacing: 12, alignment: WrapAlignment.center,
-                              children: [20000, 50000, 100000, 150000, 200000].map((v) => _quickBtn(v.toDouble())).toList()),
+                          Wrap(
+                            spacing: 12, 
+                            runSpacing: 12, 
+                            alignment: WrapAlignment.center,
+                            children: [
+                              grandTotal, // Menambahkan nominal pas (Uang Pas)
+                              20000.0, 
+                              50000.0, 
+                              100000.0, 
+                              150000.0, 
+                              200000.0
+                            ].map((v) => _quickBtn(v)).toList(),
+                          ),
                           const Spacer(),
                           if (change >= 0) _buildChangeDisplay(change.toDouble()), 
                         ] 
-                        // ✅ JIKA CARD ATAU QRIS, TAMPILKAN WEBVIEW MIDTRANS DI SINI
                         else if (_paymentMethod == 'Card' || _paymentMethod == 'Qris') ...[
                           Expanded(
                             child: _webViewController != null 
@@ -434,7 +442,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                                   margin: const EdgeInsets.only(top: 10),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(15),
-                                    border: Border.all(color: AppStyle.primaryBlue.withOpacity(0.3), width: 2),
+                                    border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.3), width: 2),
                                   ),
                                   clipBehavior: Clip.antiAlias,
                                   child: WebViewWidget(controller: _webViewController!),
@@ -448,8 +456,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                     ),
                   ),
                 ),
-                
-                // SISI KANAN: RECEIPT SUMMARY
                 Expanded(
                   flex: 4,
                   child: Container(
@@ -518,7 +524,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                               ),
                               const SizedBox(height: 20),
 
-                              // ✅ TOMBOL PROSES SEKARANG HANYA MUNCUL JIKA METODE PEMBAYARAN = CASH
                               if (_paymentMethod == 'Cash')
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(
@@ -547,7 +552,6 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
               ],
             ),
 
-            // ERROR BANNER
             if (_errorMessage != null)
               Positioned(
                 top: 24, 
@@ -563,7 +567,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       border: Border.all(color: Colors.red.shade200, width: 1.5),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
@@ -596,16 +600,20 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  // --- LOGIKA PEMBAYARAN WEBVIEW MIDTRANS ---
   Future<void> _processPayment() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null; 
+      _errorMessage = null;
     });
+
     try {
+      // 1. Ambil data Outlet live
+      final outletData = await ApiService.fetchOutletInfoLive();
+      final String currentOutletName = outletData['name']!;
+      final String currentOutletAddress = outletData['address']!;
+
       final savedOutletId = await StorageService.getOutletId();
-      
-      if (savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");
+      if (savedOutletId == null || savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");
 
       double subTotal = widget.totalAmount;
       double discountAmount = _calculateDiscountValue(subTotal);
@@ -614,7 +622,15 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       var taxData = _calculateTaxesAndGrandTotal(baseAmount);
       double taxAmountFinal = taxData['tax_amount'];
       double grandTotal = taxData['grand_total'];
-      List<Map<String, dynamic>> taxBreakdown = taxData['tax_breakdown'];
+      
+      // Sederhanakan Tax Breakdown (Kirim info inti saja untuk mencegah 422)
+      List<Map<String, dynamic>> simplifiedTaxBreakdown = List<Map<String, dynamic>>.from(taxData['tax_breakdown']).map((tax) {
+        return {
+          'id': tax['id'],
+          'name': tax['name'],
+          'calculated_amount': tax['calculated_amount'],
+        };
+      }).toList();
 
       int tagihanInt = grandTotal.toInt();
       int uangMasukInt = _amountTendered.toInt();
@@ -622,35 +638,31 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
       var mappedItems = widget.cart.values.map((item) {
         return {
-          'product_id': item.productId, 
-          'qty': item.quantity, 
+          'product_id': item.productId,
+          'qty': item.quantity,
           'price': item.unitPrice.toInt(),
           'notes': item.notes 
         };
       }).toList();
 
-      int finalPaidAmount = _paymentMethod == 'Cash' ? uangMasukInt : 0;
-      int finalChangeAmount = _paymentMethod == 'Cash' ? change : 0;
-      int? finalDiscountId = _selectedDiscount?.id;
-
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
         'invoice_number': "INV-${DateTime.now().millisecondsSinceEpoch}",
-        'customer_name': widget.customerName, 
+        'customer_name': widget.customerName,
         'table_id': widget.tableId, 
         'subtotal_price': subTotal.toInt(),
         'total_price': tagihanInt,
         'discount_amount': discountAmount.toInt(),
         'tax_amount': taxAmountFinal.toInt(),
-        'tax_breakdown': taxBreakdown, 
-        'payment_method': _paymentMethod, 
-        'paid_amount': finalPaidAmount,      
-        'change_amount': finalChangeAmount, 
-        'discount_id': finalDiscountId, 
+        'tax_breakdown': simplifiedTaxBreakdown,
+        'payment_method': _paymentMethod.toLowerCase(),
+        'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
+        'change_amount': _paymentMethod == 'Cash' ? (change < 0 ? 0 : change) : 0,
         'items': mappedItems,
-        'status': _paymentMethod == 'Cash' ? 'paid' : 'pending',
+        'status': 'paid',
       };
 
+      print("[API REQUEST] --> CHECKOUT ORDER. Payload: $payload");
       final res = await ApiService.submitOrder(payload);
 
       if (!mounted) return;
@@ -660,90 +672,66 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         final cartSnapshot = Map<int, OrderItem>.from(widget.cart);
 
         if (_paymentMethod == 'Cash') {
-          // --- ALUR CASH (Tetap Normal) ---
           Navigator.of(context).pop({'status': 'success'});
           Navigator.of(context).push(MaterialPageRoute(builder: (c) => SuccessPaymentPage(
-              orderId: realOrderId,
-              paymentMethod: _paymentMethod,
-              grandTotal: grandTotal,
-              amountPaid: _amountTendered,
-              change: change.toDouble(),
-              cart: cartSnapshot,
-              tableNumber: widget.tableNumber,
-              customerName: widget.customerName, 
-              cashierName: widget.cashierName,
-              outletName: "ARANUS POS",
-              formatCurrency: widget.formatCurrency,
-              discountAmount: discountAmount,
-              taxAmount: taxAmountFinal,
+            orderId: realOrderId,
+            outletName: currentOutletName,
+            outletAddress: currentOutletAddress,
+            paymentMethod: _paymentMethod,
+            grandTotal: grandTotal,
+            amountPaid: _amountTendered,
+            change: change.toDouble(),
+            cart: cartSnapshot,
+            tableNumber: widget.tableNumber,
+            customerName: widget.customerName,
+            cashierName: widget.cashierName,
+            formatCurrency: widget.formatCurrency,
+            discountAmount: discountAmount,
+            taxBreakdown: simplifiedTaxBreakdown,
           )));
         } else {
-          // --- ALUR MIDTRANS VIA WEBVIEW ---
           String? redirectUrl = res['data']?['redirect_url'];
-
           if (redirectUrl != null && redirectUrl.isNotEmpty) {
             setState(() {
               _webViewController = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 ..setBackgroundColor(const Color(0x00000000))
                 ..setNavigationDelegate(
                   NavigationDelegate(
-                    onPageFinished: (String url) {
-                      _webViewController?.runJavaScript("document.body.style.zoom = '0.75';");
-                    },
-                    onNavigationRequest: (NavigationRequest request) {
-                      // Mengizinkan Deep-Link aplikasi Gojek/ShopeePay jika diperlukan
-                      if (request.url.contains('gojek://') || request.url.contains('shopeepay://')) {
-                         return NavigationDecision.navigate;
+                    onPageFinished: (_) => _webViewController?.runJavaScript("document.body.style.zoom = '0.75';"),
+                    onNavigationRequest: (request) {
+                      if (request.url.contains('status_code=200') || request.url.contains('transaction_status=settlement')) {
+                        Navigator.pop(context, {'status': 'success'});
+                        Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
+                          orderId: realOrderId,
+                          outletName: currentOutletName,
+                          outletAddress: currentOutletAddress,
+                          paymentMethod: _paymentMethod,
+                          grandTotal: grandTotal,
+                          amountPaid: grandTotal,
+                          change: 0,
+                          cart: cartSnapshot,
+                          tableNumber: widget.tableNumber,
+                          customerName: widget.customerName,
+                          cashierName: widget.cashierName,
+                          formatCurrency: widget.formatCurrency,
+                          discountAmount: discountAmount,
+                          taxBreakdown: simplifiedTaxBreakdown,
+                        )));
+                        return NavigationDecision.prevent;
                       }
-                      
-                      // 👇 UBAH BAGIAN INI 👇
-                      // Menangkap URL dari Midtrans berdasarkan domain default atau status transaksi yang sukses
-                      if (request.url.contains('example.com') || 
-                          request.url.contains('status_code=200') || 
-                          request.url.contains('transaction_status=capture') || 
-                          request.url.contains('transaction_status=settlement')) {
-                         
-                         Navigator.pop(context, {'status': 'success'});
-                         Navigator.push(context, MaterialPageRoute(builder: (c) => SuccessPaymentPage(
-                           orderId: realOrderId,
-                           paymentMethod: _paymentMethod,
-                           grandTotal: grandTotal,
-                           amountPaid: grandTotal, 
-                           change: 0,
-                           cart: cartSnapshot,
-                           tableNumber: widget.tableNumber,
-                           customerName: widget.customerName, 
-                           cashierName: widget.cashierName,
-                           outletName: "ARANUS POS",
-                           formatCurrency: widget.formatCurrency,
-                           discountAmount: discountAmount,
-                           taxAmount: taxAmountFinal,
-                         )));
-                         return NavigationDecision.prevent; // Hentikan WebView membuka example.com
-                      }
-                      // 👆 ================= 👆
-                      
                       return NavigationDecision.navigate;
                     },
                   ),
-                )
-                ..loadRequest(Uri.parse(redirectUrl));
+                )..loadRequest(Uri.parse(redirectUrl));
             });
-          } else {
-            throw Exception("Gagal mendapatkan link pembayaran Midtrans dari server.");
           }
         }
-
       } else {
         throw Exception(res['message'] ?? "Gagal memproses pesanan");
       }
     } catch (e) {
-      if (mounted) {
-        String errorText = e.toString().replaceAll('Exception: ', '');
-        setState(() => _errorMessage = errorText);
-      }
+      if (mounted) setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -755,18 +743,13 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     bool s = _paymentMethod == l; 
     return Expanded(
       child: GestureDetector(
-        // ✅ JIKA KLIK CARD ATAU QRIS, OTOMATIS JALANKAN _processPayment!
         onTap: (isEnabled && !_isLoading) ? () async {
           setState(() {
             if (_errorMessage != null) _errorMessage = null;
             _paymentMethod = l;
-            _webViewController = null; // Reset Webview saat pindah menu
+            _webViewController = null;
           });
-
-          // Panggil otomatis logika pembayaran jika memilih Midtrans
-          if (l != 'Cash') {
-            await _processPayment();
-          }
+          if (l != 'Cash') await _processPayment();
         } : null, 
         child: Opacity(
           opacity: isEnabled ? 1.0 : 0.4,
@@ -774,10 +757,8 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             height: 100, 
             decoration: BoxDecoration(color: s ? AppStyle.primaryBlue : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE))), 
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              if (_isLoading && s)
-                const SizedBox(height: 28, width: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              else
-                Icon(i, color: s ? Colors.white : AppStyle.textMain, size: 28), 
+              if (_isLoading && s) const SizedBox(height: 28, width: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              else Icon(i, color: s ? Colors.white : AppStyle.textMain, size: 28), 
               const SizedBox(height: 8), 
               Text(l, style: TextStyle(color: s ? Colors.white : AppStyle.textMain, fontWeight: s ? FontWeight.bold : FontWeight.normal))
             ])
@@ -802,12 +783,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   
   Widget _buildChangeDisplay(double c) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), 
-    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withOpacity(0.1))), 
+    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.green.withValues(alpha: 0.1))), 
     child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Kembalian", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)), Text(widget.formatCurrency(c), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w900, fontSize: 24))])
   );
 }
 
-// Helpers
 class _TicketPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -819,7 +799,7 @@ class _TicketPainter extends CustomPainter {
     path.addOval(Rect.fromCircle(center: Offset(0, size.height / 2), radius: 10));
     path.addOval(Rect.fromCircle(center: Offset(size.width, size.height / 2), radius: 10));
     path.fillType = PathFillType.evenOdd;
-    canvas.drawShadow(path, Colors.black.withOpacity(0.1), 4, false); 
+    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.1), 4, false); 
     canvas.drawPath(path, paint);
   }
   @override

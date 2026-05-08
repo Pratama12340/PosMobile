@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../style.dart'; 
-import 'printer_screen.dart';
-import 'profil_screen.dart'; 
+import 'printer_screen.dart'; 
+import 'profil_screen.dart';  
 
 class SettingScreen extends StatefulWidget {
   final TextEditingController searchController; 
@@ -50,7 +50,7 @@ class _SettingScreenState extends State<SettingScreen> {
                     context,
                     icon: Icons.print_outlined,
                     title: "Koneksi Printer",
-                    subtitle: "Atur printer struk via Bluetooth",
+                    subtitle: "Atur printer struk via Bluetooth/LAN",
                     onTap: () {
                       Navigator.push(
                         context,
@@ -59,7 +59,7 @@ class _SettingScreenState extends State<SettingScreen> {
                     },
                   ),
 
-                // Item Informasi Outlet -> Membuka ProfilHistory
+                // Item Informasi Outlet
                 if ("informasi outlet".contains(_searchQuery))
                   _buildSettingItem(
                     context,
@@ -67,7 +67,6 @@ class _SettingScreenState extends State<SettingScreen> {
                     title: "Informasi Outlet",
                     subtitle: "Lihat detail lokasi cabang Anda",
                     onTap: () {
-                      // Navigasi ke halaman profil_history.dart
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const ProfilHistory()),
@@ -83,7 +82,7 @@ class _SettingScreenState extends State<SettingScreen> {
                     title: "Tentang Aplikasi",
                     subtitle: "Versi 1.0.0 - Aranus POS",
                     onTap: () {
-                      // Tambahkan aksi jika diperlukan
+                      // Tambahkan dialog atau halaman tentang aplikasi jika perlu
                     },
                   ),
               ],
@@ -107,7 +106,8 @@ class _SettingScreenState extends State<SettingScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            // Memperbaiki 'withOpacity' yang deprecated menjadi 'withValues'
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -120,7 +120,8 @@ class _SettingScreenState extends State<SettingScreen> {
         leading: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppStyle.primaryBlue.withOpacity(0.1),
+            // Memperbaiki 'withOpacity' yang deprecated menjadi 'withValues'
+            color: AppStyle.primaryBlue.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: AppStyle.primaryBlue, size: 24),

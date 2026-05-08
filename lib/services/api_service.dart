@@ -33,7 +33,7 @@ class ApiService {
 
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/login-pin'), // ✅ Sudah diperbaiki
+        Uri.parse('$baseUrl/login-pin'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -62,13 +62,10 @@ class ApiService {
 
         final String? shiftId = data['shift_id']?.toString();
         if (shiftId == null || shiftId == 'null' || shiftId.isEmpty) {
-          print(
-            "❌ [API REJECTED] Karyawan tidak memiliki jadwal shift aktif saat ini.",
-          );
+          print("❌ [API REJECTED] Karyawan tidak memiliki jadwal shift aktif saat ini.");
           return {
             'success': false,
-            'message':
-                'Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.',
+            'message': 'Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.',
           };
         }
 
@@ -103,15 +100,23 @@ class ApiService {
     }
   }
 
-  // --- 2. FETCH OUTLET INFO LIVE ---
-  static Future<Map<String, String>> fetchOutletInfoLive() async {
+  // --- 2. FETCH OUTLET INFO LIVE (VERSI UPDATE) ---
+  static Future<Map<String, dynamic>> fetchOutletInfoLive() async {
     print("[API REQUEST] --> FETCH OUTLET INFO LIVE");
     try {
       final token = await StorageService.getToken();
       final outletId = await StorageService.getOutletId();
 
-      if (outletId == null)
-        return {'name': "Outlet Belum Dipilih", 'address': "-"};
+      if (outletId == null) {
+        return {
+          'name': "Outlet Belum Dipilih",
+          'address_outlet': "-",
+          'phone_number_outlet': "-",
+          'image': null,
+          'owner_name': "-",
+          'owner_email': "-",
+        };
+      }
 
       final response = await http.get(
         Uri.parse('$baseUrl/outlets'),
@@ -124,27 +129,86 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        List<dynamic> outlets = (result['data'] is List)
-            ? result['data']
-            : (result['data']?['data'] ?? []);
+        List<dynamic> outlets = (result['data'] is List) ? result['data'] : (result['data']?['data'] ?? []);
 
         for (var outlet in outlets) {
           if (outlet['id'].toString() == outletId.toString()) {
+            String ownerName = "Belum diatur";
+            String ownerEmail = "Belum diatur";
+
+            if (outlet['owner_id'] != null && outlet['owner_id'].toString() != "NULL") {
+              try {
+                print("==================================================");
+                print("🚨 [DEBUG Laporan Backend] MULAI CEK AKSES /users");
+                print("🚨 [DEBUG Laporan Backend] Mencari owner_id : ${outlet['owner_id']}");
+
+                final userResponse = await http.get(
+                  Uri.parse('$baseUrl/users'),
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+                  },
+                );
+
+                print("🚨 [DEBUG Laporan Backend] Status HTTP   : ${userResponse.statusCode}");
+                print("🚨 [DEBUG Laporan Backend] Body Response : ${userResponse.body}");
+                print("==================================================");
+
+                if (userResponse.statusCode == 200) {
+                  final userResult = jsonDecode(userResponse.body);
+                  List<dynamic> users = [];
+                  if (userResult is List) {
+                    users = userResult;
+                  } else if (userResult['data'] is List) {
+                    users = userResult['data'];
+                  }
+
+                  for (var user in users) {
+                    if (user['id'].toString() == outlet['owner_id'].toString()) {
+                      ownerName = user['name']?.toString() ?? "Belum diatur";
+                      ownerEmail = user['email']?.toString() ?? "Belum diatur";
+                      break;
+                    }
+                  }
+                }
+              } catch (e) {
+                print("💥 [API ERROR] Gagal fetch data user: $e");
+              }
+            }
+
             return {
               'name': outlet['name']?.toString() ?? "Outlet",
-              'address':
-                  outlet['address_outlet']?.toString() ??
-                  "Alamat tidak tersedia",
+              'address_outlet': outlet['address_outlet']?.toString() ?? "Alamat tidak tersedia",
+              'phone_number_outlet': outlet['phone_number_outlet']?.toString() ?? "-",
+              'image': outlet['image'],
+              'owner_name': ownerName,
+              'owner_email': ownerEmail,
             };
           }
         }
       }
-      return {'name': "Outlet Tidak Ditemukan", 'address': "-"};
+      return {
+        'name': "Outlet Tidak Ditemukan",
+        'address_outlet': "-",
+        'phone_number_outlet': "-",
+        'image': null,
+        'owner_name': "-",
+        'owner_email': "-",
+      };
     } catch (e) {
       debugPrint("💥 [API ERROR] fetchOutletInfoLive: $e");
-      return {'name': "Error Jaringan", 'address': "-"};
+      return {
+        'name': "Error Jaringan",
+        'address_outlet': "-",
+        'phone_number_outlet': "-",
+        'image': null,
+        'owner_name': "-",
+        'owner_email': "-",
+      };
     }
   }
+
   // --- 3. GET CATEGORIES ---
   static Future<List<dynamic>> getCategories() async {
     try {
@@ -160,7 +224,9 @@ class ApiService {
         if (result['data']['data'] is List) return result['data']['data'];
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   // --- 4. GET PRODUCTS ---
@@ -178,7 +244,9 @@ class ApiService {
         return productList.map((json) => Product.fromJson(json)).toList();
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   // --- 5. SUBMIT ORDER ---
@@ -202,24 +270,20 @@ class ApiService {
       } else {
         return {'success': false, 'message': result['message'] ?? 'Gagal Simpan'};
       }
-    } catch (e) { return {'success': false, 'message': 'Kesalahan Sistem: $e'}; }
+    } catch (e) {
+      return {'success': false, 'message': 'Kesalahan Sistem: $e'};
+    }
   }
 
-  // --- 5B. UPDATE PENDING ORDER (EDIT ITEMS & BAYAR) ---
-  static Future<Map<String, dynamic>> updatePendingOrder(
-    String orderId,
-    Map<String, dynamic> orderData,
-  ) async {
+  // --- 5B. UPDATE PENDING ORDER ---
+  static Future<Map<String, dynamic>> updatePendingOrder(String orderId, Map<String, dynamic> orderData) async {
     print("\n[API REQUEST] --> UPDATE PENDING ORDER (ID: $orderId)");
     try {
       final headers = await _getHeaders();
-
       if (!orderData.containsKey('outlet_id')) {
-        final int? outletId = await StorageService.getOutletId();
-        orderData['outlet_id'] = outletId;
+        orderData['outlet_id'] = await StorageService.getOutletId();
       }
 
-      // ✅ STEP 1: Update items order + pajak & total
       final itemsPayload = {
         '_method': 'PUT',
         'outlet_id': orderData['outlet_id'],
@@ -233,43 +297,27 @@ class ApiService {
         'items': orderData['items'],
       };
 
-      print("Step 1 - Update Items: ${jsonEncode(itemsPayload)}");
-
       final itemsResponse = await http.post(
         Uri.parse('$baseUrl/orders/$orderId/items'),
         headers: headers,
         body: jsonEncode(itemsPayload),
       );
 
-      print("[Step 1 RESPONSE] <-- STATUS: ${itemsResponse.statusCode}");
-      print("[Step 1 BODY]: ${itemsResponse.body}");
-      print("Body: ${itemsResponse.body}");
-
       if (itemsResponse.statusCode != 200 && itemsResponse.statusCode != 201) {
         final err = jsonDecode(itemsResponse.body);
-        return {
-          'success': false,
-          'message': err['message'] ?? 'Gagal update items',
-        };
+        return {'success': false, 'message': err['message'] ?? 'Gagal update items'};
       }
 
-      // ✅ STEP 2: Proses pembayaran → ubah status pending ke paid
       final paymentPayload = {
         'payments': [
-          {
-            'method': orderData['payment_method'], // 'cash' / 'card' / 'qris'
-            'amount_paid': orderData['paid_amount'],
-          },
+          {'method': orderData['payment_method'], 'amount_paid': orderData['paid_amount']}
         ],
-          // 🔥 Coba tambahkan ini
-  'tax_amount': orderData['tax_amount'],
-  'tax_breakdown': orderData['tax_breakdown'],
-  'total_price': orderData['total_price'],
-  'subtotal_price': orderData['subtotal_price'],
-  'discount_amount': orderData['discount_amount'],
+        'tax_amount': orderData['tax_amount'],
+        'tax_breakdown': orderData['tax_breakdown'],
+        'total_price': orderData['total_price'],
+        'subtotal_price': orderData['subtotal_price'],
+        'discount_amount': orderData['discount_amount'],
       };
-
-      print("Step 2 - Process Payment: ${jsonEncode(paymentPayload)}");
 
       final paymentResponse = await http.post(
         Uri.parse('$baseUrl/orders/$orderId/payments'),
@@ -277,45 +325,25 @@ class ApiService {
         body: jsonEncode(paymentPayload),
       );
 
-      print("[Step 2 RESPONSE] <-- STATUS: ${paymentResponse.statusCode}");
-      print("Body: ${paymentResponse.body}");
-
       final result = jsonDecode(paymentResponse.body);
-
-      if (paymentResponse.statusCode == 200 ||
-          paymentResponse.statusCode == 201) {
-        print("✅ [API SUCCESS] Pembayaran Pending Order Berhasil.");
+      if (paymentResponse.statusCode == 200 || paymentResponse.statusCode == 201) {
         return {'success': true, 'data': result['data'] ?? result};
       } else {
-        print("❌ [API FAILED] Pembayaran Gagal: ${result['message']}");
-        return {
-          'success': false,
-          'message': result['message'] ?? 'Gagal proses pembayaran',
-        };
+        return {'success': false, 'message': result['message'] ?? 'Gagal proses pembayaran'};
       }
     } catch (e) {
-      print("💥 [API ERROR] updatePendingOrder: $e");
       return {'success': false, 'message': 'Kesalahan Sistem: $e'};
     }
   }
 
   // --- 5C. GET PENDING ORDERS ---
   static Future<List<Order>> getPendingOrders() async {
-    print("\n[API REQUEST] --> MENGAMBIL PENDING ORDERS");
     try {
       final headers = await _getHeaders();
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/orders?status=pending'),
-        headers: headers,
-      );
-
-      print("[API RESPONSE PENDING] <-- STATUS: ${response.statusCode}");
-      print("[RAW BODY PENDING]: ${response.body}");
+      final response = await http.get(Uri.parse('$baseUrl/orders?status=pending'), headers: headers);
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-
         List<dynamic> rawData = [];
         if (result['data'] != null) {
           if (result['data'] is Map && result['data'].containsKey('data')) {
@@ -323,26 +351,11 @@ class ApiService {
           } else if (result['data'] is List) {
             rawData = result['data'];
           }
-        } else if (result is List) {
-          rawData = result;
         }
-
-        List<Order> parsedOrders = [];
-        for (var i = 0; i < rawData.length; i++) {
-          try {
-            parsedOrders.add(Order.fromJson(rawData[i]));
-          } catch (err) {
-            print("⚠️ GAGAL PARSING ITEM KE-$i: $err");
-          }
-        }
-
-        print("✅ Berhasil memproses ${parsedOrders.length} object Order.");
-        return parsedOrders;
+        return rawData.map((json) => Order.fromJson(json)).toList();
       }
       return [];
-    } catch (e, stacktrace) {
-      print("💥 [API ERROR] getPendingOrders: $e");
-      print(stacktrace);
+    } catch (e) {
       return [];
     }
   }
@@ -352,7 +365,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final int? outletId = await StorageService.getOutletId();
-      final String? shiftId = await StorageService.getCurrentShiftId(); 
+      final String? shiftId = await StorageService.getCurrentShiftId();
       final response = await http.get(
         Uri.parse('$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=100'),
         headers: headers,
@@ -363,7 +376,9 @@ class ApiService {
         return data.map((json) => Order.fromJson(json)).toList();
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<Order?> fetchHistoryDetail(int id) async {
@@ -371,7 +386,9 @@ class ApiService {
       final headers = await _getHeaders();
       final response = await http.get(Uri.parse('$baseUrl/history-transactions/$id'), headers: headers);
       if (response.statusCode == 200) return Order.fromJson(jsonDecode(response.body));
-    } catch (e) { debugPrint("💥 [API ERROR] fetchHistoryDetail: $e"); }
+    } catch (e) {
+      debugPrint("💥 [API ERROR] fetchHistoryDetail: $e");
+    }
     return null;
   }
 
@@ -397,12 +414,17 @@ class ApiService {
         body: jsonEncode(bodyData),
       );
       return (response.statusCode == 200 || response.statusCode == 201);
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   }
 
   // --- 8. VOID / EDIT ITEM ---
   static Future<Map<String, dynamic>> voidOrEditItem({
-    required int itemId, required int orderId, required int newQty, required String reason,
+    required int itemId,
+    required int orderId,
+    required int newQty,
+    required String reason,
   }) async {
     try {
       final response = await http.post(
@@ -411,8 +433,11 @@ class ApiService {
         body: jsonEncode({'order_id': orderId, 'qty': newQty, 'notes': reason}),
       );
       return (response.statusCode == 200 || response.statusCode == 201)
-          ? {'success': true} : {'success': false, 'message': json.decode(response.body)['message'] ?? 'Gagal'};
-    } catch (e) { return {'success': false, 'message': 'Terjadi kesalahan: $e'}; }
+          ? {'success': true}
+          : {'success': false, 'message': json.decode(response.body)['message'] ?? 'Gagal'};
+    } catch (e) {
+      return {'success': false, 'message': 'Terjadi kesalahan: $e'};
+    }
   }
 
   // --- 9. UPDATE ITEM STATUS ---
@@ -424,7 +449,9 @@ class ApiService {
         body: jsonEncode({'status': status}),
       );
       return response.statusCode == 200 ? {'success': true} : {'success': false};
-    } catch (e) { return {'success': false}; }
+    } catch (e) {
+      return {'success': false};
+    }
   }
 
   // --- 10. GET STATIONS & OUTLETS ---
@@ -433,7 +460,9 @@ class ApiService {
       final response = await http.get(Uri.parse('$baseUrl/stations'), headers: await _getHeaders());
       final result = jsonDecode(response.body);
       return response.statusCode == 200 ? (result['data'] is List ? result['data'] : result['data']['data'] ?? []) : [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<List<dynamic>> getOutlets() async {
@@ -444,7 +473,9 @@ class ApiService {
         return result['data'] is List ? result['data'] : result['data']['data'] ?? [];
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   // --- 11. GET DISCOUNTS ---
@@ -454,15 +485,20 @@ class ApiService {
       if (response.statusCode == 200) {
         final dynamic res = jsonDecode(response.body);
         List<dynamic> data = [];
-        if (res is List) data = res;
+        if (res is List)
+          data = res;
         else if (res is Map) {
-          if (res['data'] is List) data = res['data'];
-          else if (res['data'] is Map && res['data']['data'] is List) data = res['data']['data'];
+          if (res['data'] is List)
+            data = res['data'];
+          else if (res['data'] is Map && res['data']['data'] is List)
+            data = res['data']['data'];
           else if (res['discounts'] is List) data = res['discounts'];
         }
         return data.map((json) => Discount.fromJson(json)).toList();
       }
-    } catch (e) { debugPrint("💥 [API ERROR] getDiscounts: $e"); }
+    } catch (e) {
+      debugPrint("💥 [API ERROR] getDiscounts: $e");
+    }
     return [];
   }
 
@@ -479,7 +515,9 @@ class ApiService {
         }
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   // --- 13. CEK STATUS SHIFT ---
@@ -488,15 +526,20 @@ class ApiService {
       final headers = await _getHeaders();
       final response = await http.get(Uri.parse('$baseUrl/shift-karyawans/check-status?outlet_id=$outletId'), headers: headers);
       final data = jsonDecode(response.body);
-      return response.statusCode == 200 ? {'success': data['success'] ?? true, 'message': data['message'], 'data': data['data']} : {'success': false, 'message': data['message'] ?? 'Gagal'};
-    } catch (e) { return {'success': false, 'message': 'Koneksi error: $e'}; }
+      return response.statusCode == 200
+          ? {'success': data['success'] ?? true, 'message': data['message'], 'data': data['data']}
+          : {'success': false, 'message': data['message'] ?? 'Gagal'};
+    } catch (e) {
+      return {'success': false, 'message': 'Koneksi error: $e'};
+    }
   }
 
   // --- 14. MULAI SHIFT ---
   static Future<Map<String, dynamic>> startShift(int nominal, int outletId) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(Uri.parse('$baseUrl/shift-karyawans/start'), headers: headers, body: jsonEncode({'outlet_id': outletId, 'opening_balance': nominal}));
+      final response = await http.post(Uri.parse('$baseUrl/shift-karyawans/start'),
+          headers: headers, body: jsonEncode({'outlet_id': outletId, 'opening_balance': nominal}));
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
         final int balance = int.tryParse(data['data']['opening_balance'].toString()) ?? nominal;
@@ -505,14 +548,17 @@ class ApiService {
         return {'success': true, 'data': data};
       }
       return {'success': false, 'message': data['message'] ?? 'Gagal memulai shift'};
-    } catch (e) { return {'success': false, 'message': 'Koneksi error: $e'}; }
+    } catch (e) {
+      return {'success': false, 'message': 'Koneksi error: $e'};
+    }
   }
 
   // --- 15. AKHIRI SHIFT ---
   static Future<Map<String, dynamic>> endShift(int totalFisik, String notes) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(Uri.parse('$baseUrl/shift-karyawans/end'), headers: headers, body: jsonEncode({'actual_closing_balance': totalFisik, 'notes': notes}));
+      final response = await http.post(Uri.parse('$baseUrl/shift-karyawans/end'),
+          headers: headers, body: jsonEncode({'actual_closing_balance': totalFisik, 'notes': notes}));
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
         await StorageService.clearOpeningBalance();
@@ -524,7 +570,9 @@ class ApiService {
         return {'success': true, 'message': 'Shift sinkron.', 'is_forced_sync': true};
       }
       return {'success': false, 'message': data['message'] ?? 'Gagal'};
-    } catch (e) { return {'success': false, 'message': 'Koneksi error: $e'}; }
+    } catch (e) {
+      return {'success': false, 'message': 'Koneksi error: $e'};
+    }
   }
 
   static Future<List<RekapShift>> getShiftHistory() async {
@@ -536,7 +584,9 @@ class ApiService {
         return data.map((json) => RekapShift.fromJson(json)).toList();
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   static Future<List<ShiftMaster>> getMasterShifts() async {
@@ -548,19 +598,27 @@ class ApiService {
         return data.map((json) => ShiftMaster.fromJson(json)).toList();
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   // --- 16. MIDTRANS PAYMENTS ---
   static Future<Map<String, dynamic>> getMidtransToken(String orderId, String paymentMethod, int amount) async {
     try {
       final headers = await _getHeaders();
-      final requestBody = jsonEncode({"payments": [{"method": paymentMethod, "amount_paid": amount}]});
+      final requestBody = jsonEncode({
+        "payments": [
+          {"method": paymentMethod, "amount_paid": amount}
+        ]
+      });
       final response = await http.post(Uri.parse('$baseUrl/orders/$orderId/payments'), headers: headers, body: requestBody);
       final result = jsonDecode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) return {'success': true, 'data': result['data'] ?? result};
       return {'success': false, 'message': result['message'] ?? 'Gagal mendapatkan token'};
-    } catch (e) { return {'success': false, 'message': 'Koneksi error: $e'}; }
+    } catch (e) {
+      return {'success': false, 'message': 'Koneksi error: $e'};
+    }
   }
 
   // --- 17. MIDTRANS CONFIG ---
@@ -569,8 +627,12 @@ class ApiService {
       final headers = await _getHeaders();
       final response = await http.get(Uri.parse('$baseUrl/midtrans-config'), headers: headers);
       final result = jsonDecode(response.body);
-      return response.statusCode == 200 ? {'success': true, 'client_key': result['client_key'], 'merchant_base_url': result['merchant_base_url']} : {'success': false, 'message': 'Gagal memuat konfigurasi'};
-    } catch (e) { return {'success': false, 'message': e.toString()}; }
+      return response.statusCode == 200
+          ? {'success': true, 'client_key': result['client_key'], 'merchant_base_url': result['merchant_base_url']}
+          : {'success': false, 'message': 'Gagal memuat konfigurasi'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
   }
 
   // --- 18. REPORTS ---
@@ -582,7 +644,9 @@ class ApiService {
         return result['data'] is List ? result['data'] : result['data']['data'] ?? [];
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
 
   // --- 19. TABLES ---
@@ -594,6 +658,8 @@ class ApiService {
         return result['data'] is List ? result['data'] : result['data']['data'] ?? [];
       }
       return [];
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   }
-}
+} 

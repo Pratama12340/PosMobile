@@ -644,7 +644,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       // 1. Ambil data Outlet live
       final outletData = await ApiService.fetchOutletInfoLive();
       final String currentOutletName = outletData['name']!;
-      final String currentOutletAddress = outletData['address']!;
+      final String currentOutletAddress = outletData['address_outlet'] ?? "-";
 
       final savedOutletId = await StorageService.getOutletId();
       if (savedOutletId == null || savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");

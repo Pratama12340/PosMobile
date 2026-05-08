@@ -32,6 +32,7 @@ class OrderItem {
   
   final String itemName;
   final double unitPrice;
+  final double originalPrice;
   final bool isVoided;
   String notes;
 
@@ -53,10 +54,11 @@ class OrderItem {
     required this.originalQty,
     required this.activeQty,
     required this.itemName, 
-    required this.unitPrice, 
+    required this.unitPrice,
+    double? originalPrice,   
     this.isVoided = false, 
     this.notes = "",
-  });
+  }) : originalPrice = originalPrice ?? unitPrice; 
 
   double get subtotal => (isVoided || activeQty == 0) ? 0 : (activeQty * unitPrice);
 
@@ -73,6 +75,7 @@ class OrderItem {
       activeQty: orig - canc, 
       itemName: product['name'] ?? json['product_name'] ?? json['item_name'] ?? 'Tanpa Nama',
       unitPrice: double.tryParse((json['price'] ?? json['unit_price'])?.toString() ?? '0') ?? 0.0,
+      
       isVoided: json['is_void'] == 1 || json['status'] == 'void' || (orig - canc <= 0),
       notes: json['notes'] ?? json['note'] ?? "",
     );

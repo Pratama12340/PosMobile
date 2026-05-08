@@ -6,7 +6,7 @@ import '../models/product_models.dart';
 import '../models/order_model.dart';
 import '../models/discount_model.dart'; 
 import '../widgets/cart_panel.dart';
-import '../widgets/pending_order_dialog.dart'; 
+
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -74,6 +74,8 @@ class HomeScreenState extends State<HomeScreen> {
         // Reset status pending
         _isPendingOrderLoaded = false;
         _currentPendingOrderId = null;
+        _currentPendingDiscountId = null;
+        
 
         widget.onCartToggled?.call(false);
       }
@@ -259,6 +261,7 @@ class HomeScreenState extends State<HomeScreen> {
 
         _isPendingOrderLoaded = false;
         _currentPendingOrderId = null;
+        _currentPendingDiscountId = null;
 
         _isCartVisible = false;
         widget.onCartToggled?.call(false);
@@ -272,25 +275,18 @@ class HomeScreenState extends State<HomeScreen> {
       
       for (var item in order.items) {
         int productIndex = _allProducts.indexWhere((p) => p.id == item.productId);
-        double unitPrice = item.price ?? 0.0;
+        double unitPrice = item.price ;
         String itemName = "Menu ${item.productId}";
 
        if (productIndex != -1) {
   final product = _allProducts[productIndex];
   itemName = product.name;
-
-  // 🔥 Terapkan diskon ke unitPrice, sama seperti saat tambah item baru
-  if (product.discount != null) {
-    if (product.discount!.type == 'percentage') {
-      unitPrice = product.price * (1 - (product.discount!.value / 100));
-    } else {
-      unitPrice = (product.price - product.discount!.value).toDouble();
-    }
-  } else {
-    unitPrice = product.price.toDouble();
-  }
+  // 🔥 Selalu pakai harga asli yang tersimpan di order (item.price)
+  // Jangan terapkan diskon produk di sini — backend simpan harga asli
+  unitPrice = (item.price > 0)
+      ? item.price
+      : product.price.toDouble();
 }
-
         // 🔥 PERBAIKAN: Gunakan item.id (ID record item), bukan item.productId
         _cart[item.productId] = OrderItem(
           id: item.id, 
@@ -302,7 +298,7 @@ class HomeScreenState extends State<HomeScreen> {
         );
       }
 
-      _currentCustomerName = order.customerName ?? "Tanpa Nama";
+      _currentCustomerName = order.customerName ;
       _currentTableNumber = order.tableNumber?.toString() ?? order.tableId?.toString() ?? "-"; 
       _currentTableId = int.tryParse(order.tableId?.toString() ?? '0');
 
@@ -351,10 +347,19 @@ class HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool hasDiscountedItem = _cart.values.any((cartItem) {
-      int index = _allProducts.indexWhere((p) => p.id == cartItem.productId);
-      return index != -1 && _allProducts[index].discount != null;
-    });
+  bool hasDiscountedItem = _isPendingOrderLoaded
+    ? false // ✅ Pending: diskon via pendingDiscountId, bukan per-produk
+    : _cart.values.any((cartItem) {
+        int index = _allProducts.indexWhere((p) => p.id == cartItem.productId);
+        return index != -1 && _allProducts[index].discount != null;
+      });
+
+ // Sekarang originalTotalAmount = unitPrice karena unitPrice sudah = harga asli
+double originalTotalAmount = _isPendingOrderLoaded
+    ? 0.0
+    : _cart.values.fold(0.0, (sum, cartItem) {
+        return sum + (cartItem.unitPrice * cartItem.quantity); // ✅ pakai unitPrice langsung
+      });
 
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
@@ -446,6 +451,7 @@ class HomeScreenState extends State<HomeScreen> {
                   CartPanel(
                     cart: _cart,
                     hasDiscountedItem: hasDiscountedItem, 
+                    originalTotalAmount: originalTotalAmount, 
                     formatCurrency: formatHarga,
                     initialCustomerName: _currentCustomerName,
                     initialTableNumber: _currentTableNumber,
@@ -523,6 +529,7 @@ class HomeScreenState extends State<HomeScreen> {
 
                         _isPendingOrderLoaded = false; 
                         _currentPendingOrderId = null;
+                        _currentPendingDiscountId = null;
 
                         _isCartVisible = false;
                         widget.onCartToggled?.call(false);
@@ -608,9 +615,9 @@ class HomeScreenState extends State<HomeScreen> {
                         itemBuilder: (context, index) {
                           final order = _pendingOrders[index];
                           
-                          String custName = order.customerName ?? 'Tanpa Nama';
+                          String custName = order.customerName ;
                           String tableNo = order.tableId?.toString() ?? '-';
-                          double total = (order.totalPrice ?? 0).toDouble();
+                          double total = (order.totalPrice).toDouble();
                           
                           return InkWell(
                             onTap: () {
@@ -908,25 +915,41 @@ class HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: isOutOfStock ? null : () => setState(() {
-                      _isPendingPanelVisible = false; 
-                      _isCartVisible = true;
-                      widget.onCartToggled?.call(true);
+  onTap: isOutOfStock ? null : () => setState(() {
+    // ✅ Jika mode pending, cek apakah item baru (bukan dari order)
+    if (_isPendingOrderLoaded && !_cart.containsKey(p.id)) {
+      // Tampilkan pesan — item baru tidak bisa ditambah ke pending order
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            "Tidak bisa menambah menu baru ke pesanan pending.\nHanya bisa mengubah jumlah menu yang sudah ada.",
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return; // ← stop, jangan tambah item
+    }
 
-                      if (_cart.containsKey(p.id)) {
-                        _cart[p.id]!.quantity++;
-                      } else {
-                        // 🔥 PERBAIKAN: Gunakan id: null untuk produk baru yang ditambahkan manual
-                        _cart[p.id] = OrderItem(
-                          id: 0, 
-                          productId: p.id, 
-                          itemName: p.name, 
-                          originalQty: 1, 
-                          activeQty: 1, 
-                          unitPrice: isDiskon ? priceAfterDiscount : p.price.toDouble()
-                        );
-                      }
-                    }),
+    _isPendingPanelVisible = false; 
+    _isCartVisible = true;
+    widget.onCartToggled?.call(true);
+
+    if (_cart.containsKey(p.id)) {
+      _cart[p.id]!.quantity++; // ✅ item lama boleh ditambah qty-nya
+    } else {
+      _cart[p.id] = OrderItem(
+        id: 0, 
+        productId: p.id, 
+        itemName: p.name, 
+        originalQty: 1, 
+        activeQty: 1, 
+        unitPrice: p.price.toDouble(),
+      );
+    }
+  }),
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),

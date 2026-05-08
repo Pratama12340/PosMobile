@@ -23,12 +23,14 @@ class CheckoutDialog extends StatefulWidget {
 
   // 🔥 FITUR DITAMBAHKAN: Mendeteksi apakah ini pesanan baru atau update pesanan pending
   final bool isUpdatingOrder;
+  final double originalTotalAmount;
 
   const CheckoutDialog({
     super.key,
     required this.cart,
     required this.hasDiscountedItem, 
     required this.totalAmount,
+    required this.originalTotalAmount,
     required this.orderId,
     this.tableId,
     this.pendingDiscountId,
@@ -112,8 +114,15 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
   double _calculateDiscountValue(double subtotal) {
   if (_selectedDiscount == null) return 0;
+
+  // 🔥 Jika produk punya diskon DAN user pilih diskon lain,
+  // hitung dari harga ASLI bukan harga yang sudah didiskon
+  double baseForDiscount = (widget.hasDiscountedItem && widget.originalTotalAmount > 0)
+      ? widget.originalTotalAmount
+      : subtotal;
+
   return _selectedDiscount!.type == 'percentage'
-      ? (subtotal * _selectedDiscount!.value) / 100
+      ? (baseForDiscount * _selectedDiscount!.value) / 100
       : _selectedDiscount!.value.toDouble();
 }
 
@@ -372,7 +381,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
   @override
   Widget build(BuildContext context) {
-    double subTotal = widget.totalAmount;
+    double subTotal = (widget.hasDiscountedItem && 
+                  _selectedDiscount != null && 
+                  widget.originalTotalAmount > 0)
+    ? widget.originalTotalAmount  // 🔥 harga asli jika diskon produk di-override
+    : widget.totalAmount;
     double discountAmount = _calculateDiscountValue(subTotal);
     double baseAmount = subTotal - discountAmount;
     
@@ -636,7 +649,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       final savedOutletId = await StorageService.getOutletId();
       if (savedOutletId == null || savedOutletId == 0) throw Exception("ID Outlet tidak ditemukan.");
 
-      double subTotal = widget.totalAmount;
+      double subTotal = (widget.hasDiscountedItem && 
+                  _selectedDiscount != null && 
+                  widget.originalTotalAmount > 0)
+    ? widget.originalTotalAmount
+    : widget.totalAmount;
       double discountAmount = _calculateDiscountValue(subTotal);
       double baseAmount = subTotal - discountAmount;
       
@@ -646,6 +663,9 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       
       // Sederhanakan Tax Breakdown (Kirim info inti saja untuk mencegah 422)
       List<Map<String, dynamic>> simplifiedTaxBreakdown = List<Map<String, dynamic>>.from(taxData['tax_breakdown']).map((tax) {
+        
+        
+
         return {
           'id': tax['id'],
           'name': tax['name'],
@@ -657,14 +677,30 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
       int uangMasukInt = _amountTendered.toInt();
       int change = uangMasukInt - tagihanInt;
 
-      var mappedItems = widget.cart.values.map((item) {
-        return {
-          'product_id': item.productId,
-          'qty': item.quantity,
-          'price': item.unitPrice.toInt(),
-          'notes': item.notes 
-        };
-      }).toList();
+      // ✅ FIX 2: Sertakan id untuk item dari pending order
+// Pisah item lama (dari pending) dan item baru (ditambah manual)
+var existingItems = widget.cart.values
+    .where((item) => item.id > 0)
+    .map((item) => {
+      'product_id': item.productId,
+      'qty': item.quantity,
+      'price': item.unitPrice.toInt(),
+      'notes': item.notes,
+      'id': item.id, // ✅ item lama: selalu ada id
+    }).toList();
+
+var newItems = widget.cart.values
+    .where((item) => item.id == 0)
+    .map((item) => {
+      'product_id': item.productId,
+      'qty': item.quantity,
+      'price': item.unitPrice.toInt(),
+      'notes': item.notes,
+      // ✅ item baru: TANPA key 'id' sama sekali
+    }).toList();
+
+// Gabung: item lama dulu, item baru di belakang
+var mappedItems = [...existingItems, ...newItems];
 
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
@@ -681,10 +717,29 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         'change_amount': _paymentMethod == 'Cash' ? (change < 0 ? 0 : change) : 0,
         'items': mappedItems,
         'status': 'paid',
+        if (_selectedDiscount != null) 'discount_id': _selectedDiscount!.id,
       };
+      // 🔥 DEBUG LOG DI SINI (setelah payload dibuat)
+print("=== DEBUG CHECKOUT ===");
+print("isUpdatingOrder: ${widget.isUpdatingOrder}");
+print("pendingDiscountId: ${widget.pendingDiscountId}");
+print("selectedDiscount: ${_selectedDiscount?.name}");
+print("subTotal: $subTotal");
+print("discountAmount: $discountAmount");
+print("grandTotal: $grandTotal");
+print("payload discount_amount: ${payload['discount_amount']}");
+print("payload total_price: ${payload['total_price']}");
+print("payload paid_amount: ${payload['paid_amount']}");
+print("======================");
 
+      
       print("[API REQUEST] --> CHECKOUT ORDER. Payload: $payload");
-      final res = await ApiService.submitOrder(payload);
+      dynamic res;
+      if (widget.isUpdatingOrder) {
+        res = await ApiService.updatePendingOrder(widget.orderId, payload);
+      } else {
+        res = await ApiService.submitOrder(payload);
+      }
 
       if (!mounted) return;
 

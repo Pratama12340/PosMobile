@@ -89,9 +89,9 @@ class PendingOrderPanel extends StatelessWidget {
                         itemBuilder: (context, index) {
                           final order = pendingOrders[index];
                           
-                          String custName = order.customerName ?? 'Tanpa Nama';
+                          String custName = order.customerName ;
                           String tableNo = order.tableId?.toString() ?? '-';
-                          double total = (order.totalPrice ?? 0).toDouble();
+                          double total = (order.totalPrice).toDouble();
                           
                           return ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

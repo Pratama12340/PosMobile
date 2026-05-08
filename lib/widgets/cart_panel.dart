@@ -26,6 +26,7 @@ class CartPanel extends StatefulWidget {
   final bool isPendingMode;
   final int? pendingOrderId;
   final int? pendingDiscountId; 
+  final double originalTotalAmount;
 
   const CartPanel({
     super.key,
@@ -36,6 +37,7 @@ class CartPanel extends StatefulWidget {
     this.initialTableNumber,
     this.initialTableId,
     this.pendingDiscountId,
+    this.originalTotalAmount = 0.0,
     required this.onIncrease,
     required this.onDecrease,
     required this.onDelete,
@@ -133,7 +135,11 @@ class _CartPanelState extends State<CartPanel> {
 
   @override
   Widget build(BuildContext context) {
-    double total = widget.cart.values.fold(0, (sum, item) => sum + item.subtotal);
+    double total = widget.isPendingMode
+    ? widget.cart.values.fold(0.0, (sum, item) => sum + item.subtotal)
+    : (widget.originalTotalAmount > 0 
+        ? widget.originalTotalAmount  // ✅ harga asli sebelum diskon
+        : widget.cart.values.fold(0.0, (sum, item) => sum + item.subtotal));
 
     return Container(
       width: 340, 
@@ -320,15 +326,35 @@ class _CartPanelState extends State<CartPanel> {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black)),
-                    Text(widget.formatCurrency(item.unitPrice), style: const TextStyle(color: Colors.black45, fontSize: 12)),
-                  ],
-                ),
-              ),
+              // GANTI DENGAN INI ✅
+Expanded(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black)),
+      
+      // Tampilkan harga asli dicoret jika ada diskon
+      if (item.originalPrice > 0 && item.originalPrice != item.unitPrice) ...[
+        Text(
+          widget.formatCurrency(item.originalPrice), // harga asli dicoret
+          style: const TextStyle(
+            color: Colors.red,
+            fontSize: 11,
+            decoration: TextDecoration.lineThrough,
+          ),
+        ),
+        Text(
+          widget.formatCurrency(item.unitPrice), // harga setelah diskon
+          style: const TextStyle(color: Colors.black45, fontSize: 12),
+        ),
+      ] else
+        Text(
+          widget.formatCurrency(item.unitPrice), // harga normal (tidak ada diskon)
+          style: const TextStyle(color: Colors.black45, fontSize: 12),
+        ),
+    ],
+  ),
+),
               Row(
                 children: [
                   _qtyButton(Icons.remove, () => widget.onDecrease(id), isPrimary: false),
@@ -424,6 +450,7 @@ class _CartPanelState extends State<CartPanel> {
                     cart: widget.cart,
                     hasDiscountedItem: widget.hasDiscountedItem, 
                     totalAmount: total,
+                    originalTotalAmount: widget.originalTotalAmount,
                     
                     // 🔥 FITUR PENDING: Jika mode pending, teruskan ID pending order (jika null, biarkan string kosong atau ID manual)
                     orderId: widget.isPendingMode && widget.pendingOrderId != null 

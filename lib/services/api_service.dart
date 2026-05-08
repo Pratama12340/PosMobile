@@ -42,6 +42,7 @@ class ApiService {
       );
 
       print("[API RESPONSE] <-- STATUS: ${response.statusCode}");
+      print('[ERROR BODY]: ${response.body}');
 
       final data = jsonDecode(response.body);
 
@@ -275,66 +276,133 @@ class ApiService {
     }
   }
 
-  // --- 5B. UPDATE PENDING ORDER ---
-  static Future<Map<String, dynamic>> updatePendingOrder(String orderId, Map<String, dynamic> orderData) async {
-    print("\n[API REQUEST] --> UPDATE PENDING ORDER (ID: $orderId)");
-    try {
-      final headers = await _getHeaders();
-      if (!orderData.containsKey('outlet_id')) {
-        orderData['outlet_id'] = await StorageService.getOutletId();
-      }
+static Future<Map<String, dynamic>> updatePendingOrder(
+  String orderId,
+  Map<String, dynamic> orderData,
+) async {
+  print("\n[API REQUEST] --> UPDATE PENDING ORDER (ID: $orderId)");
+  try {
+    final headers = await _getHeaders();
 
-      final itemsPayload = {
-        '_method': 'PUT',
-        'outlet_id': orderData['outlet_id'],
-        'customer_name': orderData['customer_name'],
-        'table_id': orderData['table_id'],
-        'subtotal_price': orderData['subtotal_price'],
-        'discount_amount': orderData['discount_amount'],
-        'tax_amount': orderData['tax_amount'],
-        'tax_breakdown': orderData['tax_breakdown'],
-        'total_price': orderData['total_price'],
-        'items': orderData['items'],
-      };
-
-      final itemsResponse = await http.post(
-        Uri.parse('$baseUrl/orders/$orderId/items'),
-        headers: headers,
-        body: jsonEncode(itemsPayload),
-      );
-
-      if (itemsResponse.statusCode != 200 && itemsResponse.statusCode != 201) {
-        final err = jsonDecode(itemsResponse.body);
-        return {'success': false, 'message': err['message'] ?? 'Gagal update items'};
-      }
-
-      final paymentPayload = {
-        'payments': [
-          {'method': orderData['payment_method'], 'amount_paid': orderData['paid_amount']}
-        ],
-        'tax_amount': orderData['tax_amount'],
-        'tax_breakdown': orderData['tax_breakdown'],
-        'total_price': orderData['total_price'],
-        'subtotal_price': orderData['subtotal_price'],
-        'discount_amount': orderData['discount_amount'],
-      };
-
-      final paymentResponse = await http.post(
-        Uri.parse('$baseUrl/orders/$orderId/payments'),
-        headers: headers,
-        body: jsonEncode(paymentPayload),
-      );
-
-      final result = jsonDecode(paymentResponse.body);
-      if (paymentResponse.statusCode == 200 || paymentResponse.statusCode == 201) {
-        return {'success': true, 'data': result['data'] ?? result};
-      } else {
-        return {'success': false, 'message': result['message'] ?? 'Gagal proses pembayaran'};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Kesalahan Sistem: $e'};
+    if (!orderData.containsKey('outlet_id')) {
+      final int? outletId = await StorageService.getOutletId();
+      orderData['outlet_id'] = outletId;
     }
+
+    // ✅ PISAH item lama (ada id) dan item baru (tidak ada id)
+    List<dynamic> allItems = orderData['items'] ?? [];
+    List<dynamic> existingItems = allItems.where((item) => item['id'] != null && item['id'] != 0).toList();
+    List<dynamic> newItems = allItems.where((item) => item['id'] == null || item['id'] == 0).toList();
+
+    // ✅ STEP 1A: Update item lama — kirim hanya yang punya id
+    final itemsPayload = {
+      '_method': 'PUT',
+      'outlet_id': orderData['outlet_id'],
+      'customer_name': orderData['customer_name'],
+      'table_id': orderData['table_id'],
+      'subtotal_price': orderData['subtotal_price'],
+      'discount_amount': orderData['discount_amount'],
+      'tax_amount': orderData['tax_amount'],
+      'tax_breakdown': orderData['tax_breakdown'],
+      'total_price': orderData['total_price'],
+      'items': existingItems, // ✅ hanya item lama
+    };
+
+    print("Step 1A - Update Existing Items: ${jsonEncode(itemsPayload)}");
+
+    final itemsResponse = await http.post(
+      Uri.parse('$baseUrl/orders/$orderId/items'),
+      headers: headers,
+      body: jsonEncode(itemsPayload),
+    );
+
+    print("[Step 1A RESPONSE] <-- STATUS: ${itemsResponse.statusCode}");
+    print("[Step 1A BODY]: ${itemsResponse.body}");
+
+    if (itemsResponse.statusCode != 200 && itemsResponse.statusCode != 201) {
+      final err = jsonDecode(itemsResponse.body);
+      return {'success': false, 'message': err['message'] ?? 'Gagal update items'};
+    }
+
+    // ✅ STEP 1B: Tambah item baru — kirim tanpa id
+    if (newItems.isNotEmpty) {
+      // Hapus key 'id' dari item baru jika ada (pastikan bersih)
+      List<dynamic> cleanNewItems = newItems.map((item) {
+        final Map<String, dynamic> clean = Map.from(item);
+        clean.remove('id');
+        return clean;
+      }).toList();
+
+      final newItemsPayload = {
+        'outlet_id': orderData['outlet_id'],
+        'items': cleanNewItems, // ✅ item baru tanpa id
+      };
+
+      print("Step 1B - Add New Items: ${jsonEncode(newItemsPayload)}");
+
+      final newItemsResponse = await http.post(
+        Uri.parse('$baseUrl/orders/$orderId/add-items'), // ← coba endpoint ini
+        headers: headers,
+        body: jsonEncode(newItemsPayload),
+      );
+
+      print("[Step 1B RESPONSE] <-- STATUS: ${newItemsResponse.statusCode}");
+      print("[Step 1B BODY]: ${newItemsResponse.body}");
+
+      // Jika endpoint add-items tidak ada (404), coba endpoint alternatif
+      if (newItemsResponse.statusCode == 404) {
+        print("⚠️ Endpoint add-items tidak ditemukan, coba endpoint lain...");
+        
+        final altResponse = await http.post(
+          Uri.parse('$baseUrl/orders/$orderId/items/add'),
+          headers: headers,
+          body: jsonEncode(newItemsPayload),
+        );
+        print("[Step 1B ALT RESPONSE] <-- STATUS: ${altResponse.statusCode}");
+        print("[Step 1B ALT BODY]: ${altResponse.body}");
+      }
+    }
+
+    // ✅ STEP 2: Proses pembayaran
+    final paymentPayload = {
+      'payments': [
+        {
+          'method': orderData['payment_method'],
+          'amount_paid': orderData['paid_amount'],
+        },
+      ],
+      'tax_amount': orderData['tax_amount'],
+      'tax_breakdown': orderData['tax_breakdown'],
+      'total_price': orderData['total_price'],
+      'subtotal_price': orderData['subtotal_price'],
+      'discount_amount': orderData['discount_amount'],
+    };
+
+    print("Step 2 - Process Payment: ${jsonEncode(paymentPayload)}");
+
+    final paymentResponse = await http.post(
+      Uri.parse('$baseUrl/orders/$orderId/payments'),
+      headers: headers,
+      body: jsonEncode(paymentPayload),
+    );
+
+    print("[Step 2 RESPONSE] <-- STATUS: ${paymentResponse.statusCode}");
+    print("Body: ${paymentResponse.body}");
+
+    final result = jsonDecode(paymentResponse.body);
+
+    if (paymentResponse.statusCode == 200 || paymentResponse.statusCode == 201) {
+      print("✅ [API SUCCESS] Pembayaran Pending Order Berhasil.");
+      return {'success': true, 'data': result['data'] ?? result};
+    } else {
+      print("❌ [API FAILED] Pembayaran Gagal: ${result['message']}");
+      return {'success': false, 'message': result['message'] ?? 'Gagal proses pembayaran'};
+    }
+  } catch (e) {
+    print("💥 [API ERROR] updatePendingOrder: $e");
+    return {'success': false, 'message': 'Kesalahan Sistem: $e'};
   }
+}
 
   // --- 5C. GET PENDING ORDERS ---
   static Future<List<Order>> getPendingOrders() async {

@@ -19,7 +19,13 @@ class CartPanel extends StatefulWidget {
   final Function(int) onDecrease;
   final Function(int) onDelete;
   final Function(Map<String, dynamic>) onCheckoutSuccess; 
-  final Function(String customerName, String tableNumber) onSaveDraft; 
+  
+  final Function(String customerName, String tableNumber, int? tableId) onSaveDraft; 
+
+  // 🔥 FITUR PENDING: Tambahkan 2 parameter ini untuk menerima status dari HomeScreen
+  final bool isPendingMode;
+  final int? pendingOrderId;
+  final int? pendingDiscountId; 
 
   const CartPanel({
     super.key,
@@ -29,11 +35,17 @@ class CartPanel extends StatefulWidget {
     this.initialCustomerName,
     this.initialTableNumber,
     this.initialTableId,
+    this.pendingDiscountId,
     required this.onIncrease,
     required this.onDecrease,
     required this.onDelete,
     required this.onCheckoutSuccess,
     required this.onSaveDraft, 
+    
+    
+    // 🔥 FITUR PENDING: Inisialisasi parameter di constructor
+    this.isPendingMode = false,
+    this.pendingOrderId,
   });
 
   @override
@@ -51,7 +63,7 @@ class _CartPanelState extends State<CartPanel> {
 
   bool _showTableSelection = false;
   
-  // 🔥 TAMBAHAN: Variabel untuk menyimpan ID Meja
+  // Variabel untuk menyimpan ID Meja
   int? _selectedTableId;
 
   @override
@@ -151,26 +163,43 @@ class _CartPanelState extends State<CartPanel> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            "Pesanan Saat Ini",
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87, fontFamily: 'Poppins'),
+                          // 🔥 FITUR PENDING: Ubah title jika ini mode pending
+                          Text(
+                            widget.isPendingMode ? "Update Pesanan" : "Pesanan Saat Ini",
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87, fontFamily: 'Poppins'),
                           ),
-                          TextButton.icon(
-                            onPressed: () => widget.onSaveDraft(_customerController.text, _tableController.text),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              backgroundColor: AppStyle.primaryBlue.withValues(alpha: 0.1),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          
+                          // 🔥 FITUR PENDING: Sembunyikan tombol draft jika sedang mode pending order
+                          if (!widget.isPendingMode)
+                            TextButton.icon(
+                              onPressed: () => widget.onSaveDraft(
+                                _customerController.text, 
+                                _tableController.text, 
+                                _selectedTableId
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                backgroundColor: AppStyle.primaryBlue.withValues(alpha: 0.1),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.inventory_2_outlined, color: AppStyle.primaryBlue, size: 16),
+                              label: const Text("Draft", style: TextStyle(color: AppStyle.primaryBlue, fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
                             ),
-                            icon: const Icon(Icons.inventory_2_outlined, color: AppStyle.primaryBlue, size: 16),
-                            label: const Text("Draft", style: TextStyle(color: AppStyle.primaryBlue, fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 15),
-                      _buildInput(controller: _customerController, hint: "Nama Customer", icon: Icons.person_outline_rounded),
+                      
+                      // 🔥 FITUR PENDING: Kunci input nama pelanggan
+                      _buildInput(
+                        controller: _customerController, 
+                        hint: "Nama Customer", 
+                        icon: Icons.person_outline_rounded,
+                        isReadOnly: widget.isPendingMode // Teruskan status read-only
+                      ),
                       const SizedBox(height: 10),
-                      _buildTableSelectorButton(), 
+                      
+                      // 🔥 FITUR PENDING: Teruskan status read-only ke pemilih meja
+                      _buildTableSelectorButton(isReadOnly: widget.isPendingMode), 
                     ],
                   ),
                 ),
@@ -198,11 +227,11 @@ class _CartPanelState extends State<CartPanel> {
             if (_showTableSelection)
               Positioned.fill(
                 child: TablePanel(
-                  currentTableId: _selectedTableId, // Sudah sinkron dengan variabel state
+                  currentTableId: _selectedTableId, 
                   onTableSelected: (tableData) {
                     setState(() {
-                      _selectedTableId = tableData['id'];         // Menyimpan ID Meja
-                      _tableController.text = tableData['name'];  // Menyimpan Nama Meja
+                      _selectedTableId = tableData['id'];         
+                      _tableController.text = tableData['name'];  
                       _showTableSelection = false; 
                     });
                   },
@@ -219,23 +248,25 @@ class _CartPanelState extends State<CartPanel> {
     );
   }
 
-  Widget _buildInput({required TextEditingController controller, required String hint, required IconData icon}) {
+  // 🔥 FITUR PENDING: Tambahkan parameter isReadOnly
+  Widget _buildInput({required TextEditingController controller, required String hint, required IconData icon, bool isReadOnly = false}) {
     return Container(
       height: 45, 
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC), 
+        color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC), // Ubah warna jika dikunci
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.1))
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: AppStyle.primaryBlue),
+          Icon(icon, size: 18, color: isReadOnly ? Colors.grey : AppStyle.primaryBlue),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppStyle.primaryBlue, fontFamily: 'Poppins'),
+              readOnly: isReadOnly, // Kunci input jika true
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: isReadOnly ? Colors.grey.shade700 : AppStyle.primaryBlue, fontFamily: 'Poppins'),
               decoration: InputDecoration(hintText: hint, border: InputBorder.none, isDense: true),
             ),
           ),
@@ -244,22 +275,23 @@ class _CartPanelState extends State<CartPanel> {
     );
   }
 
-  Widget _buildTableSelectorButton() {
+  // 🔥 FITUR PENDING: Tambahkan parameter isReadOnly untuk mencegah popup meja terbuka
+  Widget _buildTableSelectorButton({bool isReadOnly = false}) {
     bool hasSelectedTable = _tableController.text.isNotEmpty;
 
     return GestureDetector(
-      onTap: () => setState(() => _showTableSelection = true),
+      onTap: isReadOnly ? null : () => setState(() => _showTableSelection = true), // Disable tap jika terkunci
       child: Container(
         height: 45, 
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC), 
+          color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC), // Ubah warna
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.1))
         ),
         child: Row(
           children: [
-            Icon(Icons.table_restaurant_outlined, size: 18, color: AppStyle.primaryBlue),
+            Icon(Icons.table_restaurant_outlined, size: 18, color: isReadOnly ? Colors.grey : AppStyle.primaryBlue),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -267,12 +299,13 @@ class _CartPanelState extends State<CartPanel> {
                 style: TextStyle(
                   fontSize: 13, 
                   fontWeight: hasSelectedTable ? FontWeight.w700 : FontWeight.normal, 
-                  color: hasSelectedTable ? AppStyle.primaryBlue : Colors.black54, 
+                  color: isReadOnly ? Colors.grey.shade700 : (hasSelectedTable ? AppStyle.primaryBlue : Colors.black54), 
                   fontFamily: 'Poppins'
                 ),
               ),
             ),
-            const Icon(Icons.arrow_drop_down_rounded, color: Colors.black54),
+            if (!isReadOnly) // Sembunyikan panah drop-down jika form dikunci
+              const Icon(Icons.arrow_drop_down_rounded, color: Colors.black54),
           ],
         ),
       ),
@@ -359,7 +392,6 @@ class _CartPanelState extends State<CartPanel> {
   }
 
   Widget _buildFooter(double total) {
-    // Validasi tombol checkout, tidak bisa diklik jika keranjang kosong atau meja belum dipilih
     bool isTableEmpty = _selectedTableId == null;
 
     return Container(
@@ -392,17 +424,29 @@ class _CartPanelState extends State<CartPanel> {
                     cart: widget.cart,
                     hasDiscountedItem: widget.hasDiscountedItem, 
                     totalAmount: total,
-                    orderId: _orderId,
-                    tableNumber: _tableController.text, // Teks untuk UI struk
-                    tableId: _selectedTableId,          // 🔥 ID dikirim ke CheckoutDialog
+                    
+                    // 🔥 FITUR PENDING: Jika mode pending, teruskan ID pending order (jika null, biarkan string kosong atau ID manual)
+                    orderId: widget.isPendingMode && widget.pendingOrderId != null 
+                        ? widget.pendingOrderId.toString() 
+                        : _orderId,
+                        
+                    tableNumber: _tableController.text, 
+                    tableId: _selectedTableId,         
                     customerName: _customerController.text, 
                     cashierName: _cashierName,
                     formatCurrency: widget.formatCurrency,
+                    
+                    // 🔥 FITUR PENDING: Sampaikan ke CheckoutDialog bahwa ini bayar pesanan pending
+                    isUpdatingOrder: widget.isPendingMode,
+                    pendingDiscountId: widget.pendingDiscountId,
                   ),
                 );
                 if (result != null) widget.onCheckoutSuccess(result);
               },
-              child: const Text("Checkout", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Poppins')),
+              child: Text(
+                widget.isPendingMode ? "Update & Bayar" : "Checkout", // 🔥 Ubah teks tombol jika pending mode
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Poppins')
+              ),
             ),
           )
         ],

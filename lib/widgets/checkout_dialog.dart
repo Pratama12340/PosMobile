@@ -19,6 +19,10 @@ class CheckoutDialog extends StatefulWidget {
   final String customerName; 
   final String cashierName;
   final String Function(double) formatCurrency;
+  final int? pendingDiscountId;
+
+  // 🔥 FITUR DITAMBAHKAN: Mendeteksi apakah ini pesanan baru atau update pesanan pending
+  final bool isUpdatingOrder;
 
   const CheckoutDialog({
     super.key,
@@ -27,10 +31,12 @@ class CheckoutDialog extends StatefulWidget {
     required this.totalAmount,
     required this.orderId,
     this.tableId,
+    this.pendingDiscountId,
     required this.tableNumber,
     required this.customerName, 
     required this.cashierName,
     required this.formatCurrency,
+    this.isUpdatingOrder = false, // Set default false
   });
 
   @override
@@ -66,23 +72,35 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     super.dispose();
   }
 
-  void _loadDiscounts() async {
-    final discounts = await ApiService.getDiscounts();
-    if (!mounted) return;
-    setState(() {
-      _availableDiscounts = discounts;
-      
-      if (widget.hasDiscountedItem) {
-        List<int> cartProductIds = widget.cart.values.map((item) => item.productId).toList();
-        for (var d in discounts) {
-          if (d.scope == 'products' && d.productIds.any((id) => cartProductIds.contains(id))) {
-            _selectedDiscount = d; 
-            break;
-          }
+ void _loadDiscounts() async {
+  final discounts = await ApiService.getDiscounts();
+  if (!mounted) return;
+  setState(() {
+    _availableDiscounts = discounts;
+
+    // 🔥 Jika pending order punya discount, preselect otomatis
+    if (widget.pendingDiscountId != null) {
+      _selectedDiscount = discounts.firstWhere(
+        (d) => d.id == widget.pendingDiscountId,
+        orElse: () => discounts.first,
+      );
+      return; // skip logika hasDiscountedItem
+    }
+
+    if (widget.hasDiscountedItem) {
+      List<int> cartProductIds = widget.cart.values
+          .map((item) => item.productId)
+          .toList();
+      for (var d in discounts) {
+        if (d.scope == 'products' &&
+            d.productIds.any((id) => cartProductIds.contains(id))) {
+          _selectedDiscount = d;
+          break;
         }
       }
-    });
-  }
+    }
+  });
+}
 
   void _loadTaxes() async {
     final taxes = await ApiService.getTaxes();
@@ -93,13 +111,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   }
 
   double _calculateDiscountValue(double subtotal) {
-    if (widget.hasDiscountedItem) return 0;
-
-    if (_selectedDiscount == null) return 0;
-    return _selectedDiscount!.type == 'percentage'
-        ? (subtotal * _selectedDiscount!.value) / 100
-        : _selectedDiscount!.value.toDouble();
-  }
+  if (_selectedDiscount == null) return 0;
+  return _selectedDiscount!.type == 'percentage'
+      ? (subtotal * _selectedDiscount!.value) / 100
+      : _selectedDiscount!.value.toDouble();
+}
 
   Map<String, dynamic> _calculateTaxesAndGrandTotal(double baseAmount) {
     double serviceAmount = 0;
@@ -129,7 +145,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         amt = (tax['type'] == 'percentage') ? (baseForOtherTax * (rate / 100)) : rate;
       }
 
-      amt = amt.ceilToDouble(); 
+      amt = amt.floorToDouble(); 
       totalTaxAmount += amt;
       
       Map<String, dynamic> taxData = Map<String, dynamic>.from(tax);
@@ -140,7 +156,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     return {
       'tax_amount': totalTaxAmount,
       'tax_breakdown': taxBreakdown,
-      'grand_total': (baseAmount + totalTaxAmount).ceilToDouble(), 
+      'grand_total': (baseAmount + totalTaxAmount).floorToDouble(), 
     };
   }
 
@@ -248,21 +264,19 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
     String btnText = "Pilih Diskon Tambahan";
     if (isProductDiscountActive) {
-      if (_availableDiscounts.isEmpty) {
-        btnText = "Mengecek Promo...";
-      } else if (_selectedDiscount != null) {
-        btnText = _selectedDiscount!.name;
-      } else {
-        btnText = "Promo Produk Aktif";
-      }
-    } else if (hasGlobalDiscount) {
+  if (_selectedDiscount != null) {
+    btnText = _selectedDiscount!.name;
+  } else {
+    btnText = "Promo Produk Aktif (Tap untuk ubah)";
+  }
+} else if (hasGlobalDiscount) {
       btnText = _selectedDiscount!.name;
     }
 
     bool isHighlighted = isProductDiscountActive || hasGlobalDiscount;
 
     return InkWell(
-      onTap: isProductDiscountActive ? null : () => setState(() => _showDiscountList = true),
+     onTap: () => setState(() => _showDiscountList = true),
       borderRadius: BorderRadius.circular(10),
       child: Container(
         width: double.infinity,
@@ -297,11 +311,14 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             ),
             Row(
               children: [
-                if (isProductDiscountActive) ...[
-                  const Text("Otomatis Aktif", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.orange)),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.lock_outline, size: 16, color: Colors.orange),
-                ] else ...[
+                if (isProductDiscountActive && _selectedDiscount == null) ...[
+                const Text(
+                  "Aktif", 
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.orange)
+                ),
+                const SizedBox(width: 6),
+                const Icon(Icons.swap_horiz_rounded, size: 16, color: Colors.orange), // ✅ bisa swap
+              ] else ...[
                   Text(
                     hasGlobalDiscount ? "- ${widget.formatCurrency(discAmount)}" : "Tambah", 
                     style: TextStyle(
@@ -389,7 +406,11 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                     padding: const EdgeInsets.all(40),
                     child: Column(
                       children: [
-                        const Text("Payment Method", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
+                        // 🔥 FITUR DITAMBAHKAN: Ubah title jika ini mode update pesanan
+                        Text(
+                          widget.isUpdatingOrder ? "Bayar Pesanan (Update)" : "Payment Method", 
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Poppins')
+                        ),
                         const SizedBox(height: 30),
                         Row(children: [
                           _payBtn('Cash', Icons.payments_outlined),

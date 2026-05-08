@@ -33,7 +33,7 @@ class ApiService {
 
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/login-pin'),
+        Uri.parse('$baseUrl/login-pin'), // ✅ Sudah diperbaiki
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -62,19 +62,30 @@ class ApiService {
 
         final String? shiftId = data['shift_id']?.toString();
         if (shiftId == null || shiftId == 'null' || shiftId.isEmpty) {
-          return {'success': false, 'message': 'Akses Ditolak: Anda tidak memiliki jadwal shift aktif.'};
+          print(
+            "❌ [API REJECTED] Karyawan tidak memiliki jadwal shift aktif saat ini.",
+          );
+          return {
+            'success': false,
+            'message':
+                'Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.',
+          };
         }
 
         await StorageService.saveToken(data['token']);
         await StorageService.saveCashierName(user['name'] ?? "Kasir");
         await StorageService.saveUserRole(user['role']?.toString() ?? "Cashier");
         await StorageService.saveOutletId(outletId);
-        
-        // --- AMBIL INFO OUTLET (NAMA & ALAMAT) ---
-        final outletInfo = await fetchOutletInfoLive();
-        await StorageService.saveOutletName(outletInfo['name']!);
 
-        if (user['image'] != null) await StorageService.saveProfilePhoto(user['image'].toString());
+        final outletInfo = await fetchOutletInfoLive();
+        await StorageService.saveOutletName(outletInfo['name'] ?? "Outlet");
+
+        if (user['image'] != null) {
+          await StorageService.saveProfilePhoto(user['image'].toString());
+        } else {
+          await StorageService.saveProfilePhoto("");
+        }
+
         await StorageService.saveCurrentShiftId(shiftId);
 
         if (data['opening_balance'] != null) {
@@ -91,23 +102,16 @@ class ApiService {
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
-// --- FETCH OUTLET INFO LIVE ---
-  static Future<Map<String, dynamic>> fetchOutletInfoLive() async {
+
+  // --- 2. FETCH OUTLET INFO LIVE ---
+  static Future<Map<String, String>> fetchOutletInfoLive() async {
     print("[API REQUEST] --> FETCH OUTLET INFO LIVE");
     try {
       final token = await StorageService.getToken();
       final outletId = await StorageService.getOutletId();
 
-      if (outletId == null) {
-        return {
-          'name': "Outlet Belum Dipilih",
-          'address_outlet': "-",
-          'phone_number_outlet': "-",
-          'image': null,
-          'owner_name': "-",
-          'owner_email': "-",
-        };
-      }
+      if (outletId == null)
+        return {'name': "Outlet Belum Dipilih", 'address': "-"};
 
       final response = await http.get(
         Uri.parse('$baseUrl/outlets'),
@@ -120,95 +124,25 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        List<dynamic> outlets = (result['data'] is List) ? result['data'] : (result['data']?['data'] ?? []);
+        List<dynamic> outlets = (result['data'] is List)
+            ? result['data']
+            : (result['data']?['data'] ?? []);
 
         for (var outlet in outlets) {
           if (outlet['id'].toString() == outletId.toString()) {
-            
-            String ownerName = "Belum diatur";
-            String ownerEmail = "Belum diatur";
-
-            // 2. AMBIL DATA DARI DATABASE USERS BERDASARKAN owner_id (Dilengkapi Debugging 403)
-            if (outlet['owner_id'] != null && outlet['owner_id'].toString() != "NULL") {
-              try {
-                print("==================================================");
-                print("🚨 [DEBUG Laporan Backend] MULAI CEK AKSES /users");
-                print("🚨 [DEBUG Laporan Backend] Mencari owner_id : ${outlet['owner_id']}");
-                
-                final userResponse = await http.get(
-                  Uri.parse('$baseUrl/users'),
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-                  },
-                );
-
-                print("🚨 [DEBUG Laporan Backend] Status HTTP   : ${userResponse.statusCode}");
-                print("🚨 [DEBUG Laporan Backend] Body Response : ${userResponse.body}");
-                print("==================================================");
-
-                if (userResponse.statusCode == 200) {
-                  final userResult = jsonDecode(userResponse.body);
-                  
-                  List<dynamic> users = [];
-                  if (userResult is List) {
-                    users = userResult;
-                  } else if (userResult['data'] is List) {
-                    users = userResult['data'];
-                  }
-
-                  for (var user in users) {
-                    if (user['id'].toString() == outlet['owner_id'].toString()) {
-                      ownerName = user['name']?.toString() ?? "Belum diatur";
-                      ownerEmail = user['email']?.toString() ?? "Belum diatur";
-                      break; 
-                    }
-                  }
-                } else {
-                  print("💥 [API ERROR] Gagal load users, backend menolak. Status: ${userResponse.statusCode}");
-                }
-              } catch (e) {
-                print("💥 [API ERROR] Gagal fetch data user: $e");
-              }
-            }
-
-            // 3. LOGIKA UNTUK GAMBAR DARI DATABASE
-            String? imageUrl;
-            var dbImage = outlet['image'];
-            
-            if (dbImage != null && dbImage.toString().trim() != "" && dbImage.toString() != "NULL") {
-              imageUrl = dbImage.toString();
-              print("🟢 [DEBUG IMAGE] URL Gambar dari DB: $imageUrl");
-              
-              // Catatan: Jika backend Anda hanya menyimpan nama file (misal: "toko1.jpg") 
-              // dan bukan full URL (seperti "http://domain.com/toko1.jpg"),
-              // hapus komentar pada 3 baris di bawah ini dan sesuaikan link-nya:
-              //
-              // if (!imageUrl.startsWith('http')) {
-              //   imageUrl = "https://domain-backend-anda.com/storage/$imageUrl";
-              // }
-            } else {
-              print("🟡 [DEBUG IMAGE] Kolom image di DB bernilai NULL atau kosong.");
-            }
-
             return {
-              'name': outlet['name']?.toString() ?? "Nama Outlet",
-              'address_outlet': (outlet['address_outlet'] != null && outlet['address_outlet'] != "NULL") 
-                  ? outlet['address_outlet'].toString() : "Belum diatur",
-              'phone_number_outlet': (outlet['phone_number_outlet'] != null && outlet['phone_number_outlet'] != "NULL") 
-                  ? outlet['phone_number_outlet'].toString() : "Belum diatur",
-              'image': imageUrl, // Memasukkan variabel imageUrl yang sudah divalidasi
-              'owner_name': ownerName,
-              'owner_email': ownerEmail,
+              'name': outlet['name']?.toString() ?? "Outlet",
+              'address':
+                  outlet['address_outlet']?.toString() ??
+                  "Alamat tidak tersedia",
             };
           }
         }
       }
-      return {'name': "Outlet Tidak Ditemukan", 'address_outlet': "-", 'phone_number_outlet': "-", 'image': null, 'owner_name': "-", 'owner_email': "-"};
+      return {'name': "Outlet Tidak Ditemukan", 'address': "-"};
     } catch (e) {
       debugPrint("💥 [API ERROR] fetchOutletInfoLive: $e");
-      return {'name': "Error Jaringan", 'address_outlet': "-", 'phone_number_outlet': "-", 'image': null, 'owner_name': "-", 'owner_email': "-"};
+      return {'name': "Error Jaringan", 'address': "-"};
     }
   }
   // --- 3. GET CATEGORIES ---
@@ -269,6 +203,148 @@ class ApiService {
         return {'success': false, 'message': result['message'] ?? 'Gagal Simpan'};
       }
     } catch (e) { return {'success': false, 'message': 'Kesalahan Sistem: $e'}; }
+  }
+
+  // --- 5B. UPDATE PENDING ORDER (EDIT ITEMS & BAYAR) ---
+  static Future<Map<String, dynamic>> updatePendingOrder(
+    String orderId,
+    Map<String, dynamic> orderData,
+  ) async {
+    print("\n[API REQUEST] --> UPDATE PENDING ORDER (ID: $orderId)");
+    try {
+      final headers = await _getHeaders();
+
+      if (!orderData.containsKey('outlet_id')) {
+        final int? outletId = await StorageService.getOutletId();
+        orderData['outlet_id'] = outletId;
+      }
+
+      // ✅ STEP 1: Update items order + pajak & total
+      final itemsPayload = {
+        '_method': 'PUT',
+        'outlet_id': orderData['outlet_id'],
+        'customer_name': orderData['customer_name'],
+        'table_id': orderData['table_id'],
+        'subtotal_price': orderData['subtotal_price'],
+        'discount_amount': orderData['discount_amount'],
+        'tax_amount': orderData['tax_amount'],
+        'tax_breakdown': orderData['tax_breakdown'],
+        'total_price': orderData['total_price'],
+        'items': orderData['items'],
+      };
+
+      print("Step 1 - Update Items: ${jsonEncode(itemsPayload)}");
+
+      final itemsResponse = await http.post(
+        Uri.parse('$baseUrl/orders/$orderId/items'),
+        headers: headers,
+        body: jsonEncode(itemsPayload),
+      );
+
+      print("[Step 1 RESPONSE] <-- STATUS: ${itemsResponse.statusCode}");
+      print("[Step 1 BODY]: ${itemsResponse.body}");
+      print("Body: ${itemsResponse.body}");
+
+      if (itemsResponse.statusCode != 200 && itemsResponse.statusCode != 201) {
+        final err = jsonDecode(itemsResponse.body);
+        return {
+          'success': false,
+          'message': err['message'] ?? 'Gagal update items',
+        };
+      }
+
+      // ✅ STEP 2: Proses pembayaran → ubah status pending ke paid
+      final paymentPayload = {
+        'payments': [
+          {
+            'method': orderData['payment_method'], // 'cash' / 'card' / 'qris'
+            'amount_paid': orderData['paid_amount'],
+          },
+        ],
+          // 🔥 Coba tambahkan ini
+  'tax_amount': orderData['tax_amount'],
+  'tax_breakdown': orderData['tax_breakdown'],
+  'total_price': orderData['total_price'],
+  'subtotal_price': orderData['subtotal_price'],
+  'discount_amount': orderData['discount_amount'],
+      };
+
+      print("Step 2 - Process Payment: ${jsonEncode(paymentPayload)}");
+
+      final paymentResponse = await http.post(
+        Uri.parse('$baseUrl/orders/$orderId/payments'),
+        headers: headers,
+        body: jsonEncode(paymentPayload),
+      );
+
+      print("[Step 2 RESPONSE] <-- STATUS: ${paymentResponse.statusCode}");
+      print("Body: ${paymentResponse.body}");
+
+      final result = jsonDecode(paymentResponse.body);
+
+      if (paymentResponse.statusCode == 200 ||
+          paymentResponse.statusCode == 201) {
+        print("✅ [API SUCCESS] Pembayaran Pending Order Berhasil.");
+        return {'success': true, 'data': result['data'] ?? result};
+      } else {
+        print("❌ [API FAILED] Pembayaran Gagal: ${result['message']}");
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Gagal proses pembayaran',
+        };
+      }
+    } catch (e) {
+      print("💥 [API ERROR] updatePendingOrder: $e");
+      return {'success': false, 'message': 'Kesalahan Sistem: $e'};
+    }
+  }
+
+  // --- 5C. GET PENDING ORDERS ---
+  static Future<List<Order>> getPendingOrders() async {
+    print("\n[API REQUEST] --> MENGAMBIL PENDING ORDERS");
+    try {
+      final headers = await _getHeaders();
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/orders?status=pending'),
+        headers: headers,
+      );
+
+      print("[API RESPONSE PENDING] <-- STATUS: ${response.statusCode}");
+      print("[RAW BODY PENDING]: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+
+        List<dynamic> rawData = [];
+        if (result['data'] != null) {
+          if (result['data'] is Map && result['data'].containsKey('data')) {
+            rawData = result['data']['data'];
+          } else if (result['data'] is List) {
+            rawData = result['data'];
+          }
+        } else if (result is List) {
+          rawData = result;
+        }
+
+        List<Order> parsedOrders = [];
+        for (var i = 0; i < rawData.length; i++) {
+          try {
+            parsedOrders.add(Order.fromJson(rawData[i]));
+          } catch (err) {
+            print("⚠️ GAGAL PARSING ITEM KE-$i: $err");
+          }
+        }
+
+        print("✅ Berhasil memproses ${parsedOrders.length} object Order.");
+        return parsedOrders;
+      }
+      return [];
+    } catch (e, stacktrace) {
+      print("💥 [API ERROR] getPendingOrders: $e");
+      print(stacktrace);
+      return [];
+    }
   }
 
   // --- 6. API HISTORY TRANSACTIONS ---

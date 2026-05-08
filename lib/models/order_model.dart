@@ -37,6 +37,8 @@ class OrderItem {
 
   int get quantity => activeQty;
   
+  // 🔥 FITUR PENDING: Tambahan getter 'price' agar kompatibel dengan pemanggilan di HomeScreen
+  double get price => unitPrice; 
   
   set quantity(int val) {
     activeQty = val;
@@ -88,16 +90,27 @@ class Order {
   final int id;              
   final int orderId;         
   final String invoiceNo, date, cashierName, customerName, tableNo, paymentMethod, status;
+  
+  // 🔥 FITUR PENDING: Tambahan tableId untuk form dropdown kasir
+  final int? tableId;
+  final int? discountId; 
+
   final double subtotalPrice, discountAmount, taxAmount, totalPrice, paidAmount, changeAmount;
   final List<OrderItem> items;
   final List<OrderLog> logs;
   final List<dynamic>? taxBreakdown;
 
+  // 🔥 FITUR PENDING: Getter kompatibilitas untuk HomeScreen
+  String? get tableNumber => tableId?.toString();
+
   Order({
     required this.id,
     required this.orderId,    
     required this.invoiceNo, required this.date, required this.cashierName,
-    required this.customerName, required this.tableNo, required this.paymentMethod, required this.status,
+    required this.customerName, required this.tableNo, 
+    this.tableId,
+    this.discountId, // 🔥
+    required this.paymentMethod, required this.status,
     required this.subtotalPrice, required this.discountAmount, required this.taxAmount,
     this.taxBreakdown,
     required this.totalPrice, required this.paidAmount, required this.changeAmount,
@@ -125,11 +138,16 @@ class Order {
     }
 
     String tNo = "Takeaway";
+    int? tId; // 🔥 Penampung ID meja
+
     var tableData = orderRelasi['table'] ?? d['table'];
+    
     if (tableData != null) {
       tNo = "Meja ${tableData['name'] ?? tableData['id']}";
+      tId = int.tryParse(tableData['id']?.toString() ?? '');
     } else if (d['table_id'] != null && d['table_id'] != 0) {
       tNo = "Meja ${d['table_id']}";
+      tId = int.tryParse(d['table_id']?.toString() ?? '');
     }
 
     return Order(
@@ -140,6 +158,8 @@ class Order {
       cashierName: d['cashier_name'] ?? d['cashier']?['name'] ?? d['user']?['name'] ?? "Staff",
       customerName: d['customer_name'] ?? "-",
       tableNo: tNo,
+      tableId: tId,
+      discountId: int.tryParse(d['discount_id']?.toString() ?? ''),  
       paymentMethod: (d['payment_method']?.toString() ?? "CASH").toUpperCase(),
       status: d['status'] ?? "paid",
       subtotalPrice: double.tryParse((d['subtotal_price'] ?? '0').toString()) ?? 0.0,

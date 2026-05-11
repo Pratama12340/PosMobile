@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../services/storage_service.dart';
 import 'login_screen.dart';
 
@@ -79,15 +79,26 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10))
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.storefront_rounded, size: 60, color: AppStyle.primaryBlue),
+              const Icon(
+                Icons.storefront_rounded,
+                size: 60,
+                color: AppStyle.primaryBlue,
+              ),
               const SizedBox(height: 20),
-              Text("Konfigurasi Outlet", style: AppStyle.titleText.copyWith(fontSize: 22)),
+              Text(
+                "Konfigurasi Outlet",
+                style: AppStyle.titleText.copyWith(fontSize: 22),
+              ),
               const SizedBox(height: 10),
               const Text(
                 "Masukkan ID Outlet sesuai instruksi Manager.\nIdentitas ini akan mengunci menu dan akses kasir.",
@@ -99,11 +110,16 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
                 controller: _outletIdController,
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
                 decoration: InputDecoration(
                   labelText: "ID Outlet",
                   prefixIcon: const Icon(Icons.numbers),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   filled: true,
                   fillColor: Colors.grey.shade50,
                 ),
@@ -116,13 +132,20 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
                   onPressed: _isLoading ? null : _saveAndContinue,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppStyle.primaryBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     elevation: 0,
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("SIMPAN & LANJUT LOGIN",
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      : const Text(
+                          "SIMPAN & LANJUT LOGIN",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],

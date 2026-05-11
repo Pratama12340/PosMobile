@@ -6,9 +6,9 @@ class Product {
   final String? description;
   final int price;
   final String image;
-  final String category; 
+  final String category;
   int stock;
-  Discount? discount; 
+  Discount? discount;
   bool? isBestseller;
 
   Product({
@@ -30,11 +30,15 @@ class Product {
       description: json['description'] ?? '',
       price: double.parse(json['price'].toString()).toInt(),
       image: json['image'] ?? '',
-      category: (json['category_name'] ?? 
-                  json['category'] ?? 
-                  json['category_id'] ?? 
-                  'Uncategorized').toString(),
-      stock: json['stock'] != null ? int.tryParse(json['stock'].toString()) ?? 0 : 0,
+      category:
+          (json['category_name'] ??
+                  json['category'] ??
+                  json['category_id'] ??
+                  'Uncategorized')
+              .toString(),
+      stock: json['stock'] != null
+          ? int.tryParse(json['stock'].toString()) ?? 0
+          : 0,
       isBestseller: json['is_bestseller'] == 1 || json['is_bestseller'] == true,
     );
   }

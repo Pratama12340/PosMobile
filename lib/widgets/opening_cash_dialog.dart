@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
 
@@ -88,25 +88,32 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                   children: [
                     if (_errorMessage != null)
                       Container(
-                        width: double.infinity, 
+                        width: double.infinity,
                         margin: const EdgeInsets.only(bottom: 20),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(15), 
+                          borderRadius: BorderRadius.circular(15),
                           border: Border.all(color: Colors.red.shade200),
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center, 
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                            Icon(
+                              Icons.error_outline,
+                              color: Colors.red.shade700,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
                                 _errorMessage!,
-                                textAlign: TextAlign.center, 
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Colors.red.shade700, 
+                                  color: Colors.red.shade700,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -130,8 +137,8 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: AppStyle.bgLightBlue,
-                        prefixIcon: Padding(
-                          padding: const EdgeInsets.only(left: 30, right: 10),
+                        prefixIcon: const Padding(
+                          padding: EdgeInsets.only(left: 30, right: 10),
                           child: Text(
                             "Rp",
                             style: TextStyle(
@@ -146,7 +153,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                           minWidth: 0,
                           minHeight: 0,
                         ),
-                        suffixIcon: const SizedBox(width: 65), 
+                        suffixIcon: const SizedBox(width: 65),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
@@ -159,7 +166,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                         if (_errorMessage != null) {
                           setState(() => _errorMessage = null);
                         }
-                        
+
                         if (value.isNotEmpty) {
                           String formatted = _formatNumber(value);
                           _cashController.value = TextEditingValue(
@@ -235,39 +242,56 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                         if (_cashController.text.isNotEmpty) {
                           debugPrint("\n[DIALOG] Memulai proses Buka Kasir...");
                           debugPrint("[DIALOG] Nominal Kas Awal: $_rawAmount");
-                          
+
                           setState(() {
                             _isSaving = true;
                             _errorMessage = null;
                           });
 
-                          final navigator = Navigator.of(context); 
-                          
+                          final navigator = Navigator.of(context);
+
                           try {
-                            final int outletId = await StorageService.getOutletId() ?? 0;
-                            final apiResponse = await ApiService.startShift(_rawAmount, outletId);
-                            
+                            final int outletId =
+                                await StorageService.getOutletId() ?? 0;
+                            final apiResponse = await ApiService.startShift(
+                              _rawAmount,
+                              outletId,
+                            );
+
                             if (!mounted) return;
 
                             if (apiResponse['success'] == true) {
-                              debugPrint("✔ Berhasil menyimpan Kas Awal ke Server Database.");
-                              
-                              await StorageService.saveOpeningCash(_rawAmount.toDouble());
-                              await StorageService.saveShiftStatus(true);
-                              
-                              DateTime now = DateTime.now();
-                              String exactStartTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-                              await StorageService.saveLoginTime(exactStartTime);
+                              debugPrint(
+                                "✔ Berhasil menyimpan Kas Awal ke Server Database.",
+                              );
 
-                              debugPrint("✔ Berhasil menandai status Shift Lokal: AKTIF mulai jam $exactStartTime.");
-                              debugPrint("[DIALOG] Proses Selesai. Menutup dialog...\n");
-                              
-                              if (!mounted) return;              
-                              navigator.pop();  
+                              await StorageService.saveOpeningCash(
+                                _rawAmount.toDouble(),
+                              );
+                              await StorageService.saveShiftStatus(true);
+
+                              DateTime now = DateTime.now();
+                              String exactStartTime =
+                                  "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+                              await StorageService.saveLoginTime(
+                                exactStartTime,
+                              );
+
+                              debugPrint(
+                                "✔ Berhasil menandai status Shift Lokal: AKTIF mulai jam $exactStartTime.",
+                              );
+                              debugPrint(
+                                "[DIALOG] Proses Selesai. Menutup dialog...\n",
+                              );
+
+                              if (!mounted) return;
+                              navigator.pop();
                             } else {
                               setState(() {
                                 _isSaving = false;
-                                _errorMessage = apiResponse['message'] ?? "Gagal menyimpan kas awal di server.";
+                                _errorMessage =
+                                    apiResponse['message'] ??
+                                    "Gagal menyimpan kas awal di server.";
                               });
                               debugPrint("❌ GAGAL: ${apiResponse['message']}");
                             }
@@ -275,7 +299,8 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                             if (mounted) {
                               setState(() {
                                 _isSaving = false;
-                                _errorMessage = "Terjadi kesalahan koneksi jaringan.";
+                                _errorMessage =
+                                    "Terjadi kesalahan koneksi jaringan.";
                               });
                             }
                             debugPrint("❌ ERROR pada OpeningCashDialog: $e");
@@ -291,7 +316,10 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                     ? const SizedBox(
                         width: 24,
                         height: 24,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
                       )
                     : Text(
                         "BUKA KASIR SEKARANG",

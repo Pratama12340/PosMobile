@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
-import '../style.dart'; 
+import '../constants/style.dart';
 import '../services/printer_service.dart';
 import '../models/transaction_model.dart';
 
@@ -10,13 +10,13 @@ class SuccessPaymentPage extends StatelessWidget {
   final String outletAddress;
   final String paymentMethod;
   final double grandTotal;
-  final List<dynamic> taxBreakdown;    
-  final double discountAmount; 
+  final List<dynamic> taxBreakdown;
+  final double discountAmount;
   final double amountPaid;
   final double change;
   final Map<int, OrderItem> cart;
   final String tableNumber;
-  final String customerName; 
+  final String customerName;
   final String cashierName;
   final String Function(double) formatCurrency;
 
@@ -33,7 +33,7 @@ class SuccessPaymentPage extends StatelessWidget {
     required this.change,
     required this.cart,
     required this.tableNumber,
-    required this.customerName, 
+    required this.customerName,
     required this.cashierName,
     required this.formatCurrency,
   });
@@ -41,7 +41,7 @@ class SuccessPaymentPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F3F9), 
+      backgroundColor: const Color(0xFFF1F3F9),
       body: Center(
         child: SingleChildScrollView(
           child: Container(
@@ -56,7 +56,7 @@ class SuccessPaymentPage extends StatelessWidget {
                   color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 30,
                   offset: const Offset(0, 10),
-                )
+                ),
               ],
             ),
             child: Column(
@@ -94,15 +94,15 @@ class SuccessPaymentPage extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: AppStyle.primaryBlue, 
+                      color: AppStyle.primaryBlue,
                       fontFamily: 'Poppins',
                     ),
                   ),
                 ],
                 const SizedBox(height: 40),
-                
-               
-                if (paymentMethod.toLowerCase() == 'cash' || paymentMethod == 'Tunai')
+
+                if (paymentMethod.toLowerCase() == 'cash' ||
+                    paymentMethod == 'Tunai')
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 30),
@@ -137,17 +137,23 @@ class SuccessPaymentPage extends StatelessWidget {
                 else
                   Column(
                     children: [
-                      const Text("Total Pembayaran", style: TextStyle(color: Colors.grey, fontSize: 16)),
+                      const Text(
+                        "Total Pembayaran",
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
                       Text(
-                        formatCurrency(grandTotal), 
-                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF4285F4)),
+                        formatCurrency(grandTotal),
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF4285F4),
+                        ),
                       ),
                     ],
                   ),
-                
+
                 const SizedBox(height: 60),
-                
-               
+
                 Row(
                   children: [
                     Expanded(
@@ -156,7 +162,7 @@ class SuccessPaymentPage extends StatelessWidget {
                         "Transaksi Baru",
                         const Color(0xFF4CAF50),
                         Icons.add_shopping_cart_rounded,
-                        true, // isBack = true
+                        true,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -166,7 +172,7 @@ class SuccessPaymentPage extends StatelessWidget {
                         "Cetak Struk",
                         const Color(0xFF4285F4),
                         Icons.print_rounded,
-                        false, 
+                        false,
                       ),
                     ),
                   ],
@@ -179,16 +185,21 @@ class SuccessPaymentPage extends StatelessWidget {
     );
   }
 
-  Widget _buildActionBtn(BuildContext context, String label, Color color, IconData icon, bool isBack) {
+  Widget _buildActionBtn(
+    BuildContext context,
+    String label,
+    Color color,
+    IconData icon,
+    bool isBack,
+  ) {
     return SizedBox(
       height: 65,
       child: ElevatedButton.icon(
-        onPressed: isBack 
-            ? () => Navigator.of(context).popUntil((route) => route.isFirst) 
+        onPressed: isBack
+            ? () => Navigator.of(context).popUntil((route) => route.isFirst)
             : () {
                 final printerService = TerminalPrinterService();
 
-                
                 final List<CartItem> itemsForPrinting = cart.values.map((item) {
                   return CartItem(
                     itemName: item.itemName,
@@ -206,17 +217,13 @@ class SuccessPaymentPage extends StatelessWidget {
                   customerName: customerName,
                   tableNumber: tableNumber,
                   items: itemsForPrinting,
-                  taxBreakdown: List<Map<String, dynamic>>.from(taxBreakdown),          
-                  discountAmount: discountAmount, 
+                  taxBreakdown: List<Map<String, dynamic>>.from(taxBreakdown),
+                  discountAmount: discountAmount,
                   totalDariHalaman: grandTotal,
                 );
 
-                
-                
-                
                 printerService.printToTerminal(transaction);
-                
-               
+
                 printerService.printKitchenToTerminal(transaction);
 
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -238,7 +245,9 @@ class SuccessPaymentPage extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           elevation: 0,
         ),
       ),

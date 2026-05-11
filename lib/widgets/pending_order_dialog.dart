@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
-import '../style.dart'; 
+import '../constants/style.dart';
 
 class PendingOrderPanel extends StatelessWidget {
   final List<Order> pendingOrders;
@@ -21,7 +21,7 @@ class PendingOrderPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 360, // Lebar disamakan standar CartPanel
+      width: 360,
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -29,12 +29,11 @@ class PendingOrderPanel extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 15,
             offset: const Offset(-5, 0),
-          )
+          ),
         ],
       ),
       child: Column(
         children: [
-          // --- HEADER PANEL ---
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: Row(
@@ -45,7 +44,11 @@ class PendingOrderPanel extends StatelessWidget {
                     color: AppStyle.primaryBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.receipt_long, color: AppStyle.primaryBlue, size: 20),
+                  child: const Icon(
+                    Icons.receipt_long,
+                    color: AppStyle.primaryBlue,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Expanded(
@@ -63,7 +66,11 @@ class PendingOrderPanel extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   child: const Padding(
                     padding: EdgeInsets.all(4.0),
-                    child: Icon(Icons.close_rounded, color: Colors.black54, size: 24),
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: Colors.black54,
+                      size: 24,
+                    ),
                   ),
                 ),
               ],
@@ -71,62 +78,83 @@ class PendingOrderPanel extends StatelessWidget {
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFF5F5F5)),
 
-          // --- LIST PESANAN ---
           Expanded(
             child: isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppStyle.primaryBlue))
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppStyle.primaryBlue,
+                    ),
+                  )
                 : pendingOrders.isEmpty
-                    ? const Center(
-                        child: Text(
-                          "Tidak ada pesanan tertunda.",
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                ? const Center(
+                    child: Text(
+                      "Tidak ada pesanan tertunda.",
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    itemCount: pendingOrders.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1, color: Color(0xFFF5F5F5)),
+                    itemBuilder: (context, index) {
+                      final order = pendingOrders[index];
+
+                      String custName = order.customerName;
+                      String tableNo = order.tableId?.toString() ?? '-';
+                      double total = (order.totalPrice).toDouble();
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 8,
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        itemCount: pendingOrders.length,
-                        separatorBuilder: (context, index) => const Divider(height: 1, color: Color(0xFFF5F5F5)),
-                        itemBuilder: (context, index) {
-                          final order = pendingOrders[index];
-                          
-                          String custName = order.customerName ;
-                          String tableNo = order.tableId?.toString() ?? '-';
-                          double total = (order.totalPrice).toDouble();
-                          
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                            leading: CircleAvatar(
-                              backgroundColor: const Color(0xFFF8FAFC),
-                              child: Text(
-                                tableNo, 
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: AppStyle.primaryBlue, fontSize: 14),
-                              ),
+                        leading: CircleAvatar(
+                          backgroundColor: const Color(0xFFF8FAFC),
+                          child: Text(
+                            tableNo,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppStyle.primaryBlue,
+                              fontSize: 14,
                             ),
-                            title: Text(
-                              custName, 
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)
+                          ),
+                        ),
+                        title: Text(
+                          custName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text(
+                            "Total: ${formatHarga(total)}",
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 13,
                             ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 4.0),
-                              child: Text(
-                                "Total: ${formatHarga(total)}", 
-                                style: const TextStyle(color: Colors.black54, fontSize: 13)
-                              ),
-                            ),
-                            trailing: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: AppStyle.primaryBlue.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6)
-                              ),
-                              child: const Icon(Icons.arrow_forward_ios, size: 12, color: AppStyle.primaryBlue),
-                            ),
-                            onTap: () {
-                              onOrderSelected(order); // Pindahkan data ke Home
-                            },
-                          );
+                          ),
+                        ),
+                        trailing: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_ios,
+                            size: 12,
+                            color: AppStyle.primaryBlue,
+                          ),
+                        ),
+                        onTap: () {
+                          onOrderSelected(order);
                         },
-                      ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

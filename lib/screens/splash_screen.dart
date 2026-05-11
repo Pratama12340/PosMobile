@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import 'outlet_selection_screen.dart';
 import 'login_screen.dart';
 
@@ -19,32 +19,44 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkDeviceStatus() async {
-    await Future.delayed(const Duration(milliseconds: 1500)); 
+    await Future.delayed(const Duration(milliseconds: 1500));
 
     final int? outletId = await StorageService.getOutletId();
 
     if (!mounted) return;
 
     if (outletId == null) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OutletSelectionScreen()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const OutletSelectionScreen()),
+      );
     } else {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppStyle.primaryBlue, 
+      backgroundColor: AppStyle.primaryBlue,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.storefront, size: 80, color: Colors.white),
             const SizedBox(height: 20),
-            Text("ARANUS POS", style: AppStyle.titleText.copyWith(color: Colors.white, fontSize: 24)),
+            Text(
+              "ARANUS POS",
+              style: AppStyle.titleText.copyWith(
+                color: Colors.white,
+                fontSize: 24,
+              ),
+            ),
             const SizedBox(height: 30),
-            const CircularProgressIndicator(color: Colors.white), 
+            const CircularProgressIndicator(color: Colors.white),
           ],
         ),
       ),

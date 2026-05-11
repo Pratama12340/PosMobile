@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; 
-import '../style.dart';
+import 'package:intl/intl.dart';
+import '../constants/style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
 import '../widgets/edit_dialog.dart';
@@ -46,24 +46,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _connectReverb() async {
-  final int? outletId = await StorageService.getOutletId(); // ✅ int?
-  if (outletId == null) return;
+    final int? outletId = await StorageService.getOutletId();
+    if (outletId == null) return;
 
-  _reverbService.initConnection(
-    channelName: 'private-orders.outlet.$outletId',
-    eventName: '.order.updated',
-    onEventReceived: (data) {
-      debugPrint('⚡ [HISTORY] Order updated: $data');
-      _loadHistory();
-    },
-  );
-}
+    _reverbService.initConnection(
+      channelName: 'private-orders.outlet.$outletId',
+      eventName: '.order.updated',
+      onEventReceived: (data) {
+        debugPrint('⚡ [HISTORY] Order updated: $data');
+        _loadHistory();
+      },
+    );
+  }
 
   Color _getSideColor(String method) {
     String m = method.toUpperCase();
     if (m.contains('CASH')) return AppStyle.primaryBlue;
     if (m.contains('QRIS')) return Colors.redAccent;
-    if (m.contains('DEBIT') || m.contains('CARD')) return Colors.amber; 
+    if (m.contains('DEBIT') || m.contains('CARD')) return Colors.amber;
     return Colors.green;
   }
 
@@ -83,19 +83,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
           }
 
           final query = widget.searchController.text.toLowerCase();
-          
+
           final String todayStr = DateFormat('yyyyMMdd').format(DateTime.now());
 
           final filteredOrders = snapshot.data!.where((order) {
             bool isCurrentShift = order.invoiceNo.contains(todayStr);
-            bool matchesSearch = order.invoiceNo.toLowerCase().contains(query) ||
-                                order.customerName.toLowerCase().contains(query);
+            bool matchesSearch =
+                order.invoiceNo.toLowerCase().contains(query) ||
+                order.customerName.toLowerCase().contains(query);
 
             return isCurrentShift && matchesSearch;
           }).toList();
 
           if (filteredOrders.isEmpty) {
-            return const Center(child: Text("Data tidak ditemukan untuk shift ini"));
+            return const Center(
+              child: Text("Data tidak ditemukan untuk shift ini"),
+            );
           }
 
           return GridView.builder(
@@ -106,9 +109,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               mainAxisSpacing: 20,
               mainAxisExtent: 100,
             ),
-            itemCount: filteredOrders.length, 
+            itemCount: filteredOrders.length,
             itemBuilder: (context, index) {
-              final order = filteredOrders[index]; 
+              final order = filteredOrders[index];
               final sideColor = _getSideColor(order.paymentMethod);
 
               return Container(
@@ -166,14 +169,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                Icon(Icons.person_outline,
-                                    size: 12, color: Colors.grey[600]),
+                                Icon(
+                                  Icons.person_outline,
+                                  size: 12,
+                                  color: Colors.grey[600],
+                                ),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
                                     order.customerName,
-                                    style: AppStyle.subTitleText
-                                        .copyWith(fontSize: 11),
+                                    style: AppStyle.subTitleText.copyWith(
+                                      fontSize: 11,
+                                    ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -181,13 +188,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                             Row(
                               children: [
-                                Icon(Icons.table_restaurant_outlined,
-                                    size: 12, color: Colors.grey[600]),
+                                Icon(
+                                  Icons.table_restaurant_outlined,
+                                  size: 12,
+                                  color: Colors.grey[600],
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   order.tableNo,
-                                  style: AppStyle.subTitleText
-                                      .copyWith(fontSize: 11),
+                                  style: AppStyle.subTitleText.copyWith(
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
@@ -211,7 +222,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             const SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: sideColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),

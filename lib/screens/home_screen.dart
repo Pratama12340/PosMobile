@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../services/api_service.dart';
-import '../models/product_models.dart';
+import '../models/product_model.dart';
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../widgets/cart_panel.dart';
@@ -32,13 +32,11 @@ class HomeScreenState extends State<HomeScreen> {
   String? _currentTableNumber;
   int? _currentTableId;
 
-  // 🔥 FITUR PENDING: Variabel untuk menyimpan data pesanan pending & status form
   List<Order> _pendingOrders = [];
   bool _isPendingOrderLoaded = false;
   int? _currentPendingOrderId;
   int? _currentPendingDiscountId;
 
-  // 🔥 STATE UNTUK PANEL PENDING
   bool _isPendingPanelVisible = false;
   bool _isLoadingPendingOrders = false;
 
@@ -53,12 +51,9 @@ class HomeScreenState extends State<HomeScreen> {
 
   bool _isCartVisible = false;
 
-  // 🔥 PERBAIKAN: closeCart yang cerdas
   void closeCart() {
     setState(() {
       if (_cart.isNotEmpty) {
-        // Jika INI BUKAN pesanan pending, simpan ke Draf.
-        // Jika ini pesanan pending, biarkan saja terhapus dari UI karena datanya sudah aman di server sebagai Pending.
         if (!_isPendingOrderLoaded) {
           _drafts.add({
             'cart': Map<int, OrderItem>.from(_cart),
@@ -73,7 +68,6 @@ class HomeScreenState extends State<HomeScreen> {
         _currentTableNumber = null;
         _currentTableId = null;
 
-        // Reset status pending
         _isPendingOrderLoaded = false;
         _currentPendingOrderId = null;
         _currentPendingDiscountId = null;
@@ -124,9 +118,7 @@ class HomeScreenState extends State<HomeScreen> {
         ApiService.getDiscounts().catchError((e) => <Discount>[]),
         ApiService.getReports().catchError((e) => []),
         ApiService.fetchHistory().catchError((e) => <Order>[]),
-        ApiService.getPendingOrders().catchError(
-          (e) => <Order>[],
-        ), // 🔥 Tambahkan pengecekan langsung ke pending orders
+        ApiService.getPendingOrders().catchError((e) => <Order>[]),
       ]);
 
       if (mounted) {
@@ -135,15 +127,13 @@ class HomeScreenState extends State<HomeScreen> {
         final List<Discount> discountsData = results[2] as List<Discount>;
         final List reportsData = results[3];
         final List<Order> historyData = results[4] as List<Order>;
-        final List<Order> pendingData =
-            results[5] as List<Order>; // 🔥 Hasil fetch pending
+        final List<Order> pendingData = results[5] as List<Order>;
 
         List<Order> loadedPendingOrders = pendingData.isNotEmpty
             ? pendingData
             : [];
         Map<int, int> productSales = {};
 
-        // Sinkronisasi data history untuk bestseller
         for (var order in historyData) {
           if (order.status == 'paid') {
             for (var item in order.items) {
@@ -151,7 +141,6 @@ class HomeScreenState extends State<HomeScreen> {
                   (productSales[item.productId] ?? 0) + item.quantity;
             }
           }
-          // Jika data API pending belum lengkap, bisa ambil dari history jika statusnya pending
           if (pendingData.isEmpty &&
               (order.status == 'pending' || order.status == 'unpaid')) {
             loadedPendingOrders.add(order);
@@ -202,7 +191,6 @@ class HomeScreenState extends State<HomeScreen> {
 
         Set<int> calculatedBestsellers = {};
 
-        // Terapkan diskon ke setiap produk
         for (var product in productsData) {
           final specificDiscount = discountsData
               .where(
@@ -216,15 +204,13 @@ class HomeScreenState extends State<HomeScreen> {
               : null;
         }
 
-        // 🔥 Ambil top 5 produk terlaris
         final sortedBySales = List<Product>.from(productsData)
           ..sort((a, b) {
             int salesA = productSales[a.id] ?? 0;
             int salesB = productSales[b.id] ?? 0;
-            return salesB.compareTo(salesA); // Descending
+            return salesB.compareTo(salesA);
           });
 
-        // Hanya produk yang punya minimal 1 penjualan & ambil top 5
         final top5 = sortedBySales
             .where((p) => (productSales[p.id] ?? 0) > 0)
             .take(5)
@@ -307,11 +293,8 @@ class HomeScreenState extends State<HomeScreen> {
         if (productIndex != -1) {
           final product = _allProducts[productIndex];
           itemName = product.name;
-          // 🔥 Selalu pakai harga asli yang tersimpan di order (item.price)
-          // Jangan terapkan diskon produk di sini — backend simpan harga asli
           unitPrice = (item.price > 0) ? item.price : product.price.toDouble();
         }
-        // 🔥 PERBAIKAN: Gunakan item.id (ID record item), bukan item.productId
         _cart[item.productId] = OrderItem(
           id: item.id,
           productId: item.productId,
@@ -373,7 +356,7 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     bool hasDiscountedItem = _isPendingOrderLoaded
-        ? false // ✅ Pending: diskon via pendingDiscountId, bukan per-produk
+        ? false
         : _cart.values.any((cartItem) {
             int index = _allProducts.indexWhere(
               (p) => p.id == cartItem.productId,
@@ -381,13 +364,10 @@ class HomeScreenState extends State<HomeScreen> {
             return index != -1 && _allProducts[index].discount != null;
           });
 
-    // Sekarang originalTotalAmount = unitPrice karena unitPrice sudah = harga asli
     double originalTotalAmount = _isPendingOrderLoaded
         ? 0.0
         : _cart.values.fold(0.0, (sum, cartItem) {
-            return sum +
-                (cartItem.unitPrice *
-                    cartItem.quantity); // ✅ pakai unitPrice langsung
+            return sum + (cartItem.unitPrice * cartItem.quantity);
           });
 
     return Scaffold(
@@ -397,7 +377,6 @@ class HomeScreenState extends State<HomeScreen> {
           : Row(
               children: [
                 Expanded(
-                  // 🔥 PERBAIKAN: Memungkinkan area kiri diklik untuk menutup semua panel (Cart / Pending)
                   child: GestureDetector(
                     onTap: () {
                       if (_isPendingPanelVisible) {
@@ -405,11 +384,10 @@ class HomeScreenState extends State<HomeScreen> {
                           _isPendingPanelVisible = false;
                         });
                       } else if (_isCartVisible) {
-                        closeCart(); // Tutup cart secara aman
+                        closeCart();
                       }
                     },
-                    behavior:
-                        HitTestBehavior.translucent, // Deteksi area kosong
+                    behavior: HitTestBehavior.translucent,
                     child: Padding(
                       padding: const EdgeInsets.all(20.0),
                       child: Column(
@@ -422,7 +400,6 @@ class HomeScreenState extends State<HomeScreen> {
                               if (_cart.isEmpty && _drafts.isNotEmpty)
                                 _buildDraftDropdownButton(),
 
-                              // 🔥 PERBAIKAN: Ikon hanya muncul jika ada pending AND panel pending tertutup AND cart pending tertutup
                               if (_pendingOrders.isNotEmpty &&
                                   !_isPendingPanelVisible &&
                                   !_isPendingOrderLoaded) ...[
@@ -500,7 +477,6 @@ class HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // 🔥 RENDER PANEL KANAN BERDASARKAN STATUS
                 if (_isPendingPanelVisible)
                   _buildPendingOrderPanel()
                 else if (_isCartVisible &&
@@ -608,7 +584,6 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ✅ SESUDAH — channel disesuaikan dengan outlet_id
   Future<void> _connectReverb() async {
     final int? outletId = await StorageService.getOutletId();
 
@@ -619,7 +594,7 @@ class HomeScreenState extends State<HomeScreen> {
 
     await _reverbService.initConnection(
       channelName: 'private-orders.outlet.$outletId',
-      eventName: '.order.created', // listen order baru untuk refresh pending
+      eventName: '.order.created',
       onEventReceived: (data) {
         debugPrint('⚡ [HOME] Event Reverb diterima: $data');
         _refreshPendingOrdersSilently();
@@ -650,7 +625,6 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Di home_screen.dart — dalam class HomeScreenState
   Future<void> refreshPendingOrdersSilently() async {
     try {
       final freshOrders = await ApiService.getPendingOrders();
@@ -662,7 +636,6 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 🔥 Refresh pending orders tanpa mengubah UI secara mencolok
   Future<void> _refreshPendingOrdersSilently() async {
     try {
       final freshOrders = await ApiService.getPendingOrders();
@@ -676,7 +649,6 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 🔥 WIDGET PANEL PESANAN TERTUNDA
   Widget _buildPendingOrderPanel() {
     return Container(
       width: 360,
@@ -693,7 +665,6 @@ class HomeScreenState extends State<HomeScreen> {
       ),
       child: Column(
         children: [
-          // --- HEADER PANEL ---
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: Row(
@@ -734,7 +705,6 @@ class HomeScreenState extends State<HomeScreen> {
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFF5F5F5)),
 
-          // --- LIST PESANAN ---
           Expanded(
             child: _isLoadingPendingOrders
                 ? const Center(
@@ -1164,10 +1134,8 @@ class HomeScreenState extends State<HomeScreen> {
                     onTap: isOutOfStock
                         ? null
                         : () => setState(() {
-                            // ✅ Jika mode pending, cek apakah item baru (bukan dari order)
                             if (_isPendingOrderLoaded &&
                                 !_cart.containsKey(p.id)) {
-                              // Tampilkan pesan — item baru tidak bisa ditambah ke pending order
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: const Text(
@@ -1181,7 +1149,7 @@ class HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               );
-                              return; // ← stop, jangan tambah item
+                              return;
                             }
 
                             _isPendingPanelVisible = false;
@@ -1189,8 +1157,7 @@ class HomeScreenState extends State<HomeScreen> {
                             widget.onCartToggled?.call(true);
 
                             if (_cart.containsKey(p.id)) {
-                              _cart[p.id]!
-                                  .quantity++; // ✅ item lama boleh ditambah qty-nya
+                              _cart[p.id]!.quantity++;
                             } else {
                               _cart[p.id] = OrderItem(
                                 id: 0,

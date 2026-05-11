@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../services/api_service.dart';
 
 class ProfilHistory extends StatefulWidget {
@@ -15,7 +15,7 @@ class _ProfilHistoryState extends State<ProfilHistory> {
   @override
   void initState() {
     super.initState();
-    _outletDataFuture = ApiService.fetchOutletInfoLive(); 
+    _outletDataFuture = ApiService.fetchOutletInfoLive();
   }
 
   @override
@@ -36,15 +36,13 @@ class _ProfilHistoryState extends State<ProfilHistory> {
           final String phone = data['phone_number_outlet'] ?? "Belum diatur";
           final String address = data['address_outlet'] ?? "Belum diatur";
           final String ownerName = data['owner_name'] ?? "Belum diatur";
-          final String ownerEmail = data['owner_email'] ?? "Belum diatur"; 
-          
-          // Ambil URL gambar dari data
+          final String ownerEmail = data['owner_email'] ?? "Belum diatur";
+
           final String? imageUrl = data['image'];
 
           return SingleChildScrollView(
             child: Stack(
               children: [
-                // --- 1. BACKGROUND HEADER GRADASI DENGAN WATERMARK ---
                 Container(
                   height: 280,
                   width: double.infinity,
@@ -74,10 +72,9 @@ class _ProfilHistoryState extends State<ProfilHistory> {
                   ),
                 ),
 
-                // --- 2. TOMBOL KEMBALI (BACK BUTTON) ---
                 Positioned(
-                  top: 40, 
-                  left: 24, 
+                  top: 40,
+                  left: 24,
                   child: IconButton(
                     icon: const Icon(
                       Icons.arrow_back_ios_new_rounded,
@@ -90,13 +87,11 @@ class _ProfilHistoryState extends State<ProfilHistory> {
                   ),
                 ),
 
-                // --- 3. KONTEN UTAMA (LAPISAN ATAS) ---
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 60),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // SISI KIRI (FOTO PROFIL)
                       Expanded(
                         flex: 4,
                         child: Column(
@@ -104,14 +99,16 @@ class _ProfilHistoryState extends State<ProfilHistory> {
                           children: [
                             const SizedBox(height: 80),
 
-                            // Penanganan Gambar Dinamis
                             Container(
                               height: 400,
                               width: 300,
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: Colors.white, width: 6),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 6,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.15),
@@ -120,19 +117,17 @@ class _ProfilHistoryState extends State<ProfilHistory> {
                                   ),
                                 ],
                               ),
-                              // Gunakan ClipRRect agar gambar terpotong mengikuti border radius
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18), 
+                                borderRadius: BorderRadius.circular(18),
                                 child: (imageUrl != null && imageUrl.isNotEmpty)
                                     ? Image.network(
                                         imageUrl,
                                         fit: BoxFit.cover,
-                                        // errorBuilder akan dijalankan jika link rusak/mengalami 404
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return _buildPlaceholderImage();
-                                        },
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                              return _buildPlaceholderImage();
+                                            },
                                       )
-                                    // Jika imageUrl dari database memang null, langsung tampilkan placeholder
                                     : _buildPlaceholderImage(),
                               ),
                             ),
@@ -142,7 +137,6 @@ class _ProfilHistoryState extends State<ProfilHistory> {
 
                       const SizedBox(width: 50),
 
-                      // SISI KANAN (NAMA OUTLET & KOTAK INFO)
                       Expanded(
                         flex: 6,
                         child: Column(
@@ -208,7 +202,6 @@ class _ProfilHistoryState extends State<ProfilHistory> {
     );
   }
 
-  // Widget Helper untuk Placeholder Gambar (Tampil jika DB null atau link error)
   Widget _buildPlaceholderImage() {
     return Container(
       color: Colors.grey.shade100,
@@ -220,15 +213,16 @@ class _ProfilHistoryState extends State<ProfilHistory> {
             const SizedBox(height: 10),
             Text(
               "No Image",
-              style: AppStyle.subTitleText.copyWith(color: Colors.grey.shade500),
-            )
+              style: AppStyle.subTitleText.copyWith(
+                color: Colors.grey.shade500,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Widget Helper Card Modern
   Widget _buildModernInfoBox({
     required String label,
     required String value,
@@ -242,10 +236,7 @@ class _ProfilHistoryState extends State<ProfilHistory> {
       decoration: BoxDecoration(
         color: baseColor.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: baseColor.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
+        border: Border.all(color: baseColor.withValues(alpha: 0.3), width: 1.5),
       ),
       child: Row(
         children: [
@@ -255,11 +246,7 @@ class _ProfilHistoryState extends State<ProfilHistory> {
               color: baseColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              icon,
-              color: baseColor,
-              size: 28,
-            ),
+            child: Icon(icon, color: baseColor, size: 28),
           ),
           const SizedBox(width: 20),
           Expanded(

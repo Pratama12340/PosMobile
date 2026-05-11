@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'main_navigation.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
 import 'outlet_selection_screen.dart';
@@ -18,7 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final int _pinLength = 6;
   bool _isLoading = false;
   int _outletId = 0;
-  String? _errorMessage; 
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -76,12 +76,12 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                final navigator = Navigator.of(context); // ✅ simpan sebelum await
-                
+                final navigator = Navigator.of(context);
+
                 await StorageService.saveOutletId(0);
-                
-                if (!mounted) return; // ✅ cek mounted setelah await
-                navigator.pop(); // ✅ pakai navigator yang sudah disimpan
+
+                if (!mounted) return;
+                navigator.pop();
                 navigator.pushReplacement(
                   MaterialPageRoute(
                     builder: (context) => const OutletSelectionScreen(),
@@ -227,18 +227,21 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 5),
-                        Text(
+                        const Text(
                           "Masukkan 6 digit PIN akses",
                           style: AppStyle.subTitleText,
                         ),
-                        
+
                         SizedBox(height: _errorMessage != null ? 15 : 25),
 
                         if (_errorMessage != null)
                           Container(
                             width: 280,
                             margin: const EdgeInsets.only(bottom: 15),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.red.shade50,
                               borderRadius: BorderRadius.circular(8),
@@ -247,13 +250,17 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Icon(Icons.error_outline, color: Colors.red.shade700, size: 16),
+                                Icon(
+                                  Icons.error_outline,
+                                  color: Colors.red.shade700,
+                                  size: 16,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _errorMessage!,
                                     style: TextStyle(
-                                      color: Colors.red.shade700, 
+                                      color: Colors.red.shade700,
                                       fontSize: 12,
                                       height: 1.2,
                                     ),

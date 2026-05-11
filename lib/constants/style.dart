@@ -1,24 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; 
+import 'package:intl/intl.dart';
 
 class AppStyle {
-  // --- WARNA UTAMA ---
   static const Color primaryBlue = Color(0xFF4285F4);
-
   static const Color bgLightBlue = Color(0xFFF3F8FE);
-
-  
   static const Color errorRed = Colors.redAccent;
-
   static const Color textMain = Color(0xFF1A1C1E);
   static const Color textGrey = Color(0xFF757575);
   static const Color white = Colors.white;
 
-  // --- FONT FAMILY ---
   static const String fontPoppins = 'Poppins';
   static const String fontNumbers = 'JetBrains';
 
-  // --- TEXT STYLES ---
   static const TextStyle titleText = TextStyle(
     fontFamily: fontPoppins,
     fontSize: 28,
@@ -47,23 +40,20 @@ class AppStyle {
     color: white,
   );
 
- 
   static const TextStyle menuText = TextStyle(
     fontFamily: fontPoppins,
     fontSize: 14,
-    fontWeight: FontWeight.w500, 
+    fontWeight: FontWeight.w500,
     color: textMain,
   );
 
-  
   static const TextStyle priceText = TextStyle(
-    fontFamily: fontNumbers, 
+    fontFamily: fontNumbers,
     fontSize: 14,
-    fontWeight: FontWeight.w800, 
+    fontWeight: FontWeight.w800,
     color: primaryBlue,
   );
 
- 
   String formatHarga(double price) {
     final formatter = NumberFormat.currency(
       locale: 'id_ID',

@@ -1,12 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pusher_client_fixed/pusher_client_fixed.dart';
-
-// Sesuaikan path import ini dengan lokasi StorageService Anda
-import 'storage_service.dart'; 
+import 'storage_service.dart';
 
 class ReverbService {
-  // Singleton pattern
   static final ReverbService _instance = ReverbService._internal();
   factory ReverbService() => _instance;
   ReverbService._internal();
@@ -14,11 +11,8 @@ class ReverbService {
   PusherClient? _pusher;
   Channel? _channel;
 
-  // ========================================================
-  // KONFIGURASI SERVER REVERB (Sesuai .env Anda)
-  // ========================================================
-  final String reverbAppKey = "r3gcjhwwanzthldyihry"; 
-  final String reverbHost = "192.168.1.29"; // IP Lokal
+  final String reverbAppKey = "r3gcjhwwanzthldyihry";
+  final String reverbHost = "192.168.1.29";
   final int reverbPort = 8080;
   final String authUrl = "https://api.etres.my.id/api/broadcasting/auth";
 
@@ -35,12 +29,11 @@ class ReverbService {
         return;
       }
 
-      // 1. Konfigurasi PusherOptions untuk Custom Host (Reverb)
       PusherOptions options = PusherOptions(
         host: reverbHost,
         wsPort: reverbPort,
-        encrypted: false, // Set false karena pakai HTTP (ws://), bukan HTTPS (wss://)
-        cluster: 'mt1', // Wajib diisi meskipun Reverb tidak memakainya
+        encrypted: false,
+        cluster: 'mt1',
         auth: PusherAuth(
           authUrl,
           headers: {
@@ -50,31 +43,27 @@ class ReverbService {
         ),
       );
 
-      // 2. Inisialisasi PusherClient
       _pusher = PusherClient(
         reverbAppKey,
         options,
         autoConnect: false,
-        enableLogging: true, // Akan mencetak log koneksi di console Anda
+        enableLogging: true,
       );
 
-      // 3. Connect ke Server Reverb
       await _pusher!.connect();
 
       _pusher!.onConnectionStateChange((state) {
-        debugPrint("🔵 [REVERB STATUS] ${state?.previousState} -> ${state?.currentState}");
+        debugPrint(
+          "🔵 [REVERB STATUS] ${state?.previousState} -> ${state?.currentState}",
+        );
       });
 
       _pusher!.onConnectionError((error) {
         debugPrint("🔴 [REVERB ERROR] ${error?.message}");
       });
 
-      // 4. Subscribe ke Private Channel
       _channel = _pusher!.subscribe(channelName);
 
-      // 5. Bind / Dengarkan Event Masuk
-      // CATATAN: Terkadang Laravel menambahkan awalan titik (.). 
-      // Jika event tidak merespon, coba panggil dengan ".$eventName" (misal: ".order.updated")
       _channel!.bind(eventName, (PusherEvent? event) {
         debugPrint("⚡ [REVERB EVENT MASUK]: ${event?.eventName}");
         if (event?.data != null) {
@@ -83,8 +72,9 @@ class ReverbService {
         }
       });
 
-      debugPrint("✅ [REVERB SUCCESS] Terhubung dan listen ke channel: $channelName");
-
+      debugPrint(
+        "✅ [REVERB SUCCESS] Terhubung dan listen ke channel: $channelName",
+      );
     } catch (e) {
       debugPrint("💥 [REVERB FATAL ERROR]: $e");
     }

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
-import '../screens/login_screen.dart'; 
+import '../screens/login_screen.dart';
 
 class ClosingCashDialog extends StatefulWidget {
   const ClosingCashDialog({super.key});
@@ -16,7 +16,7 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
   final TextEditingController _actualCashController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   bool _isLoading = false;
-  String? _errorMessage; 
+  String? _errorMessage;
 
   int get _rawAmount {
     String clean = _actualCashController.text.replaceAll('.', '');
@@ -34,25 +34,30 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
 
   Future<void> _processClosing() async {
     if (_actualCashController.text.isEmpty || _rawAmount <= 0) {
-      setState(() => _errorMessage = "Harap masukkan total uang fisik di laci.");
+      setState(
+        () => _errorMessage = "Harap masukkan total uang fisik di laci.",
+      );
       return;
     }
 
     setState(() {
       _isLoading = true;
-      _errorMessage = null; 
+      _errorMessage = null;
     });
 
     try {
-      final result = await ApiService.endShift(_rawAmount, _notesController.text);
+      final result = await ApiService.endShift(
+        _rawAmount,
+        _notesController.text,
+      );
 
       if (result['success']) {
         await StorageService.tutupKasir();
         if (mounted) {
-          Navigator.pop(context); 
+          Navigator.pop(context);
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()), 
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
             (route) => false,
           );
         }
@@ -114,7 +119,10 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
               ),
             ),
             const SizedBox(height: 20),
-            Text("Tutup Shift", style: AppStyle.titleText.copyWith(fontSize: 28)),
+            Text(
+              "Tutup Shift",
+              style: AppStyle.titleText.copyWith(fontSize: 28),
+            ),
             const SizedBox(height: 10),
             Text(
               "Hitung semua uang fisik di laci dan masukkan totalnya di bawah ini untuk mengakhiri shift.",
@@ -132,23 +140,30 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                       Container(
                         width: double.infinity,
                         margin: const EdgeInsets.only(bottom: 20),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(15), 
+                          borderRadius: BorderRadius.circular(15),
                           border: Border.all(color: Colors.red.shade200),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                            Icon(
+                              Icons.error_outline,
+                              color: Colors.red.shade700,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
                                 _errorMessage!,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Colors.red.shade700, 
+                                  color: Colors.red.shade700,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -183,13 +198,18 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                             ),
                           ),
                         ),
-                        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                        suffixIcon: const SizedBox(width: 65), 
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 0,
+                          minHeight: 0,
+                        ),
+                        suffixIcon: const SizedBox(width: 65),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 20),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 20,
+                        ),
                       ),
                       onChanged: (value) {
                         if (_errorMessage != null) {
@@ -199,7 +219,9 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                           String formatted = _formatNumber(value);
                           _actualCashController.value = TextEditingValue(
                             text: formatted,
-                            selection: TextSelection.collapsed(offset: formatted.length),
+                            selection: TextSelection.collapsed(
+                              offset: formatted.length,
+                            ),
                           );
                         }
                       },
@@ -233,7 +255,7 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
@@ -251,16 +273,19 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                     ? const SizedBox(
                         height: 24,
                         width: 24,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
                       )
                     : const Text(
-                        "TUTUP SHIFT SEKARANG", 
+                        "TUTUP SHIFT SEKARANG",
                         style: TextStyle(
-                          color: Colors.white, 
-                          fontSize: 18, 
+                          color: Colors.white,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2
-                        )
+                          letterSpacing: 1.2,
+                        ),
                       ),
               ),
             ),
@@ -268,8 +293,12 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
             TextButton(
               onPressed: _isLoading ? null : () => Navigator.pop(context),
               child: const Text(
-                "Batal", 
-                style: TextStyle(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.w600)
+                "Batal",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],

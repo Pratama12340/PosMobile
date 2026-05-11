@@ -2,13 +2,13 @@ class CartItem {
   final String itemName;
   final int quantity;
   final double unitPrice;
-  final String notes; 
+  final String notes;
 
   CartItem({
-    required this.itemName, 
-    required this.quantity, 
-    required this.unitPrice, 
-    required this.notes
+    required this.itemName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.notes,
   });
 }
 
@@ -37,5 +37,6 @@ class TransactionModel {
     required this.totalDariHalaman,
   });
 
-  double get subtotal => items.fold(0, (sum, item) => sum + (item.quantity * item.unitPrice));
+  double get subtotal =>
+      items.fold(0, (sum, item) => sum + (item.quantity * item.unitPrice));
 }

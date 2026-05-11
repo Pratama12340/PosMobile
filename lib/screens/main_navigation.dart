@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
 import 'history_screen.dart';
-import 'shif_screen.dart';
+import 'shift_screen.dart';
 import 'setting_screen.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../services/storage_service.dart';
 import '../widgets/opening_cash_dialog.dart';
 import '../services/reverb_service.dart';
@@ -67,40 +67,44 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   }
 
   void _connectReverb() async {
-  final int? outletId = await StorageService.getOutletId(); // ✅ int?, bukan String
-  
-  if (outletId == null) {
-    debugPrint('🔴 [REVERB] outlet_id tidak ditemukan');
-    return;
-  }
+    final int? outletId = await StorageService.getOutletId();
 
-  _reverbService.initConnection(
-    channelName: 'private-orders.outlet.$outletId', // ✅ int langsung bisa dipakai di string interpolation
-    eventName: '.order.created',
-    onEventReceived: (data) {
-      debugPrint('⚡ [ORDER CREATED]: $data');
-      _homeKey.currentState?.refreshPendingOrdersSilently();
+    if (outletId == null) {
+      debugPrint('🔴 [REVERB] outlet_id tidak ditemukan');
+      return;
+    }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.add_shopping_cart, color: Colors.white),
-                const SizedBox(width: 10),
-                Text('Pesanan baru dari ${data['order']?['customer_name'] ?? 'Pelanggan'}!'),
-              ],
+    _reverbService.initConnection(
+      channelName: 'private-orders.outlet.$outletId',
+      eventName: '.order.created',
+      onEventReceived: (data) {
+        debugPrint('⚡ [ORDER CREATED]: $data');
+        _homeKey.currentState?.refreshPendingOrdersSilently();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.add_shopping_cart, color: Colors.white),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Pesanan baru dari ${data['order']?['customer_name'] ?? 'Pelanggan'}!',
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    },
-  );
-}
+          );
+        }
+      },
+    );
+  }
 
   @override
   void dispose() {

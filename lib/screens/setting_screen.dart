@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../style.dart'; 
-import 'printer_screen.dart'; 
-import 'profil_screen.dart';  
+import '../constants/style.dart';
+import 'printer_screen.dart';
+import 'profil_screen.dart';
 
 class SettingScreen extends StatefulWidget {
-  final TextEditingController searchController; 
-  const SettingScreen({super.key, required this.searchController}); 
+  final TextEditingController searchController;
+  const SettingScreen({super.key, required this.searchController});
 
   @override
   State<SettingScreen> createState() => _SettingScreenState();
@@ -35,11 +35,11 @@ class _SettingScreenState extends State<SettingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppStyle.bgLightBlue, 
+      backgroundColor: AppStyle.bgLightBlue,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 20), 
+          const SizedBox(height: 20),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -54,12 +54,13 @@ class _SettingScreenState extends State<SettingScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const PrinterScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => const PrinterScreen(),
+                        ),
                       );
                     },
                   ),
 
-                // Item Informasi Outlet
                 if ("informasi outlet".contains(_searchQuery))
                   _buildSettingItem(
                     context,
@@ -69,21 +70,20 @@ class _SettingScreenState extends State<SettingScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const ProfilHistory()),
+                        MaterialPageRoute(
+                          builder: (context) => const ProfilHistory(),
+                        ),
                       );
                     },
                   ),
 
-                // Item Tentang Aplikasi
                 if ("tentang aplikasi".contains(_searchQuery))
                   _buildSettingItem(
                     context,
                     icon: Icons.info_outline,
                     title: "Tentang Aplikasi",
                     subtitle: "Versi 1.0.0 - Aranus POS",
-                    onTap: () {
-                      // Tambahkan dialog atau halaman tentang aplikasi jika perlu
-                    },
+                    onTap: () {},
                   ),
               ],
             ),
@@ -93,11 +93,12 @@ class _SettingScreenState extends State<SettingScreen> {
     );
   }
 
-  Widget _buildSettingItem(BuildContext context, {
-    required IconData icon, 
-    required String title, 
+  Widget _buildSettingItem(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
     String? subtitle,
-    required VoidCallback onTap
+    required VoidCallback onTap,
   }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -106,7 +107,6 @@ class _SettingScreenState extends State<SettingScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            // Memperbaiki 'withOpacity' yang deprecated menjadi 'withValues'
             color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
@@ -116,11 +116,13 @@ class _SettingScreenState extends State<SettingScreen> {
       child: ListTile(
         onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 10,
+        ),
         leading: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            // Memperbaiki 'withOpacity' yang deprecated menjadi 'withValues'
             color: AppStyle.primaryBlue.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
@@ -133,10 +135,17 @@ class _SettingScreenState extends State<SettingScreen> {
             fontSize: 15,
           ),
         ),
-        subtitle: subtitle != null 
-          ? Text(subtitle, style: AppStyle.subTitleText.copyWith(fontSize: 11))
-          : null,
-        trailing: const Icon(Icons.chevron_right, color: AppStyle.textGrey, size: 20),
+        subtitle: subtitle != null
+            ? Text(
+                subtitle,
+                style: AppStyle.subTitleText.copyWith(fontSize: 11),
+              )
+            : null,
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: AppStyle.textGrey,
+          size: 20,
+        ),
       ),
     );
   }

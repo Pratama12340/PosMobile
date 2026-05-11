@@ -1,7 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class StorageService {
-  // --- KUMPULAN KEY ---
   static const String _keyToken = 'token';
   static const String _keyOutletId = 'outlet_id';
   static const String _keyCashierName = 'cashier_name';
@@ -9,14 +8,12 @@ class StorageService {
   static const String _keyUserRole = 'user_role';
   static const String _keyProfilePhoto = 'profile_photo';
   static const String _keyLoginTime = 'login_time';
-  static const String _keyOpeningCash = 'opening_cash'; 
-  
-  // Key Shift (Data operasional yang dipertahankan saat logout)
-  static const String _keyIsShiftActive = 'is_shift_active'; 
+  static const String _keyOpeningCash = 'opening_cash';
+  static const String _keyIsShiftActive = 'is_shift_active';
   static const String _keyCurrentShiftId = 'current_shift_id';
   static const String _keyShiftName = 'shift_name';
   static const String _keyShiftSchedule = 'shift_schedule';
-  static const String _keyLastShiftUserId = 'last_shift_user_id'; 
+  static const String _keyLastShiftUserId = 'last_shift_user_id';
 
   // --- 1. FUNGSI TOKEN ---
   static Future<void> saveToken(String token) async {
@@ -104,16 +101,16 @@ class StorageService {
 
   static Future<int> getOpeningBalance() async {
     final prefs = await SharedPreferences.getInstance();
-    final Object? val = prefs.get(_keyOpeningCash); 
-    
+    final Object? val = prefs.get(_keyOpeningCash);
+
     if (val == null) return 0;
-    
+
     if (val is int) return val;
-    if (val is double) return val.toInt(); 
+    if (val is double) return val.toInt();
     if (val is String) {
       return int.tryParse(val.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     }
-    
+
     return 0;
   }
 
@@ -123,7 +120,8 @@ class StorageService {
   }
 
   // Alias fungsi lama agar tidak error di bagian code lain (Bekerja dengan Int)
-  static Future<void> saveOpeningCash(double amount) async => saveOpeningBalance(amount.toInt());
+  static Future<void> saveOpeningCash(double amount) async =>
+      saveOpeningBalance(amount.toInt());
   static Future<double> getOpeningCash() async {
     final val = await getOpeningBalance();
     return val.toDouble();
@@ -183,27 +181,22 @@ class StorageService {
 
   // --- 6. LOGIKA LOGOUT VS TUTUP KASIR ---
 
-  // Logout hanya menghapus sesi user, data shift (ID & Status) TETAP DISIMPAN
-  // Agar saat user yang sama login lagi, dia tidak perlu input kas awal ulang.
   static Future<void> logoutKasir() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyToken);
     await prefs.remove(_keyCashierName);
     await prefs.remove(_keyUserRole);
     await prefs.remove(_keyProfilePhoto);
-    // CATATAN: Jangan hapus _keyIsShiftActive dan _keyCurrentShiftId di sini
   }
 
-  // Menghapus data operasional saat shift benar-benar selesai (End Shift)
   static Future<void> tutupKasir() async {
     final prefs = await SharedPreferences.getInstance();
-    await clearOpeningBalance(); 
+    await clearOpeningBalance();
     await prefs.remove(_keyLoginTime);
     await prefs.remove(_keyIsShiftActive);
     await prefs.remove(_keyCurrentShiftId);
     await prefs.remove(_keyShiftName);
     await prefs.remove(_keyShiftSchedule);
-    await prefs.remove(_keyLastShiftUserId); 
-    // CATATAN: Tetap simpan _keyOutletId agar user tidak perlu pilih outlet lagi
+    await prefs.remove(_keyLastShiftUserId);
   }
 }

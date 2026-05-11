@@ -1,31 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/order_model.dart';
-import '../style.dart'; 
+import '../constants/style.dart';
 import '../services/storage_service.dart';
 import 'checkout_dialog.dart';
-import 'table_panel.dart'; // Pastikan nama import ini sesuai dengan file kamu
+import 'table_panel.dart';
 
 class CartPanel extends StatefulWidget {
   final Map<int, OrderItem> cart;
-  final bool hasDiscountedItem; 
+  final bool hasDiscountedItem;
   final String Function(double) formatCurrency;
-  
+
   final String? initialCustomerName;
   final String? initialTableNumber;
-  final int? initialTableId; // Opsional jika kamu butuh inisialisasi dari draft
-  
-  final Function(int) onIncrease; 
+  final int? initialTableId;
+
+  final Function(int) onIncrease;
   final Function(int) onDecrease;
   final Function(int) onDelete;
-  final Function(Map<String, dynamic>) onCheckoutSuccess; 
-  
-  final Function(String customerName, String tableNumber, int? tableId) onSaveDraft; 
+  final Function(Map<String, dynamic>) onCheckoutSuccess;
 
-  // 🔥 FITUR PENDING: Tambahkan 2 parameter ini untuk menerima status dari HomeScreen
+  final Function(String customerName, String tableNumber, int? tableId)
+  onSaveDraft;
+
   final bool isPendingMode;
   final int? pendingOrderId;
-  final int? pendingDiscountId; 
+  final int? pendingDiscountId;
   final double originalTotalAmount;
 
   const CartPanel({
@@ -42,10 +42,8 @@ class CartPanel extends StatefulWidget {
     required this.onDecrease,
     required this.onDelete,
     required this.onCheckoutSuccess,
-    required this.onSaveDraft, 
-    
-    
-    // 🔥 FITUR PENDING: Inisialisasi parameter di constructor
+    required this.onSaveDraft,
+
     this.isPendingMode = false,
     this.pendingOrderId,
   });
@@ -57,24 +55,25 @@ class CartPanel extends StatefulWidget {
 class _CartPanelState extends State<CartPanel> {
   late TextEditingController _tableController;
   late TextEditingController _customerController;
-  
+
   final Map<int, TextEditingController> _noteControllers = {};
-  
+
   String _orderId = "";
   String _cashierName = "Loading...";
 
   bool _showTableSelection = false;
-  
-  // Variabel untuk menyimpan ID Meja
+
   int? _selectedTableId;
 
   @override
   void initState() {
     super.initState();
-    _customerController = TextEditingController(text: widget.initialCustomerName);
+    _customerController = TextEditingController(
+      text: widget.initialCustomerName,
+    );
     _tableController = TextEditingController(text: widget.initialTableNumber);
-    _selectedTableId = widget.initialTableId; // Set nilai awal jika ada
-    
+    _selectedTableId = widget.initialTableId;
+
     _generateOrderData();
     _loadCashierData();
     _syncNoteControllers();
@@ -83,7 +82,7 @@ class _CartPanelState extends State<CartPanel> {
   @override
   void didUpdateWidget(covariant CartPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     if (widget.initialCustomerName != oldWidget.initialCustomerName) {
       _customerController.text = widget.initialCustomerName ?? "";
     }
@@ -108,12 +107,14 @@ class _CartPanelState extends State<CartPanel> {
       }
     });
 
-    _noteControllers.removeWhere((id, controller) => !widget.cart.containsKey(id));
+    _noteControllers.removeWhere(
+      (id, controller) => !widget.cart.containsKey(id),
+    );
   }
 
   Future<void> _loadCashierData() async {
     final name = await StorageService.getCashierName();
-    if (mounted) setState(() => _cashierName = name );
+    if (mounted) setState(() => _cashierName = name);
   }
 
   void _generateOrderData() {
@@ -136,23 +137,26 @@ class _CartPanelState extends State<CartPanel> {
   @override
   Widget build(BuildContext context) {
     double total = widget.isPendingMode
-    ? widget.cart.values.fold(0.0, (sum, item) => sum + item.subtotal)
-    : (widget.originalTotalAmount > 0 
-        ? widget.originalTotalAmount  // ✅ harga asli sebelum diskon
-        : widget.cart.values.fold(0.0, (sum, item) => sum + item.subtotal));
+        ? widget.cart.values.fold(0.0, (sum, item) => sum + item.subtotal)
+        : (widget.originalTotalAmount > 0
+              ? widget.originalTotalAmount
+              : widget.cart.values.fold(
+                  0.0,
+                  (sum, item) => sum + item.subtotal,
+                ));
 
     return Container(
-      width: 340, 
+      width: 340,
       margin: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06), 
-            blurRadius: 20, 
-            offset: const Offset(0, 8)
-          )
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: ClipRRect(
@@ -162,88 +166,128 @@ class _CartPanelState extends State<CartPanel> {
             Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 15,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // 🔥 FITUR PENDING: Ubah title jika ini mode pending
                           Text(
-                            widget.isPendingMode ? "Update Pesanan" : "Pesanan Saat Ini",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87, fontFamily: 'Poppins'),
+                            widget.isPendingMode
+                                ? "Update Pesanan"
+                                : "Pesanan Saat Ini",
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.black87,
+                              fontFamily: 'Poppins',
+                            ),
                           ),
-                          
-                          // 🔥 FITUR PENDING: Sembunyikan tombol draft jika sedang mode pending order
+
                           if (!widget.isPendingMode)
                             TextButton.icon(
                               onPressed: () => widget.onSaveDraft(
-                                _customerController.text, 
-                                _tableController.text, 
-                                _selectedTableId
+                                _customerController.text,
+                                _tableController.text,
+                                _selectedTableId,
                               ),
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                backgroundColor: AppStyle.primaryBlue.withValues(alpha: 0.1),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                backgroundColor: AppStyle.primaryBlue
+                                    .withValues(alpha: 0.1),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                               ),
-                              icon: const Icon(Icons.inventory_2_outlined, color: AppStyle.primaryBlue, size: 16),
-                              label: const Text("Draft", style: TextStyle(color: AppStyle.primaryBlue, fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'Poppins')),
+                              icon: const Icon(
+                                Icons.inventory_2_outlined,
+                                color: AppStyle.primaryBlue,
+                                size: 16,
+                              ),
+                              label: const Text(
+                                "Draft",
+                                style: TextStyle(
+                                  color: AppStyle.primaryBlue,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
                             ),
                         ],
                       ),
                       const SizedBox(height: 15),
-                      
-                      // 🔥 FITUR PENDING: Kunci input nama pelanggan
+
                       _buildInput(
-                        controller: _customerController, 
-                        hint: "Nama Customer", 
+                        controller: _customerController,
+                        hint: "Nama Customer",
                         icon: Icons.person_outline_rounded,
-                        isReadOnly: widget.isPendingMode // Teruskan status read-only
+                        isReadOnly: widget.isPendingMode,
                       ),
                       const SizedBox(height: 10),
-                      
-                      // 🔥 FITUR PENDING: Teruskan status read-only ke pemilih meja
-                      _buildTableSelectorButton(isReadOnly: widget.isPendingMode), 
+
+                      _buildTableSelectorButton(
+                        isReadOnly: widget.isPendingMode,
+                      ),
                     ],
                   ),
                 ),
-                const Divider(height: 1, thickness: 1, color: Color(0xFFF5F5F5)),
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Color(0xFFF5F5F5),
+                ),
                 Expanded(
                   child: ListView.builder(
                     itemCount: widget.cart.length,
-                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15,
+                      vertical: 10,
+                    ),
                     itemBuilder: (context, index) {
                       int id = widget.cart.keys.elementAt(index);
                       OrderItem item = widget.cart[id]!;
-                      
+
                       if (!_noteControllers.containsKey(id)) {
-                        _noteControllers[id] = TextEditingController(text: item.notes);
+                        _noteControllers[id] = TextEditingController(
+                          text: item.notes,
+                        );
                       }
 
-                      return _buildCartItem(id, item, _noteControllers[id]!, key: ValueKey("cart_$id"));
+                      return _buildCartItem(
+                        id,
+                        item,
+                        _noteControllers[id]!,
+                        key: ValueKey("cart_$id"),
+                      );
                     },
                   ),
                 ),
                 _buildFooter(total),
               ],
             ),
-            
+
             if (_showTableSelection)
               Positioned.fill(
                 child: TablePanel(
-                  currentTableId: _selectedTableId, 
+                  currentTableId: _selectedTableId,
                   onTableSelected: (tableData) {
                     setState(() {
-                      _selectedTableId = tableData['id'];         
-                      _tableController.text = tableData['name'];  
-                      _showTableSelection = false; 
+                      _selectedTableId = tableData['id'];
+                      _tableController.text = tableData['name'];
+                      _showTableSelection = false;
                     });
                   },
                   onClose: () {
                     setState(() {
-                      _showTableSelection = false; 
+                      _showTableSelection = false;
                     });
                   },
                 ),
@@ -254,26 +298,43 @@ class _CartPanelState extends State<CartPanel> {
     );
   }
 
-  // 🔥 FITUR PENDING: Tambahkan parameter isReadOnly
-  Widget _buildInput({required TextEditingController controller, required String hint, required IconData icon, bool isReadOnly = false}) {
+  Widget _buildInput({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool isReadOnly = false,
+  }) {
     return Container(
-      height: 45, 
+      height: 45,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC), // Ubah warna jika dikunci
+        color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.1))
+        border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: isReadOnly ? Colors.grey : AppStyle.primaryBlue),
+          Icon(
+            icon,
+            size: 18,
+            color: isReadOnly ? Colors.grey : AppStyle.primaryBlue,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
               readOnly: isReadOnly, // Kunci input jika true
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: isReadOnly ? Colors.grey.shade700 : AppStyle.primaryBlue, fontFamily: 'Poppins'),
-              decoration: InputDecoration(hintText: hint, border: InputBorder.none, isDense: true),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: isReadOnly ? Colors.grey.shade700 : AppStyle.primaryBlue,
+                fontFamily: 'Poppins',
+              ),
+              decoration: InputDecoration(
+                hintText: hint,
+                border: InputBorder.none,
+                isDense: true,
+              ),
             ),
           ),
         ],
@@ -281,36 +342,49 @@ class _CartPanelState extends State<CartPanel> {
     );
   }
 
-  // 🔥 FITUR PENDING: Tambahkan parameter isReadOnly untuk mencegah popup meja terbuka
   Widget _buildTableSelectorButton({bool isReadOnly = false}) {
     bool hasSelectedTable = _tableController.text.isNotEmpty;
 
     return GestureDetector(
-      onTap: isReadOnly ? null : () => setState(() => _showTableSelection = true), // Disable tap jika terkunci
+      onTap: isReadOnly
+          ? null
+          : () => setState(() => _showTableSelection = true),
       child: Container(
-        height: 45, 
+        height: 45,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC), // Ubah warna
+          color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.1))
+          border: Border.all(
+            color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+          ),
         ),
         child: Row(
           children: [
-            Icon(Icons.table_restaurant_outlined, size: 18, color: isReadOnly ? Colors.grey : AppStyle.primaryBlue),
+            Icon(
+              Icons.table_restaurant_outlined,
+              size: 18,
+              color: isReadOnly ? Colors.grey : AppStyle.primaryBlue,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 hasSelectedTable ? _tableController.text : "Nomor Meja / Area",
                 style: TextStyle(
-                  fontSize: 13, 
-                  fontWeight: hasSelectedTable ? FontWeight.w700 : FontWeight.normal, 
-                  color: isReadOnly ? Colors.grey.shade700 : (hasSelectedTable ? AppStyle.primaryBlue : Colors.black54), 
-                  fontFamily: 'Poppins'
+                  fontSize: 13,
+                  fontWeight: hasSelectedTable
+                      ? FontWeight.w700
+                      : FontWeight.normal,
+                  color: isReadOnly
+                      ? Colors.grey.shade700
+                      : (hasSelectedTable
+                            ? AppStyle.primaryBlue
+                            : Colors.black54),
+                  fontFamily: 'Poppins',
                 ),
               ),
             ),
-            if (!isReadOnly) // Sembunyikan panah drop-down jika form dikunci
+            if (!isReadOnly)
               const Icon(Icons.arrow_drop_down_rounded, color: Colors.black54),
           ],
         ),
@@ -318,54 +392,87 @@ class _CartPanelState extends State<CartPanel> {
     );
   }
 
-  Widget _buildCartItem(int id, OrderItem item, TextEditingController noteController, {Key? key}) {
+  Widget _buildCartItem(
+    int id,
+    OrderItem item,
+    TextEditingController noteController, {
+    Key? key,
+  }) {
     return Container(
       key: key,
-      margin: const EdgeInsets.only(bottom: 15), 
+      margin: const EdgeInsets.only(bottom: 15),
       child: Column(
         children: [
           Row(
             children: [
-              // GANTI DENGAN INI ✅
-Expanded(
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black)),
-      
-      // Tampilkan harga asli dicoret jika ada diskon
-      if (item.originalPrice > 0 && item.originalPrice != item.unitPrice) ...[
-        Text(
-          widget.formatCurrency(item.originalPrice), // harga asli dicoret
-          style: const TextStyle(
-            color: Colors.red,
-            fontSize: 11,
-            decoration: TextDecoration.lineThrough,
-          ),
-        ),
-        Text(
-          widget.formatCurrency(item.unitPrice), // harga setelah diskon
-          style: const TextStyle(color: Colors.black45, fontSize: 12),
-        ),
-      ] else
-        Text(
-          widget.formatCurrency(item.unitPrice), // harga normal (tidak ada diskon)
-          style: const TextStyle(color: Colors.black45, fontSize: 12),
-        ),
-    ],
-  ),
-),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.itemName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.black,
+                      ),
+                    ),
+
+                    if (item.originalPrice > 0 &&
+                        item.originalPrice != item.unitPrice) ...[
+                      Text(
+                        widget.formatCurrency(item.originalPrice),
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 11,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                      Text(
+                        widget.formatCurrency(item.unitPrice),
+                        style: const TextStyle(
+                          color: Colors.black45,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ] else
+                      Text(
+                        widget.formatCurrency(item.unitPrice),
+                        style: const TextStyle(
+                          color: Colors.black45,
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               Row(
                 children: [
-                  _qtyButton(Icons.remove, () => widget.onDecrease(id), isPrimary: false),
+                  _qtyButton(
+                    Icons.remove,
+                    () => widget.onDecrease(id),
+                    isPrimary: false,
+                  ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10), 
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: SizedBox(
                       width: 30,
-                      child: Text("${item.quantity}", textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'Poppins')),
-                    )
+                      child: Text(
+                        "${item.quantity}",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
                   ),
-                  _qtyButton(Icons.add, () => widget.onIncrease(id), isPrimary: true),
+                  _qtyButton(
+                    Icons.add,
+                    () => widget.onIncrease(id),
+                    isPrimary: true,
+                  ),
                 ],
               ),
             ],
@@ -380,21 +487,34 @@ Expanded(
                   style: const TextStyle(fontSize: 11),
                   decoration: InputDecoration(
                     hintText: "Catatan (mis: Pedas)...",
-                    hintStyle: const TextStyle(color: Colors.grey, fontSize: 11),
+                    hintStyle: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 11,
+                    ),
                     filled: true,
                     fillColor: const Color(0xFFF9FAFB),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               IconButton(
                 onPressed: () => widget.onDelete(id),
-                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                  size: 20,
+                ),
                 constraints: const BoxConstraints(),
                 padding: EdgeInsets.zero,
-              )
+              ),
             ],
           ),
         ],
@@ -402,16 +522,24 @@ Expanded(
     );
   }
 
-  Widget _qtyButton(IconData icon, VoidCallback onTap, {required bool isPrimary}) {
+  Widget _qtyButton(
+    IconData icon,
+    VoidCallback onTap, {
+    required bool isPrimary,
+  }) {
     return Material(
-      color: isPrimary ? AppStyle.primaryBlue : const Color(0xFFF0F4F8), 
+      color: isPrimary ? AppStyle.primaryBlue : const Color(0xFFF0F4F8),
       borderRadius: BorderRadius.circular(6),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(6),
         child: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Icon(icon, size: 16, color: isPrimary ? Colors.white : AppStyle.primaryBlue),
+          child: Icon(
+            icon,
+            size: 16,
+            color: isPrimary ? Colors.white : AppStyle.primaryBlue,
+          ),
         ),
       ),
     );
@@ -422,60 +550,88 @@ Expanded(
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFF5F5F5)))),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFF5F5F5))),
+      ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Total Bayar", style: TextStyle(color: Colors.black54, fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Poppins')),
-              Text(widget.formatCurrency(total), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppStyle.primaryBlue, fontFamily: 'Poppins')),
+              const Text(
+                "Total Bayar",
+                style: TextStyle(
+                  color: Colors.black54,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              Text(
+                widget.formatCurrency(total),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: AppStyle.primaryBlue,
+                  fontFamily: 'Poppins',
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            height: 48, 
+            height: 48,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppStyle.primaryBlue, 
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
+                backgroundColor: AppStyle.primaryBlue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 0,
                 disabledBackgroundColor: Colors.grey.shade300,
               ),
-              onPressed: (widget.cart.isEmpty || isTableEmpty) ? null : () async {
-                final result = await showDialog<Map<String, dynamic>>(
-                  context: context,
-                  builder: (context) => CheckoutDialog(
-                    cart: widget.cart,
-                    hasDiscountedItem: widget.hasDiscountedItem, 
-                    totalAmount: total,
-                    originalTotalAmount: widget.originalTotalAmount,
-                    
-                    // 🔥 FITUR PENDING: Jika mode pending, teruskan ID pending order (jika null, biarkan string kosong atau ID manual)
-                    orderId: widget.isPendingMode && widget.pendingOrderId != null 
-                        ? widget.pendingOrderId.toString() 
-                        : _orderId,
-                        
-                    tableNumber: _tableController.text, 
-                    tableId: _selectedTableId,         
-                    customerName: _customerController.text, 
-                    cashierName: _cashierName,
-                    formatCurrency: widget.formatCurrency,
-                    
-                    // 🔥 FITUR PENDING: Sampaikan ke CheckoutDialog bahwa ini bayar pesanan pending
-                    isUpdatingOrder: widget.isPendingMode,
-                    pendingDiscountId: widget.pendingDiscountId,
-                  ),
-                );
-                if (result != null) widget.onCheckoutSuccess(result);
-              },
+              onPressed: (widget.cart.isEmpty || isTableEmpty)
+                  ? null
+                  : () async {
+                      final result = await showDialog<Map<String, dynamic>>(
+                        context: context,
+                        builder: (context) => CheckoutDialog(
+                          cart: widget.cart,
+                          hasDiscountedItem: widget.hasDiscountedItem,
+                          totalAmount: total,
+                          originalTotalAmount: widget.originalTotalAmount,
+
+                          orderId:
+                              widget.isPendingMode &&
+                                  widget.pendingOrderId != null
+                              ? widget.pendingOrderId.toString()
+                              : _orderId,
+
+                          tableNumber: _tableController.text,
+                          tableId: _selectedTableId,
+                          customerName: _customerController.text,
+                          cashierName: _cashierName,
+                          formatCurrency: widget.formatCurrency,
+
+                          isUpdatingOrder: widget.isPendingMode,
+                          pendingDiscountId: widget.pendingDiscountId,
+                        ),
+                      );
+                      if (result != null) widget.onCheckoutSuccess(result);
+                    },
               child: Text(
-                widget.isPendingMode ? "Update & Bayar" : "Checkout", // 🔥 Ubah teks tombol jika pending mode
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Poppins')
+                widget.isPendingMode ? "Update & Bayar" : "Checkout",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  fontFamily: 'Poppins',
+                ),
               ),
             ),
-          )
+          ),
         ],
       ),
     );

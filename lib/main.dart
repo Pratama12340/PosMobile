@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/date_symbol_data_local.dart'; 
+import 'package:intl/date_symbol_data_local.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4285F4)),
         useMaterial3: true,
-        fontFamily: 'Poppins', 
+        fontFamily: 'Poppins',
       ),
       home: const SplashScreen(),
     );

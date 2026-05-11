@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../services/api_service.dart';
 
 class TablePanel extends StatefulWidget {
-  // Ubah dari String ke int? untuk melacak ID meja yang sedang dipilih
-  final int? currentTableId; 
-  // Ubah callback agar mengirimkan Map berisi data lengkap meja
+  final int? currentTableId;
   final Function(Map<String, dynamic>) onTableSelected;
   final VoidCallback onClose;
 
@@ -34,7 +32,6 @@ class _TablePanelState extends State<TablePanel> {
     try {
       final tables = await ApiService.getTables();
 
-      // Sorting tetap dipertahankan berdasarkan angka pada nama meja
       tables.sort((a, b) {
         String nameA = (a['name'] ?? '').toString();
         String nameB = (b['name'] ?? '').toString();
@@ -65,7 +62,6 @@ class _TablePanelState extends State<TablePanel> {
     List<dynamic> outdoorTables = [];
     List<dynamic> otherTables = [];
 
-    // Pengelompokan berdasarkan nama area
     for (var table in _availableTables) {
       String name = (table['name'] ?? '').toString().toLowerCase();
       if (name.contains('indor') || name.contains('indoor')) {
@@ -174,7 +170,6 @@ class _TablePanelState extends State<TablePanel> {
   }
 
   Widget _buildDynamicCard(dynamic table, double width) {
-    // Ambil ID, Nama, dan Kapasitas sesuai foto image_101dc6.png
     int id = table['id'] ?? 0;
     String name = table['name']?.toString() ?? '-';
     String cap = table['capacity']?.toString() ?? '0';
@@ -182,9 +177,7 @@ class _TablePanelState extends State<TablePanel> {
     return _buildTableCard(
       title: name,
       capacity: cap,
-      // Pengecekan isSelected sekarang menggunakan ID (lebih akurat daripada nama)
       isSelected: widget.currentTableId == id,
-      // Saat ditekan, kirim Map berisi minimal id, name, dan capacity
       onTap: () => widget.onTableSelected({
         'id': id,
         'name': name,

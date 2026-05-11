@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../style.dart';
+import '../constants/style.dart';
 import '../widgets/printer_config_modal.dart';
 
 class PrinterScreen extends StatefulWidget {
@@ -10,10 +10,23 @@ class PrinterScreen extends StatefulWidget {
 }
 
 class _PrinterScreenState extends State<PrinterScreen> {
-  // Simulasi data printer
   final List<Map<String, dynamic>> printers = [
-    {'name': 'Kasir Utama', 'status': 'Online', 'type': 'Thermal', 'conn': 'LAN', 'ip': '192.168.1.100', 'color': Colors.green},
-    {'name': 'Printer Dapur', 'status': 'Offline', 'type': 'Thermal', 'conn': 'Bluetooth', 'ip': 'BT:00:11:22', 'color': Colors.red},
+    {
+      'name': 'Kasir Utama',
+      'status': 'Online',
+      'type': 'Thermal',
+      'conn': 'LAN',
+      'ip': '192.168.1.100',
+      'color': Colors.green,
+    },
+    {
+      'name': 'Printer Dapur',
+      'status': 'Offline',
+      'type': 'Thermal',
+      'conn': 'Bluetooth',
+      'ip': 'BT:00:11:22',
+      'color': Colors.red,
+    },
   ];
 
   void _showConfigModal() {
@@ -31,21 +44,21 @@ class _PrinterScreenState extends State<PrinterScreen> {
       appBar: AppBar(
         title: Text(
           "Koneksi Printer",
-          style: AppStyle.menuText.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+          style: AppStyle.menuText.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         backgroundColor: AppStyle.primaryBlue,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
-        actions: [
-          
-        ],
+        actions: [],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Action Buttons (Soft Colors)
             Row(
               children: [
                 _buildSoftTopButton(
@@ -67,10 +80,15 @@ class _PrinterScreenState extends State<PrinterScreen> {
             ),
             const SizedBox(height: 40),
 
-            Text("Daftar Perangkat Terhubung", style: AppStyle.menuText.copyWith(fontSize: 16, color: Colors.grey.shade700)),
+            Text(
+              "Daftar Perangkat Terhubung",
+              style: AppStyle.menuText.copyWith(
+                fontSize: 16,
+                color: Colors.grey.shade700,
+              ),
+            ),
             const SizedBox(height: 20),
 
-            // Grid Printer Cards (Menggunakan Wrap untuk Tablet)
             Wrap(
               spacing: 20,
               runSpacing: 20,
@@ -79,18 +97,25 @@ class _PrinterScreenState extends State<PrinterScreen> {
           ],
         ),
       ),
-      // Floating Action Button sebagai alternatif Tambah Printer
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showConfigModal,
         backgroundColor: AppStyle.primaryBlue,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text("Printer Baru", style: TextStyle(color: Colors.white)),
+        label: const Text(
+          "Printer Baru",
+          style: TextStyle(color: Colors.white),
+        ),
       ),
     );
   }
 
-  // Widget Button Atas dengan warna Soft
-  Widget _buildSoftTopButton({required String label, required IconData icon, required Color bgColor, required Color textColor, required VoidCallback onTap}) {
+  Widget _buildSoftTopButton({
+    required String label,
+    required IconData icon,
+    required Color bgColor,
+    required Color textColor,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -104,14 +129,16 @@ class _PrinterScreenState extends State<PrinterScreen> {
           children: [
             Icon(icon, color: textColor, size: 20),
             const SizedBox(width: 10),
-            Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+            Text(
+              label,
+              style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Widget Card Printer (Mix Gambar 1 & Gambar 2)
   Widget _buildPrinterCard(Map<String, dynamic> data) {
     bool isOnline = data['status'] == 'Online';
 
@@ -121,37 +148,59 @@ class _PrinterScreenState extends State<PrinterScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-        BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Column(
           children: [
-            // Bagian Atas: Nama & Status (Layout Gambar 2)
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(data['name'], style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold)),
+                  Text(
+                    data['name'],
+                    style: AppStyle.menuText.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: isOnline ? Colors.green.shade50 : Colors.red.shade50,
+                      color: isOnline
+                          ? Colors.green.shade50
+                          : Colors.red.shade50,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isOnline ? Colors.green.shade200 : Colors.red.shade200),
+                      border: Border.all(
+                        color: isOnline
+                            ? Colors.green.shade200
+                            : Colors.red.shade200,
+                      ),
                     ),
                     child: Text(
                       data['status'],
-                      style: TextStyle(color: isOnline ? Colors.green.shade700 : Colors.red.shade700, fontSize: 11, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: isOnline
+                            ? Colors.green.shade700
+                            : Colors.red.shade700,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
             const Divider(height: 1),
-            // Bagian Tengah: Info (3 baris seperti Gambar 2)
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -164,7 +213,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
                 ],
               ),
             ),
-            // Tombol Konfigurasi (Warna Soft)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: SizedBox(
@@ -174,20 +222,32 @@ class _PrinterScreenState extends State<PrinterScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue.shade50,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text("PENGATURAN", style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(
+                        "PENGATURAN",
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
                       const SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.blue.shade700),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                        color: Colors.blue.shade700,
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
-            // Aksen Warna Bawah (Gaya Gambar 1)
             Container(height: 6, color: data['color']),
           ],
         ),
@@ -200,7 +260,10 @@ class _PrinterScreenState extends State<PrinterScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+        ),
       ],
     );
   }

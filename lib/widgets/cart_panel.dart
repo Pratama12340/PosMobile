@@ -4,7 +4,7 @@ import '../models/order_model.dart';
 import '../style.dart'; 
 import '../services/storage_service.dart';
 import 'checkout_dialog.dart';
-import 'tabel_panel.dart'; // Pastikan nama import ini sesuai dengan file kamu
+import 'table_panel.dart'; // Pastikan nama import ini sesuai dengan file kamu
 
 class CartPanel extends StatefulWidget {
   final Map<int, OrderItem> cart;

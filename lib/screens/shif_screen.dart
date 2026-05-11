@@ -164,19 +164,19 @@ class _ShiftScreenState extends State<ShiftScreen> {
             );
           }
 
-          final RekapShift? activeShift = shiftList.firstWhere(
+          final RekapShift activeShift = shiftList.firstWhere(
             (s) => s.status == 'active',
             orElse: () => shiftList.isNotEmpty ? shiftList.first : RekapShift(id: 0, shiftId: 0, status: 'none'),
           );
 
-          int kasAwal = localOpeningBalance > 0 ? localOpeningBalance : (activeShift?.uangAwal?.toInt() ?? 0);
+          int kasAwal = localOpeningBalance > 0 ? localOpeningBalance : (activeShift.uangAwal?.toInt() ?? 0);
           int bersih = 0;
           int count = 0;
 
           Map<String, int> productSalesQty = {};
           Map<String, int> paymentAmount = {"CASH": 0, "CARD": 0, "QRIS": 0};
 
-          if (activeShift != null && activeShift.startedAt != null) {
+          if (activeShift.startedAt != null) {
             DateTime startShiftWIB = activeShift.startedAt!.toLocal();
             final df = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 

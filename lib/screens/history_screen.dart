@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import '../style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
-import '../widgets/receipt_dialog.dart';
+import '../widgets/edit_dialog.dart';
 import '../services/reverb_service.dart';
 import '../services/storage_service.dart';
 
@@ -117,7 +117,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -135,7 +135,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             end: Alignment.bottomCenter,
                             colors: [
                               sideColor,
-                              sideColor.withOpacity(0.7),
+                              sideColor.withValues(alpha: 0.7),
                             ],
                           ),
                         ),
@@ -213,7 +213,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: sideColor.withOpacity(0.1),
+                                color: sideColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(

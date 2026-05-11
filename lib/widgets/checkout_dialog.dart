@@ -6,7 +6,7 @@ import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../style.dart';
 import '../services/api_service.dart';
-import '../screens/SuccessPaymentPage.dart';
+import '../screens/success_payment.dart';  
 import '../services/storage_service.dart';
 
 class CheckoutDialog extends StatefulWidget {
@@ -720,20 +720,20 @@ var mappedItems = [...existingItems, ...newItems];
         if (_selectedDiscount != null) 'discount_id': _selectedDiscount!.id,
       };
       // 🔥 DEBUG LOG DI SINI (setelah payload dibuat)
-print("=== DEBUG CHECKOUT ===");
-print("isUpdatingOrder: ${widget.isUpdatingOrder}");
-print("pendingDiscountId: ${widget.pendingDiscountId}");
-print("selectedDiscount: ${_selectedDiscount?.name}");
-print("subTotal: $subTotal");
-print("discountAmount: $discountAmount");
-print("grandTotal: $grandTotal");
-print("payload discount_amount: ${payload['discount_amount']}");
-print("payload total_price: ${payload['total_price']}");
-print("payload paid_amount: ${payload['paid_amount']}");
-print("======================");
+debugPrint("=== DEBUG CHECKOUT ===");
+debugPrint("isUpdatingOrder: ${widget.isUpdatingOrder}");
+debugPrint("pendingDiscountId: ${widget.pendingDiscountId}");
+debugPrint("selectedDiscount: ${_selectedDiscount?.name}");
+debugPrint("subTotal: $subTotal");
+debugPrint("discountAmount: $discountAmount");
+debugPrint("grandTotal: $grandTotal");
+debugPrint("payload discount_amount: ${payload['discount_amount']}");
+debugPrint("payload total_price: ${payload['total_price']}");
+debugPrint("payload paid_amount: ${payload['paid_amount']}");
+debugPrint("======================");
 
       
-      print("[API REQUEST] --> CHECKOUT ORDER. Payload: $payload");
+      debugPrint("[API REQUEST] --> CHECKOUT ORDER. Payload: $payload");
       dynamic res;
       if (widget.isUpdatingOrder) {
         res = await ApiService.updatePendingOrder(widget.orderId, payload);

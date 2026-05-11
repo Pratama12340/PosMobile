@@ -50,7 +50,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
           borderRadius: BorderRadius.circular(35),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 30,
               offset: const Offset(0, 15),
             ),
@@ -191,7 +191,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                           ),
                           backgroundColor: AppStyle.white,
                           side: BorderSide(
-                            color: AppStyle.primaryBlue.withOpacity(0.2),
+                            color: AppStyle.primaryBlue.withValues(alpha: 0.2),
                             width: 1.5,
                           ),
                           shape: RoundedRectangleBorder(
@@ -233,13 +233,15 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                     ? null
                     : () async {
                         if (_cashController.text.isNotEmpty) {
-                          print("\n[DIALOG] Memulai proses Buka Kasir...");
-                          print("[DIALOG] Nominal Kas Awal: $_rawAmount");
+                          debugPrint("\n[DIALOG] Memulai proses Buka Kasir...");
+                          debugPrint("[DIALOG] Nominal Kas Awal: $_rawAmount");
                           
                           setState(() {
                             _isSaving = true;
                             _errorMessage = null;
                           });
+
+                          final navigator = Navigator.of(context); 
                           
                           try {
                             final int outletId = await StorageService.getOutletId() ?? 0;
@@ -248,7 +250,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                             if (!mounted) return;
 
                             if (apiResponse['success'] == true) {
-                              print("✔ Berhasil menyimpan Kas Awal ke Server Database.");
+                              debugPrint("✔ Berhasil menyimpan Kas Awal ke Server Database.");
                               
                               await StorageService.saveOpeningCash(_rawAmount.toDouble());
                               await StorageService.saveShiftStatus(true);
@@ -257,16 +259,17 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                               String exactStartTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
                               await StorageService.saveLoginTime(exactStartTime);
 
-                              print("✔ Berhasil menandai status Shift Lokal: AKTIF mulai jam $exactStartTime.");
-                              print("[DIALOG] Proses Selesai. Menutup dialog...\n");
+                              debugPrint("✔ Berhasil menandai status Shift Lokal: AKTIF mulai jam $exactStartTime.");
+                              debugPrint("[DIALOG] Proses Selesai. Menutup dialog...\n");
                               
-                              Navigator.pop(context);
+                              if (!mounted) return;              
+                              navigator.pop();  
                             } else {
                               setState(() {
                                 _isSaving = false;
                                 _errorMessage = apiResponse['message'] ?? "Gagal menyimpan kas awal di server.";
                               });
-                              print("❌ GAGAL: ${apiResponse['message']}");
+                              debugPrint("❌ GAGAL: ${apiResponse['message']}");
                             }
                           } catch (e) {
                             if (mounted) {
@@ -275,10 +278,10 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                                 _errorMessage = "Terjadi kesalahan koneksi jaringan.";
                               });
                             }
-                            print("❌ ERROR pada OpeningCashDialog: $e");
+                            debugPrint("❌ ERROR pada OpeningCashDialog: $e");
                           }
                         } else {
-                          print("⚠️ WARNING: Form Kas Awal masih kosong.");
+                          debugPrint("⚠️ WARNING: Form Kas Awal masih kosong.");
                           setState(() {
                             _errorMessage = "Harap masukkan nominal kas awal.";
                           });

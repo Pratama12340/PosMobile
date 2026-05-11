@@ -67,7 +67,7 @@ class _ProfilHistoryState extends State<ProfilHistory> {
                         child: Icon(
                           Icons.storefront_rounded,
                           size: 250,
-                          color: Colors.white.withOpacity(0.05),
+                          color: Colors.white.withValues(alpha: 0.05),
                         ),
                       ),
                     ],
@@ -114,7 +114,7 @@ class _ProfilHistoryState extends State<ProfilHistory> {
                                 border: Border.all(color: Colors.white, width: 6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.15),
+                                    color: Colors.black.withValues(alpha: 0.15),
                                     blurRadius: 30,
                                     offset: const Offset(0, 15),
                                   ),
@@ -240,10 +240,10 @@ class _ProfilHistoryState extends State<ProfilHistory> {
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: baseColor.withOpacity(0.04),
+        color: baseColor.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: baseColor.withOpacity(0.3),
+          color: baseColor.withValues(alpha: 0.3),
           width: 1.5,
         ),
       ),
@@ -252,7 +252,7 @@ class _ProfilHistoryState extends State<ProfilHistory> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: baseColor.withOpacity(0.15),
+              color: baseColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -271,7 +271,7 @@ class _ProfilHistoryState extends State<ProfilHistory> {
                   style: AppStyle.subTitleText.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: baseColor.withOpacity(0.8),
+                    color: baseColor.withValues(alpha: 0.8),
                   ),
                 ),
                 const SizedBox(height: 6),

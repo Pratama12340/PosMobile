@@ -165,7 +165,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                               if (tax['type'] == 'percentage') label += " (${rate.toString().replaceAll('.0', '')}%)";
                               
                               return _buildSummaryRow(label, style.formatHarga(amt));
-                            }).toList()
+                            })
                           else if (localOrder!.taxAmount > 0)
                             _buildSummaryRow("Pajak", style.formatHarga(localOrder!.taxAmount)),
 
@@ -246,6 +246,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         const SizedBox(width: 12),
         ElevatedButton.icon(
           onPressed: () async {
+            final scaffoldMessenger = ScaffoldMessenger.of(context);
             final printerService = TerminalPrinterService();
             
             // 1. Ambil Info Outlet Live
@@ -286,10 +287,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
             );
 
             // 5. EKSEKUSI CETAK (HANYA STRUK PELANGGAN)
-            printerService.printToTerminal(transaction); 
+            printerService.printToTerminal(transaction);
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Struk Pelanggan Berhasil Dicetak"), backgroundColor: Colors.blue),
+            if (!mounted) return; 
+            scaffoldMessenger.showSnackBar( 
+            const SnackBar(content: Text("Struk Pelanggan Berhasil Dicetak"), backgroundColor: Colors.blue),
             );
           },
           icon: const Icon(Icons.print, size: 20, color: Colors.white),
@@ -385,7 +387,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               children: [
                 Container(width: 12, height: 12, decoration: const BoxDecoration(color: Color(0xFF4285F4), shape: BoxShape.circle)),
                 if (index != localOrder!.logs.length - 1)
-                  Container(width: 2, height: 110, color: Colors.blue.withOpacity(0.1)),
+                  Container(width: 2, height: 110, color: Colors.blue.withValues(alpha: 0.1)),
               ],
             ),
             const SizedBox(width: 16),
@@ -407,7 +409,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                      border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,6 +479,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
   void _handleSaveButton() async {
     if (_formKey.currentState!.validate()) {
+      final navigator = Navigator.of(context);
       showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
       try {
         final success = await ApiService.updateOrder(
@@ -486,7 +489,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           taxAmount: currentTaxAmount,
           totalPrice: currentTotalPrice,
         );
-        Navigator.pop(context);
+        navigator.pop();
         if (success) {
           _triggerRefresh();
           setState(() {
@@ -495,7 +498,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           });
         }
       } catch (e) {
-        Navigator.pop(context);
+        navigator.pop();
       }
     }
   }

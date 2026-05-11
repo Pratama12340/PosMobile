@@ -26,7 +26,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(28),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 30)],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 30)],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -133,7 +133,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
           style: TextStyle(fontSize: 12, color: isActive ? Colors.green.shade700 : Colors.red.shade700)
         ),
         value: isActive,
-        activeColor: Colors.green,
+        activeThumbColor: Colors.green,
         inactiveThumbColor: Colors.red.shade400,
         inactiveTrackColor: Colors.red.shade100,
         onChanged: (v) => setState(() => isActive = v),
@@ -254,7 +254,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
         title: const Text("Potong Kertas Otomatis", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: const Text("Printer akan memotong struk secara otomatis saat selesai.", style: TextStyle(fontSize: 12)),
         value: isAutoCut,
-        activeColor: AppStyle.primaryBlue,
+        activeThumbColor: AppStyle.primaryBlue,
         onChanged: isActive ? (v) => setState(() => isAutoCut = v) : null,
         contentPadding: EdgeInsets.zero,
       ),

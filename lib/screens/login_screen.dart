@@ -76,16 +76,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
+                final navigator = Navigator.of(context); // ✅ simpan sebelum await
+                
                 await StorageService.saveOutletId(0);
-                if (mounted) {
-                  Navigator.pop(context);
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const OutletSelectionScreen(),
-                    ),
-                  );
-                }
+                
+                if (!mounted) return; // ✅ cek mounted setelah await
+                navigator.pop(); // ✅ pakai navigator yang sudah disimpan
+                navigator.pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => const OutletSelectionScreen(),
+                  ),
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
@@ -190,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: AppStyle.primaryBlue.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),

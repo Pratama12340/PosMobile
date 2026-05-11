@@ -38,7 +38,7 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
 
     try {
       await StorageService.saveOutletId(id);
-      print("DEBUG: Berhasil menyimpan ID $id ke Storage");
+      debugPrint("DEBUG: Berhasil menyimpan ID $id ke Storage");
 
       await Future.delayed(const Duration(milliseconds: 300));
 
@@ -79,7 +79,7 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10))
             ],
           ),
           child: Column(

@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 import '../models/transaction_model.dart';
+import 'package:flutter/foundation.dart';
 
 class TerminalPrinterService {
   String _fMoney(double val) {
@@ -50,9 +51,9 @@ class TerminalPrinterService {
     receipt.writeln("-" * 32);
     receipt.writeln(_formatRow("TOTAL", "Rp ${_fMoney(transaction.totalDariHalaman)}"));
     receipt.writeln("-" * 32);
-    receipt.writeln(_centerText("Terima Kasih", 32) + "\n");
+    receipt.writeln('${_centerText("Terima Kasih", 32)}\n');
 
-    print(receipt.toString());
+    debugPrint(receipt.toString());
   }
 
   void printKitchenToTerminal(TransactionModel transaction) {
@@ -81,7 +82,7 @@ class TerminalPrinterService {
     kitchen.writeln(_centerText("ARANUS POS - KITCHEN", 30));
     kitchen.writeln("==============================\n");
 
-    print(kitchen.toString());
+    debugPrint(kitchen.toString());
   }
 
  

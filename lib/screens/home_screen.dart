@@ -580,8 +580,9 @@ class HomeScreenState extends State<HomeScreen> {
                           if (productIndex != -1) {
                             _allProducts[productIndex].stock -=
                                 cartItem.quantity;
-                            if (_allProducts[productIndex].stock < 0)
+                            if (_allProducts[productIndex].stock < 0) {
                               _allProducts[productIndex].stock = 0;
+                            }
                           }
                         });
 

@@ -29,7 +29,7 @@ class DiskonPanel extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: "Dismiss",
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, anim1, anim2) {
         return Align(
@@ -134,9 +134,9 @@ class DiskonPanel extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
             decoration: BoxDecoration(
-              color: hasDiscount ? Colors.orange.withOpacity(0.08) : Colors.white,
+              color: hasDiscount ? Colors.orange.withValues(alpha: 0.08) : Colors.white,
               border: Border.all(
-                color: hasDiscount ? Colors.orange.withOpacity(0.3) : Colors.black12,
+                color: hasDiscount ? Colors.orange.withValues(alpha: 0.3) : Colors.black12,
               ),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -311,7 +311,7 @@ class _TicketPainter extends CustomPainter {
     path.addOval(Rect.fromCircle(center: Offset(size.width, size.height / 2), radius: 8));
     path.fillType = PathFillType.evenOdd;
 
-    canvas.drawShadow(path, Colors.black.withOpacity(0.2), 3, false);
+    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.2), 3, false);
     canvas.drawPath(path, paint);
   }
 
@@ -328,7 +328,7 @@ class _DashedLine extends StatelessWidget {
         width: 1.2,
         height: 4,
         margin: const EdgeInsets.symmetric(vertical: 2),
-        color: Colors.grey.withOpacity(0.3),
+        color: Colors.grey.withValues(alpha: 0.3),
       )),
     );
   }

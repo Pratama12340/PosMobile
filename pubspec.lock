@@ -264,6 +264,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
+  pusher_client_fixed:
+    dependency: "direct main"
+    description:
+      name: pusher_client_fixed
+      sha256: "0b9f39eebca9fd8700f94ee2e95babec51a7e3f1624a7e2f3d927c970f190230"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.5"
   qr:
     dependency: transitive
     description:

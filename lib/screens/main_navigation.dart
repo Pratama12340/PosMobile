@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
 import 'history_screen.dart';
-import 'shif_screen.dart'; 
+import 'shif_screen.dart';
 import 'setting_screen.dart';
 import '../style.dart';
 import '../services/storage_service.dart';
 import '../widgets/opening_cash_dialog.dart';
+import '../services/reverb_service.dart';
 
 class MainNavigationScaffold extends StatefulWidget {
   final bool requireCashInput;
@@ -19,20 +20,22 @@ class MainNavigationScaffold extends StatefulWidget {
 class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   bool _isSidebarVisible = false;
-  
+
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
-  
+  final ReverbService _reverbService = ReverbService(); // 🔥 TAMBAHKAN
+
   String _cashierName = "Loading...";
-  String _outletName = "Loading..."; 
+  String _outletName = "Loading...";
   String _profilePhoto = "";
   String _userRole = "Cashier";
-  
+
   final TextEditingController _globalSearchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadInitialData();
+    _connectReverb();
 
     if (widget.requireCashInput) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -48,11 +51,11 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   Future<void> _loadInitialData() async {
     final results = await Future.wait([
       StorageService.getCashierName(),
-      StorageService.getOutletName(), 
+      StorageService.getOutletName(),
       StorageService.getProfilePhoto(),
       StorageService.getUserRole(),
     ]);
-    
+
     if (mounted) {
       setState(() {
         _cashierName = results[0];
@@ -63,9 +66,46 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
+  void _connectReverb() async {
+  final int? outletId = await StorageService.getOutletId(); // ✅ int?, bukan String
+  
+  if (outletId == null) {
+    debugPrint('🔴 [REVERB] outlet_id tidak ditemukan');
+    return;
+  }
+
+  _reverbService.initConnection(
+    channelName: 'private-orders.outlet.$outletId', // ✅ int langsung bisa dipakai di string interpolation
+    eventName: '.order.created',
+    onEventReceived: (data) {
+      debugPrint('⚡ [ORDER CREATED]: $data');
+      _homeKey.currentState?.refreshPendingOrdersSilently();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.add_shopping_cart, color: Colors.white),
+                const SizedBox(width: 10),
+                Text('Pesanan baru dari ${data['order']?['customer_name'] ?? 'Pelanggan'}!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    },
+  );
+}
+
   @override
   void dispose() {
     _globalSearchController.dispose();
+    _reverbService.disconnect();
     super.dispose();
   }
 
@@ -82,17 +122,22 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text("Konfirmasi Keluar", style: AppStyle.titleText.copyWith(fontSize: 18)),
+        title: Text(
+          "Konfirmasi Keluar",
+          style: AppStyle.titleText.copyWith(fontSize: 18),
+        ),
         content: const Text("Apakah Anda yakin ingin keluar dari sesi kasir?"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context), 
+            onPressed: () => Navigator.pop(context),
             child: const Text("Batal"),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppStyle.errorRed,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () async {
               await StorageService.logoutKasir();
@@ -104,7 +149,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                 );
               }
             },
-            child: const Text("Ya, Keluar", style: TextStyle(color: Colors.white)),
+            child: const Text(
+              "Ya, Keluar",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -135,8 +183,12 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                           },
                         ),
                         ShiftScreen(searchController: _globalSearchController),
-                        HistoryScreen(searchController: _globalSearchController),
-                        SettingScreen(searchController: _globalSearchController),
+                        HistoryScreen(
+                          searchController: _globalSearchController,
+                        ),
+                        SettingScreen(
+                          searchController: _globalSearchController,
+                        ),
                       ],
                     ),
                   ),
@@ -154,8 +206,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       height: 85,
       padding: const EdgeInsets.symmetric(horizontal: 25),
       decoration: BoxDecoration(
-          color: AppStyle.white,
-          border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
+        color: AppStyle.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
+      ),
       child: Row(
         children: [
           IconButton(
@@ -173,9 +226,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
           Text(
             _outletName.toUpperCase(),
             style: AppStyle.titleText.copyWith(
-              fontSize: 20, 
+              fontSize: 20,
               color: const Color.fromARGB(255, 14, 16, 19),
-              letterSpacing: 0.5
+              letterSpacing: 0.5,
             ),
           ),
           const Spacer(flex: 1),
@@ -204,11 +257,17 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: AppStyle.primaryBlue.withValues(alpha: 0.1),
-                backgroundImage: _profilePhoto.isNotEmpty 
-                    ? NetworkImage("https://api.etres.my.id/storage/$_profilePhoto")
+                backgroundImage: _profilePhoto.isNotEmpty
+                    ? NetworkImage(
+                        "https://api.etres.my.id/storage/$_profilePhoto",
+                      )
                     : null,
-                child: _profilePhoto.isEmpty 
-                    ? const Icon(Icons.person, color: AppStyle.primaryBlue, size: 28)
+                child: _profilePhoto.isEmpty
+                    ? const Icon(
+                        Icons.person,
+                        color: AppStyle.primaryBlue,
+                        size: 28,
+                      )
                     : null,
               ),
               const SizedBox(width: 15),
@@ -216,10 +275,17 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_cashierName, 
-                    style: AppStyle.menuText.copyWith(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text(_userRole, 
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(
+                    _cashierName,
+                    style: AppStyle.menuText.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    _userRole,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ],
               ),
             ],
@@ -234,7 +300,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       width: 240,
       decoration: BoxDecoration(
         color: AppStyle.white,
-        border: Border(right: BorderSide(color: Colors.grey.shade100))
+        border: Border(right: BorderSide(color: Colors.grey.shade100)),
       ),
       child: Column(
         children: [
@@ -252,7 +318,12 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title, int index, {bool isLogout = false}) {
+  Widget _buildMenuItem(
+    IconData icon,
+    String title,
+    int index, {
+    bool isLogout = false,
+  }) {
     bool isActive = _currentIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
@@ -270,12 +341,24 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         },
         dense: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        tileColor: isActive ? AppStyle.primaryBlue.withValues(alpha: 0.1) : Colors.transparent,
-        leading: Icon(icon, color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textGrey)),
-        title: Text(title, style: AppStyle.menuText.copyWith(
-          color: isActive ? AppStyle.primaryBlue : (isLogout ? AppStyle.errorRed : AppStyle.textMain), 
-          fontWeight: isActive ? FontWeight.bold : FontWeight.normal
-        )),
+        tileColor: isActive
+            ? AppStyle.primaryBlue.withValues(alpha: 0.1)
+            : Colors.transparent,
+        leading: Icon(
+          icon,
+          color: isActive
+              ? AppStyle.primaryBlue
+              : (isLogout ? AppStyle.errorRed : AppStyle.textGrey),
+        ),
+        title: Text(
+          title,
+          style: AppStyle.menuText.copyWith(
+            color: isActive
+                ? AppStyle.primaryBlue
+                : (isLogout ? AppStyle.errorRed : AppStyle.textMain),
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
       ),
     );
   }

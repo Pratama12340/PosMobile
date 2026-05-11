@@ -4,6 +4,8 @@ import '../style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
 import '../widgets/receipt_dialog.dart';
+import '../services/reverb_service.dart';
+import '../services/storage_service.dart';
 
 class HistoryScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -16,17 +18,20 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   late Future<List<Order>> _historyFuture;
+  final ReverbService _reverbService = ReverbService();
 
   @override
   void initState() {
     super.initState();
     widget.searchController.addListener(_onSearchChanged);
     _loadHistory();
+    _connectReverb();
   }
 
   @override
   void dispose() {
     widget.searchController.removeListener(_onSearchChanged);
+    _reverbService.disconnect();
     super.dispose();
   }
 
@@ -39,6 +44,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
       _historyFuture = ApiService.fetchHistory();
     });
   }
+
+  void _connectReverb() async {
+  final int? outletId = await StorageService.getOutletId(); // ✅ int?
+  if (outletId == null) return;
+
+  _reverbService.initConnection(
+    channelName: 'private-orders.outlet.$outletId',
+    eventName: '.order.updated',
+    onEventReceived: (data) {
+      debugPrint('⚡ [HISTORY] Order updated: $data');
+      _loadHistory();
+    },
+  );
+}
 
   Color _getSideColor(String method) {
     String m = method.toUpperCase();
@@ -70,7 +89,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           final filteredOrders = snapshot.data!.where((order) {
             bool isCurrentShift = order.invoiceNo.contains(todayStr);
             bool matchesSearch = order.invoiceNo.toLowerCase().contains(query) ||
-                                 order.customerName.toLowerCase().contains(query);
+                                order.customerName.toLowerCase().contains(query);
 
             return isCurrentShift && matchesSearch;
           }).toList();

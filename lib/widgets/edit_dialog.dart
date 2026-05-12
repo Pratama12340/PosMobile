@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
@@ -24,28 +25,32 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   String _currentUserName = "";
   List<dynamic> _masterTaxes = [];
 
+  SharedPreferences? _prefs;
+  double _totalBeforeEdit = 0;
+
   @override
   void initState() {
     super.initState();
     _detailFuture = ApiService.fetchHistoryDetail(widget.orderId);
     _loadCurrentUserData();
     _loadTaxSettings();
+    _initPrefs();
+  }
+
+  // Inisialisasi penyimpanan lokal untuk memori abadi
+  Future<void> _initPrefs() async {
+    _prefs = await SharedPreferences.getInstance();
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadCurrentUserData() async {
     String name = await StorageService.getCashierName();
-    setState(() {
-      _currentUserName = name;
-    });
+    setState(() => _currentUserName = name);
   }
 
   void _loadTaxSettings() async {
     final taxes = await ApiService.getTaxes();
-    if (mounted) {
-      setState(() {
-        _masterTaxes = taxes;
-      });
-    }
+    if (mounted) setState(() => _masterTaxes = taxes);
   }
 
   void _triggerRefresh() {
@@ -55,11 +60,13 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     });
   }
 
+  // ─── Kalkulasi ────────────────────────────────────────────────────────────
+
   double get currentSubtotalPrice {
     if (localOrder == null) return 0;
     double total = 0;
     for (var item in localOrder!.items) {
-      total += (item.activeQty * item.unitPrice);
+      total += item.activeQty * item.unitPrice;
     }
     return total;
   }
@@ -69,27 +76,63 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return currentSubtotalPrice - localOrder!.discountAmount;
   }
 
-  double get currentTaxAmount {
-    if (localOrder == null || _masterTaxes.isEmpty) return 0;
-    double totalTax = 0;
+  /// Cascading tax:
+  /// 1. Service charge  → dari baseAmount
+  /// 2. PPN / VAT / Tax → dari (base + total service)
+  List<Map<String, dynamic>> get calculatedTaxBreakdown {
+    if (localOrder == null || _masterTaxes.isEmpty) return [];
+
+    final List<Map<String, dynamic>> result = [];
+    double serviceTotal = 0;
+
+    // Step 1 – service
     for (var tax in _masterTaxes) {
+      final name = (tax['name'] ?? '').toString().toLowerCase();
+      final isPpn =
+          name.contains('ppn') || name.contains('vat') || name.contains('tax');
+      if (isPpn) continue;
+
       double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
-      totalTax += (tax['type'] == 'percentage')
-          ? (baseAmount * (rate / 100))
-          : rate;
+      double amt =
+          (tax['type'] == 'percentage') ? (baseAmount * (rate / 100)) : rate;
+
+      serviceTotal += amt;
+      result.add({...tax, 'calculated_amount': amt});
     }
-    return totalTax;
+
+    // Step 2 – PPN dari (base + service)
+    final afterService = baseAmount + serviceTotal;
+    for (var tax in _masterTaxes) {
+      final name = (tax['name'] ?? '').toString().toLowerCase();
+      final isPpn =
+          name.contains('ppn') || name.contains('vat') || name.contains('tax');
+      if (!isPpn) continue;
+
+      double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+      double amt =
+          (tax['type'] == 'percentage') ? (afterService * (rate / 100)) : rate;
+
+      result.add({...tax, 'calculated_amount': amt});
+    }
+
+    return result;
   }
+
+  double get currentTaxAmount => calculatedTaxBreakdown.fold(
+      0.0, (sum, t) => sum + (t['calculated_amount'] as double));
 
   double get currentTotalPrice {
     if (localOrder == null) return 0;
-    double total = baseAmount + currentTaxAmount;
+    final total = baseAmount + currentTaxAmount;
     return total < 0 ? 0 : total;
   }
+
+  // ─── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final style = AppStyle();
+
     return FutureBuilder<Order?>(
       future: _detailFuture,
       builder: (context, snapshot) {
@@ -97,43 +140,49 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
             localOrder == null) {
           return const Dialog(
             child: SizedBox(
-              height: 300,
-              child: Center(child: CircularProgressIndicator()),
-            ),
+                height: 300,
+                child: Center(child: CircularProgressIndicator())),
           );
         }
 
         if (snapshot.hasData && localOrder == null) {
           localOrder = snapshot.data;
+          
+          // Migrasi otomatis jika ada kembalian dari kode versi sebelumnya agar tidak hilang
+          if (_prefs != null && localOrder != null && localOrder!.logs.isNotEmpty) {
+             final oldRefund = _prefs!.getDouble('refund_${widget.orderId}');
+             if (oldRefund != null && oldRefund > 0) {
+                 final firstLog = localOrder!.logs.first;
+                 // Kunci menggunakan Title dan Reason agar lebih stabil daripada Date
+                 final logKey = 'refund_${widget.orderId}_${firstLog.title}_${firstLog.reason}';
+                 _prefs!.setDouble(logKey, oldRefund);
+                 _prefs!.remove('refund_${widget.orderId}'); // Hapus key lama
+             }
+          }
         }
 
         if (localOrder == null) {
           return const Dialog(
-            child: Center(child: Text("Data tidak ditemukan")),
-          );
+              child: Center(child: Text("Data tidak ditemukan")));
         }
 
         bool showRightSide = localOrder!.logs.isNotEmpty || isEditMode;
 
-        double displaySubtotal = isEditMode
-            ? currentSubtotalPrice
-            : localOrder!.subtotalPrice;
+        double displaySubtotal =
+            isEditMode ? currentSubtotalPrice : localOrder!.subtotalPrice;
         double displayBase = displaySubtotal - localOrder!.discountAmount;
-        double displayTotal = isEditMode
-            ? currentTotalPrice
-            : localOrder!.totalPrice;
+        double displayTotal =
+            isEditMode ? currentTotalPrice : localOrder!.totalPrice;
 
         return Dialog(
           backgroundColor: const Color(0xFFF8FAFC),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
             constraints: BoxConstraints(
-              maxWidth:
-                  MediaQuery.of(context).size.width *
+              maxWidth: MediaQuery.of(context).size.width *
                   (showRightSide ? 0.85 : 0.5),
               maxHeight: MediaQuery.of(context).size.height * 0.9,
             ),
@@ -141,6 +190,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               key: _formKey,
               child: Row(
                 children: [
+                  // ── Kolom Kiri (Struk) ──────────────────────────────────
                   Expanded(
                     flex: 4,
                     child: Container(
@@ -148,8 +198,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                         color: Colors.white,
                         borderRadius: showRightSide
                             ? const BorderRadius.horizontal(
-                                left: Radius.circular(24),
-                              )
+                                left: Radius.circular(24))
                             : BorderRadius.circular(24),
                       ),
                       padding: const EdgeInsets.all(32),
@@ -163,13 +212,10 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                "Rincian Pesanan",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 22,
-                                ),
-                              ),
+                              const Text("Rincian Pesanan",
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 22)),
                               _buildEditToggleButton(),
                             ],
                           ),
@@ -177,19 +223,18 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           Expanded(
                             child: ListView(
                               children: localOrder!.items
-                                  .map(
-                                    (item) => _buildItemRowCustom(item, style),
-                                  )
+                                  .map((item) =>
+                                      _buildItemRowCustom(item, style))
                                   .toList(),
                             ),
                           ),
                           const Divider(height: 24, thickness: 1),
 
+                          // Subtotal
                           _buildSummaryRow(
-                            "Subtotal",
-                            style.formatHarga(displaySubtotal),
-                          ),
+                              "Subtotal", style.formatHarga(displaySubtotal)),
 
+                          // Diskon
                           if (localOrder!.discountAmount > 0)
                             _buildSummaryRow(
                               "Diskon",
@@ -197,62 +242,109 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                               color: Colors.red,
                             ),
 
+                          // Pajak
                           if (_masterTaxes.isNotEmpty)
-                            ..._masterTaxes.map((tax) {
-                              double rate =
-                                  double.tryParse(
-                                    tax['rate']?.toString() ?? '0',
-                                  ) ??
-                                  0;
-                              double amt = (tax['type'] == 'percentage')
-                                  ? (displayBase * (rate / 100))
-                                  : rate;
-
-                              String label = tax['name'] ?? "Pajak";
-                              if (tax['type'] == 'percentage') {
-                                label +=
-                                    " (${rate.toString().replaceAll('.0', '')}%)";
+                            ...() {
+                              if (isEditMode) {
+                                return calculatedTaxBreakdown.map((tax) {
+                                  double amt =
+                                      tax['calculated_amount'] as double;
+                                  double rate = double.tryParse(
+                                          tax['rate']?.toString() ?? '0') ??
+                                      0;
+                                  String label = tax['name'] ?? "Pajak";
+                                  if (tax['type'] == 'percentage') {
+                                    label += " (${rate.toStringAsFixed(0)}%)";
+                                  }
+                                  return _buildSummaryRow(
+                                      label, style.formatHarga(amt));
+                                }).toList();
                               }
 
-                              return _buildSummaryRow(
-                                label,
-                                style.formatHarga(amt),
-                              );
-                            })
+                              double serviceTotal = 0;
+                              final List<Widget> rows = [];
+
+                              for (var tax in _masterTaxes) {
+                                final name = (tax['name'] ?? '')
+                                    .toString()
+                                    .toLowerCase();
+                                final isPpn = name.contains('ppn') ||
+                                    name.contains('vat') ||
+                                    name.contains('tax');
+                                if (isPpn) continue;
+
+                                double rate = double.tryParse(
+                                        tax['rate']?.toString() ?? '0') ??
+                                    0;
+                                double amt = (tax['type'] == 'percentage')
+                                    ? (displayBase * (rate / 100))
+                                    : rate;
+                                serviceTotal += amt;
+
+                                String label = tax['name'] ?? "Pajak";
+                                if (tax['type'] == 'percentage') {
+                                  label += " (${rate.toStringAsFixed(0)}%)";
+                                }
+                                rows.add(_buildSummaryRow(
+                                    label, style.formatHarga(amt)));
+                              }
+
+                              final afterService = displayBase + serviceTotal;
+                              for (var tax in _masterTaxes) {
+                                final name = (tax['name'] ?? '')
+                                    .toString()
+                                    .toLowerCase();
+                                final isPpn = name.contains('ppn') ||
+                                    name.contains('vat') ||
+                                    name.contains('tax');
+                                if (!isPpn) continue;
+
+                                double rate = double.tryParse(
+                                        tax['rate']?.toString() ?? '0') ??
+                                    0;
+                                double amt = (tax['type'] == 'percentage')
+                                    ? (afterService * (rate / 100))
+                                    : rate;
+
+                                String label = tax['name'] ?? "Pajak";
+                                if (tax['type'] == 'percentage') {
+                                  label += " (${rate.toStringAsFixed(0)}%)";
+                                }
+                                rows.add(_buildSummaryRow(
+                                    label, style.formatHarga(amt)));
+                              }
+
+                              return rows;
+                            }()
                           else if (localOrder!.taxAmount > 0)
                             _buildSummaryRow(
-                              "Pajak",
-                              style.formatHarga(localOrder!.taxAmount),
-                            ),
+                                "Pajak",
+                                style.formatHarga(localOrder!.taxAmount)),
 
                           const Divider(height: 32, thickness: 1),
+
+                          // Total Tagihan
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                "Total Tagihan",
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              const Text("Total Tagihan",
+                                  style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold)),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text(
                                     style.formatHarga(displayTotal),
                                     style: const TextStyle(
-                                      fontSize: 32,
-                                      color: Color(0xFF4CAF50),
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                        fontSize: 32,
+                                        color: Color(0xFF4CAF50),
+                                        fontWeight: FontWeight.bold),
                                   ),
                                   Text(
                                     "Metode: ${localOrder!.paymentMethod}",
                                     style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                    ),
+                                        fontSize: 12, color: Colors.grey),
                                   ),
                                 ],
                               ),
@@ -262,6 +354,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                       ),
                     ),
                   ),
+
+                  // ── Kolom Kanan (Log & Edit) ──────────────────────────
                   if (showRightSide)
                     Expanded(
                       flex: 3,
@@ -271,34 +365,26 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (isEditMode) ...[
-                              const Text(
-                                "Input Perubahan",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              const Text("Input Perubahan",
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold)),
                               const SizedBox(height: 16),
                               _buildNoteInput(),
                               const SizedBox(height: 12),
                               _buildSaveButton(),
                               const Divider(height: 40),
                             ],
-                            const Row(
-                              children: [
-                                Icon(
-                                  Icons.history_rounded,
-                                  color: Colors.blueGrey,
-                                ),
+                            Row(
+                              children: const [
+                                Icon(Icons.history_rounded,
+                                    color: Colors.blueGrey),
                                 SizedBox(width: 8),
-                                Text(
-                                  "Log Perubahan",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blueGrey,
-                                  ),
-                                ),
+                                Text("Log Perubahan",
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blueGrey)),
                               ],
                             ),
                             const SizedBox(height: 24),
@@ -306,11 +392,10 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                               child: localOrder!.logs.isEmpty
                                   ? const Center(
                                       child: Text(
-                                        "Riwayat akan muncul di sini",
-                                        style: TextStyle(color: Colors.grey),
-                                      ),
-                                    )
-                                  : _buildTimelineLogs(),
+                                          "Riwayat akan muncul di sini",
+                                          style:
+                                              TextStyle(color: Colors.grey)))
+                                  : _buildTimelineLogs(style),
                             ),
                           ],
                         ),
@@ -325,6 +410,382 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
+  // ─── Timeline Log ─────────────────────────────────────────────────────────
+
+  Widget _buildTimelineLogs(AppStyle style) {
+    return ListView.builder(
+      itemCount: localOrder!.logs.length,
+      itemBuilder: (context, index) {
+        final log = localOrder!.logs[index];
+
+        // MENGUNCI REFUND KE LOG SPESIFIK BERDASARKAN JUDUL & ALASAN
+        // Ini dijamin permanen dan tidak akan tertimpa saat ada edit baru!
+        final logKey = 'refund_${widget.orderId}_${log.title}_${log.reason}';
+        final double logRefundAmount = _prefs?.getDouble(logKey) ?? 0.0;
+        final bool showRefundHere = logRefundAmount > 0;
+
+        final bool isLatest = index == 0;
+        final bool isLast = index == localOrder!.logs.length - 1;
+
+        String formattedTitle = log.title.replaceAllMapped(
+          RegExp(r'Void (\d+)x'),
+          (match) => '- ${match.group(1)}',
+        );
+
+        final parsedDate = _parseLogDate(log.date);
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Garis timeline ──
+            Column(
+              children: [
+                const SizedBox(height: 3),
+                Container(
+                  width: 13,
+                  height: 13,
+                  decoration: BoxDecoration(
+                    color: isLatest
+                        ? const Color(0xFF4285F4)
+                        : Colors.blueGrey.shade200,
+                    shape: BoxShape.circle,
+                    boxShadow: isLatest
+                        ? [
+                            BoxShadow(
+                              color:
+                                  const Color(0xFF4285F4).withOpacity(0.35),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            )
+                          ]
+                        : null,
+                  ),
+                ),
+                if (!isLast)
+                  Container(
+                    width: 2,
+                    height: _estimateLineHeight(showRefundHere),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          const Color(0xFF4285F4).withOpacity(0.3),
+                          Colors.blue.withOpacity(0.05),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+
+            const SizedBox(width: 14),
+
+            // ── Konten log ──
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Baris atas: avatar + nama + badge terbaru
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 13,
+                            backgroundColor:
+                                const Color(0xFF4285F4).withOpacity(0.12),
+                            child: Text(
+                              _getInitial(log.actor == "Staff"
+                                  ? _currentUserName
+                                  : log.actor),
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF4285F4),
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            log.actor == "Staff"
+                                ? _currentUserName
+                                : log.actor,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      if (isLatest)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color:
+                                const Color(0xFF4285F4).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            "Terbaru",
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF4285F4),
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // Tanggal & Waktu
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today_rounded,
+                          size: 11, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        parsedDate['date'] ?? '-',
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.grey),
+                      ),
+                      if (parsedDate['time'] != null && parsedDate['time']!.isNotEmpty) ...[
+                        Container(
+                          margin:
+                              const EdgeInsets.symmetric(horizontal: 8),
+                          width: 3,
+                          height: 3,
+                          decoration: const BoxDecoration(
+                            color: Colors.grey,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const Icon(Icons.access_time_rounded,
+                            size: 11, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          parsedDate['time']!,
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Card utama
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isLatest
+                            ? const Color(0xFF4285F4).withOpacity(0.22)
+                            : Colors.grey.withOpacity(0.1),
+                        width: isLatest ? 1.5 : 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Header card: judul aksi ──────────────────
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 11),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4285F4).withOpacity(0.07),
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(14)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.edit_note_rounded,
+                                  size: 15, color: Color(0xFF4285F4)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  formattedTitle,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: Color(0xFF4285F4)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // ── Alasan ───────────────────────────────────
+                        Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 13,
+                                  color: Colors.grey),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  log.reason,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black87,
+                                      fontStyle: FontStyle.italic,
+                                      height: 1.4),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // ── Refund banner untuk log KHUSUS INI ─────
+                        if (showRefundHere) ...[
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: const Color(0xFF4CAF50).withOpacity(0.2),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 13),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF1FBF4),
+                              borderRadius: BorderRadius.vertical(
+                                  bottom: Radius.circular(14)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(7),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF4CAF50),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.keyboard_return_rounded,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Kembalikan ke Customer • ${parsedDate['time'] ?? 'Sukses'}",
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.black45,
+                                            fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        style.formatHarga(logRefundAmount),
+                                        style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF2E7D32)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else
+                          const SizedBox(height: 4),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  double _estimateLineHeight(bool withRefund) =>
+      withRefund ? 215 : 160;
+
+  String _getInitial(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+  }
+
+  Map<String, String?> _parseLogDate(String rawDate) {
+    if (rawDate.trim().isEmpty || rawDate == '-' || rawDate == 'null') {
+      return {'date': '-', 'time': null};
+    }
+
+    try {
+      DateTime? dt = DateTime.tryParse(rawDate);
+      
+      if (dt == null) {
+        dt = DateTime.tryParse(rawDate.replaceFirst(' ', 'T'));
+      }
+
+      if (dt != null) {
+        dt = dt.toLocal(); 
+        final day = dt.day.toString().padLeft(2, '0');
+        final month = _monthName(dt.month);
+        final year = dt.year;
+        final hour = dt.hour.toString().padLeft(2, '0');
+        final minute = dt.minute.toString().padLeft(2, '0');
+        return {
+          'date': '$day $month $year',
+          'time': '$hour:$minute WIB',
+        };
+      }
+    } catch (_) {}
+
+    final timeRegex = RegExp(r'\b\d{1,2}:\d{2}(?::\d{2})?\b');
+    final match = timeRegex.firstMatch(rawDate);
+    if (match != null) {
+      final time = match.group(0)!;
+      final date = rawDate.replaceAll(time, '').trim();
+      return {
+        'date': date.isNotEmpty ? date : rawDate, 
+        'time': '$time WIB'
+      };
+    }
+
+    return {'date': rawDate, 'time': null};
+  }
+
+  String _monthName(int month) {
+    const months = [
+      '',
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+    ];
+    return months[month];
+  }
+
+  // ─── Widget helpers ───────────────────────────────────────────────────────
+
   Widget _buildHeaderCustom() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,33 +797,26 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               Text(
                 localOrder!.invoiceNo,
                 style: const TextStyle(
-                  fontSize: 26,
-                  color: Color(0xFF4285F4),
-                  fontWeight: FontWeight.bold,
-                ),
+                    fontSize: 26,
+                    color: Color(0xFF4285F4),
+                    fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
-              Text(
-                "${localOrder!.date} • Outlet 1",
-                style: const TextStyle(color: Colors.grey, fontSize: 14),
-              ),
+              Text("${_parseLogDate(localOrder!.date)['date']} • Outlet 1",
+                  style:
+                      const TextStyle(color: Colors.grey, fontSize: 14)),
             ],
           ),
         ),
         const SizedBox(width: 12),
         ElevatedButton.icon(
           onPressed: () async {
-            final scaffoldMessenger = ScaffoldMessenger.of(context);
             final printerService = TerminalPrinterService();
-
-            // 1. Ambil Info Outlet Live
             final outletInfo = await ApiService.fetchOutletInfoLive();
 
-            // 2. Map Items History ke CartItem Printer
-            final List<CartItem> itemsForPrinting = localOrder!.items.map((
-              item,
-            ) {
+            final List<CartItem> itemsForPrinting =
+                localOrder!.items.map((item) {
               return CartItem(
                 itemName: item.itemName,
                 quantity: item.activeQty,
@@ -371,17 +825,12 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               );
             }).toList();
 
-            // 3. Bangun Tax Breakdown
-            List<Map<String, dynamic>> taxDetails = _masterTaxes.map((tax) {
-              double rate =
-                  double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
-              double amt = (tax['type'] == 'percentage')
-                  ? (baseAmount * (rate / 100))
-                  : rate;
-              return {'name': tax['name'], 'calculated_amount': amt};
-            }).toList();
+            final List<Map<String, dynamic>> taxDetails =
+                calculatedTaxBreakdown.map((tax) => {
+                      'name': tax['name'],
+                      'calculated_amount': tax['calculated_amount'],
+                    }).toList();
 
-            // 4. Siapkan Model Transaksi
             final transaction = TransactionModel(
               orderId: localOrder!.invoiceNo,
               outletName: outletInfo['name'] ?? "Outlet",
@@ -392,15 +841,13 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               items: itemsForPrinting,
               discountAmount: localOrder!.discountAmount,
               taxBreakdown: taxDetails,
-              totalDariHalaman: isEditMode
-                  ? currentTotalPrice
-                  : localOrder!.totalPrice,
+              totalDariHalaman:
+                  isEditMode ? currentTotalPrice : localOrder!.totalPrice,
             );
 
             printerService.printToTerminal(transaction);
 
-            if (!mounted) return;
-            scaffoldMessenger.showSnackBar(
+            ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text("Struk Pelanggan Berhasil Dicetak"),
                 backgroundColor: Colors.blue,
@@ -408,16 +855,14 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
             );
           },
           icon: const Icon(Icons.print, size: 20, color: Colors.white),
-          label: const Text(
-            "Cetak",
-            style: TextStyle(color: Colors.white, fontSize: 16),
-          ),
+          label: const Text("Cetak",
+              style: TextStyle(color: Colors.white, fontSize: 16)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF4285F4),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
+                borderRadius: BorderRadius.circular(8)),
           ),
         ),
       ],
@@ -428,47 +873,35 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(12),
-      ),
+          color: const Color(0xFFF8F9FA),
+          borderRadius: BorderRadius.circular(12)),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildInfoColumn(
-            "CUSTOMER",
-            localOrder!.customerName == "Staff"
-                ? _currentUserName
-                : localOrder!.customerName,
-          ),
+          _buildInfoColumn("KASIR", _currentUserName),
           _buildInfoColumn("TABLE", localOrder!.tableNo, isRight: true),
         ],
       ),
     );
   }
 
-  Widget _buildInfoColumn(String label, String value, {bool isRight = false}) {
+  Widget _buildInfoColumn(String label, String value,
+      {bool isRight = false}) {
     return Column(
-      crossAxisAlignment: isRight
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
+      crossAxisAlignment:
+          isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            color: Colors.grey,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 10,
+                color: Colors.grey,
+                fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            color: Color(0xFF4285F4),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF4285F4),
+                fontWeight: FontWeight.bold)),
       ],
     );
   }
@@ -483,28 +916,23 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  item.itemName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                Text(item.itemName,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
                 Text(
-                  "${item.activeQty} x ${style.formatHarga(item.unitPrice)}",
-                  style: const TextStyle(fontSize: 13, color: Colors.grey),
-                ),
+                    "${item.activeQty} x ${style.formatHarga(item.unitPrice)}",
+                    style: const TextStyle(
+                        fontSize: 13, color: Colors.grey)),
                 if (item.notes.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       "Note: ${item.notes}",
                       style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange,
-                        fontStyle: FontStyle.italic,
-                      ),
+                          fontSize: 12,
+                          color: Colors.orange,
+                          fontStyle: FontStyle.italic),
                     ),
                   ),
               ],
@@ -514,154 +942,49 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           const SizedBox(width: 20),
           Text(
             style.formatHarga(item.activeQty * item.unitPrice),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryRow(
-    String label,
-    String value, {
-    Color color = Colors.black87,
-  }) {
+  Widget _buildSummaryRow(String label, String value,
+      {Color color = Colors.black87}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 16)),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
+          Text(label,
+              style: const TextStyle(color: Colors.grey, fontSize: 16)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: color)),
         ],
       ),
     );
   }
 
-  Widget _buildTimelineLogs() {
-    return ListView.builder(
-      itemCount: localOrder!.logs.length,
-      itemBuilder: (context, index) {
-        final log = localOrder!.logs[index];
-
-        String formattedTitle = log.title.replaceAllMapped(
-          RegExp(r'Void (\d+)x'),
-          (match) => '- ${match.group(1)}',
-        );
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Column(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF4285F4),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                if (index != localOrder!.logs.length - 1)
-                  Container(
-                    width: 2,
-                    height: 110,
-                    color: Colors.blue.withValues(alpha: 0.1),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        log.actor == "Staff" ? _currentUserName : log.actor,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        log.date,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.grey.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          formattedTitle,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: Color(0xFF4285F4),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Divider(),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Alasan: ${log.reason}",
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black87,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildEditToggleButton() {
     return OutlinedButton.icon(
-      onPressed: () => setState(() => isEditMode = !isEditMode),
-      icon: Icon(
-        isEditMode ? Icons.close : Icons.edit_note,
-        color: Colors.redAccent,
-        size: 18,
-      ),
-      label: Text(
-        isEditMode ? "Batal" : "Edit Item",
-        style: const TextStyle(color: Colors.redAccent),
-      ),
+      onPressed: () => setState(() {
+        if (!isEditMode) {
+          _totalBeforeEdit = localOrder!.totalPrice;
+        }
+        isEditMode = !isEditMode;
+      }),
+      icon: Icon(isEditMode ? Icons.close : Icons.edit_note,
+          color: Colors.redAccent, size: 18),
+      label: Text(isEditMode ? "Batal" : "Edit Item",
+          style: const TextStyle(color: Colors.redAccent)),
       style: OutlinedButton.styleFrom(
         side: const BorderSide(color: Colors.redAccent),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
       ),
     );
   }
@@ -670,19 +993,17 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return Row(
       children: [
         IconButton(
-          icon: const Icon(
-            Icons.remove_circle_outline,
-            color: Colors.redAccent,
-          ),
+          icon: const Icon(Icons.remove_circle_outline,
+              color: Colors.redAccent),
           onPressed: () =>
               setState(() => item.activeQty > 0 ? item.activeQty-- : null),
         ),
-        Text(
-          "${item.activeQty}",
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
+        Text("${item.activeQty}",
+            style: const TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 16)),
         IconButton(
-          icon: const Icon(Icons.add_circle_outline, color: Color(0xFF4285F4)),
+          icon: const Icon(Icons.add_circle_outline,
+              color: Color(0xFF4285F4)),
           onPressed: () => setState(() => item.activeQty++),
         ),
       ],
@@ -698,9 +1019,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         filled: true,
         fillColor: const Color(0xFFF1F5F9),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none),
       ),
       validator: (value) =>
           (value == null || value.isEmpty) ? "Wajib isi alasan" : null,
@@ -715,44 +1035,62 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.redAccent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+              borderRadius: BorderRadius.circular(12)),
         ),
         onPressed: _handleSaveButton,
-        child: const Text(
-          "Simpan Perubahan",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        child: const Text("Simpan Perubahan",
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
   void _handleSaveButton() async {
     if (_formKey.currentState!.validate()) {
-      final navigator = Navigator.of(context);
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
+        builder: (_) =>
+            const Center(child: CircularProgressIndicator()),
       );
       try {
+        final totalBefore = _totalBeforeEdit;
+        final totalAfter = currentTotalPrice;
+
         final success = await ApiService.updateOrder(
           orderId: localOrder!.orderId,
           items: localOrder!.items,
           reason: _noteController.text,
           taxAmount: currentTaxAmount,
-          totalPrice: currentTotalPrice,
+          totalPrice: totalAfter,
         );
-        navigator.pop();
+
+        Navigator.pop(context);
+
         if (success) {
-          _triggerRefresh();
+          final diff = totalBefore - totalAfter;
+          
+          final newOrder = await ApiService.fetchHistoryDetail(widget.orderId);
+
+          if (diff > 0 && newOrder != null && newOrder.logs.isNotEmpty) {
+             final newLog = newOrder.logs.first;
+             // Mengunci kembalian menggunakan Judul Aksi dan Alasan
+             final logKey = 'refund_${widget.orderId}_${newLog.title}_${newLog.reason}';
+             
+             if (_prefs != null) {
+                await _prefs!.setDouble(logKey, diff);
+             }
+          }
+
           setState(() {
+            localOrder = newOrder;
+            _detailFuture = Future.value(newOrder); 
             isEditMode = false;
             _noteController.clear();
           });
         }
       } catch (e) {
-        navigator.pop();
+        Navigator.pop(context);
       }
     }
   }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:intl/intl.dart';
 
 class OrderLog {
@@ -11,7 +12,12 @@ class OrderLog {
   });
 
   factory OrderLog.fromJson(Map<String, dynamic> json) {
-    String rawDate = json['created_at'] ?? "";
+    // 🔥 PERBAIKAN: Tangkap 'updated_at' atau 'date' dari database, bukan cuma 'created_at'
+    String rawDate = json['updated_at']?.toString() ?? 
+                     json['date']?.toString() ?? 
+                     json['created_at']?.toString() ?? 
+                     "";
+                     
     String formattedLogDate = rawDate;
     if (rawDate.isNotEmpty) {
       try {
@@ -24,6 +30,7 @@ class OrderLog {
         formattedLogDate = rawDate.replaceAll('T', ' ').split('.')[0];
       }
     }
+    
     return OrderLog(
       title: json['title'] ?? json['action'] ?? "Perubahan Pesanan",
       reason: json['reason'] ?? json['notes'] ?? "-",
@@ -141,7 +148,7 @@ class Order {
     required this.customerName,
     required this.tableNo,
     this.tableId,
-    this.discountId, // 🔥
+    this.discountId,
     required this.paymentMethod,
     required this.status,
     required this.subtotalPrice,
@@ -166,19 +173,37 @@ class Order {
     final Map<String, dynamic> orderRelasi = d['order'] is Map
         ? d['order']
         : {};
+        
     var itemsRaw =
         (orderRelasi['order_items'] ?? orderRelasi['items'] ?? d['items'] ?? [])
             as List;
-    var logsRaw =
-        (d['logs'] ??
-                d['order_logs'] ??
-                orderRelasi['logs'] ??
-                orderRelasi['order_logs'] ??
-                [])
-            as List;
+            
+    // 🔥 PERBAIKAN: Antisipasi jika Backend mengirimkan Logs dalam bentuk String JSON
+    var logsRawData = d['logs'] ??
+                      d['order_logs'] ??
+                      orderRelasi['logs'] ??
+                      orderRelasi['order_logs'];
+                      
+    List logsRaw = [];
+    if (logsRawData is String) {
+      try {
+        logsRaw = jsonDecode(logsRawData) as List;
+      } catch (e) {
+        logsRaw = [];
+      }
+    } else if (logsRawData is List) {
+      logsRaw = logsRawData;
+    }
 
+    // 🔥 PERBAIKAN: Prioritaskan membaca 'updated_at' sesuai instruksi Anda
     String rawDate =
-        d['paid_at'] ?? d['created_at'] ?? orderRelasi['created_at'] ?? "";
+        d['updated_at']?.toString() ?? 
+        d['paid_at']?.toString() ?? 
+        d['created_at']?.toString() ?? 
+        orderRelasi['updated_at']?.toString() ?? 
+        orderRelasi['created_at']?.toString() ?? 
+        "";
+        
     String formattedDate = "-";
     if (rawDate.isNotEmpty) {
       try {
@@ -226,7 +251,7 @@ class Order {
       discountAmount:
           double.tryParse((d['discount_amount'] ?? '0').toString()) ?? 0.0,
       taxAmount: double.tryParse((d['tax_amount'] ?? '0').toString()) ?? 0.0,
-      taxBreakdown: json['tax_breakdown'],
+      taxBreakdown: json['tax_breakdown'] ?? d['tax_breakdown'],
       totalPrice: double.tryParse((d['total_price'] ?? '0').toString()) ?? 0.0,
       paidAmount:
           double.tryParse(

@@ -907,6 +907,9 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   }
 
   Widget _buildItemRowCustom(OrderItem item, AppStyle style) {
+    // 🔥 Pengecekan qty apakah 0 atau tidak
+    final bool isZero = item.activeQty == 0;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -916,19 +919,32 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.itemName,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w500)),
+                Text(
+                  item.itemName,
+                  style: TextStyle(
+                    fontSize: 18, 
+                    fontWeight: FontWeight.w500,
+                    // 🔥 Jika 0, warna merah dan dicoret
+                    color: isZero ? Colors.red : Colors.black87,
+                    decoration: isZero ? TextDecoration.lineThrough : TextDecoration.none,
+                    decorationColor: isZero ? Colors.red : null,
+                  )
+                ),
                 const SizedBox(height: 2),
                 Text(
-                    "${item.activeQty} x ${style.formatHarga(item.unitPrice)}",
-                    style: const TextStyle(
-                        fontSize: 13, color: Colors.grey)),
+                  "${item.activeQty} x ${style.formatHarga(item.unitPrice)}",
+                  style: TextStyle(
+                    fontSize: 13, 
+                    // Teks harga abu-abu/merah redup dan dicoret jika 0
+                    color: isZero ? Colors.red.withOpacity(0.6) : Colors.grey,
+                    decoration: isZero ? TextDecoration.lineThrough : TextDecoration.none,
+                  )
+                ),
                 if (item.notes.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      "Note: ${item.notes}",
+                      "Notes: ${item.notes}",
                       style: const TextStyle(
                           fontSize: 12,
                           color: Colors.orange,
@@ -942,8 +958,13 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           const SizedBox(width: 20),
           Text(
             style.formatHarga(item.activeQty * item.unitPrice),
-            style: const TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                fontSize: 18, 
+                fontWeight: FontWeight.bold,
+                // Total dicoret merah jika qty 0
+                color: isZero ? Colors.red : Colors.black87,
+                decoration: isZero ? TextDecoration.lineThrough : TextDecoration.none,
+            ),
           ),
         ],
       ),

@@ -247,7 +247,7 @@ class _ProfilHistoryState extends State<ProfilHistory>
                     ? Image.network(
                         imageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildPhotoFallback(),
+                        errorBuilder: (_, _, _) => _buildPhotoFallback(),
                       )
                     : _buildPhotoFallback(),
               ),

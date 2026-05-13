@@ -27,6 +27,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
   SharedPreferences? _prefs;
   double _totalBeforeEdit = 0;
+  bool _prefsReady = false;
 
   @override
   void initState() {
@@ -37,10 +38,21 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     _initPrefs();
   }
 
-  // Inisialisasi penyimpanan lokal untuk memori abadi
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _prefsReady = true);
+  }
+
+  String _sanitizeKey(String raw) {
+    return raw
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .toLowerCase();
+  }
+
+  String _buildRefundKey(OrderLog log) {
+    final raw = 'refund_${widget.orderId}_${log.title}_${log.reason}';
+    return _sanitizeKey(raw);
   }
 
   Future<void> _loadCurrentUserData() async {
@@ -52,15 +64,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     final taxes = await ApiService.getTaxes();
     if (mounted) setState(() => _masterTaxes = taxes);
   }
-
-  void _triggerRefresh() {
-    setState(() {
-      localOrder = null;
-      _detailFuture = ApiService.fetchHistoryDetail(widget.orderId);
-    });
-  }
-
-  // ─── Kalkulasi ────────────────────────────────────────────────────────────
 
   double get currentSubtotalPrice {
     if (localOrder == null) return 0;
@@ -76,16 +79,12 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return currentSubtotalPrice - localOrder!.discountAmount;
   }
 
-  /// Cascading tax:
-  /// 1. Service charge  → dari baseAmount
-  /// 2. PPN / VAT / Tax → dari (base + total service)
   List<Map<String, dynamic>> get calculatedTaxBreakdown {
     if (localOrder == null || _masterTaxes.isEmpty) return [];
 
     final List<Map<String, dynamic>> result = [];
     double serviceTotal = 0;
 
-    // Step 1 – service
     for (var tax in _masterTaxes) {
       final name = (tax['name'] ?? '').toString().toLowerCase();
       final isPpn =
@@ -100,7 +99,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       result.add({...tax, 'calculated_amount': amt});
     }
 
-    // Step 2 – PPN dari (base + service)
     final afterService = baseAmount + serviceTotal;
     for (var tax in _masterTaxes) {
       final name = (tax['name'] ?? '').toString().toLowerCase();
@@ -127,8 +125,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return total < 0 ? 0 : total;
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final style = AppStyle();
@@ -147,17 +143,15 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
         if (snapshot.hasData && localOrder == null) {
           localOrder = snapshot.data;
-          
-          // Migrasi otomatis jika ada kembalian dari kode versi sebelumnya agar tidak hilang
+
           if (_prefs != null && localOrder != null && localOrder!.logs.isNotEmpty) {
-             final oldRefund = _prefs!.getDouble('refund_${widget.orderId}');
-             if (oldRefund != null && oldRefund > 0) {
-                 final firstLog = localOrder!.logs.first;
-                 // Kunci menggunakan Title dan Reason agar lebih stabil daripada Date
-                 final logKey = 'refund_${widget.orderId}_${firstLog.title}_${firstLog.reason}';
-                 _prefs!.setDouble(logKey, oldRefund);
-                 _prefs!.remove('refund_${widget.orderId}'); // Hapus key lama
-             }
+            final oldRefund = _prefs!.getDouble('refund_${widget.orderId}');
+            if (oldRefund != null && oldRefund > 0) {
+              final firstLog = localOrder!.logs.first;
+              final logKey = _buildRefundKey(firstLog);
+              _prefs!.setDouble(logKey, oldRefund);
+              _prefs!.remove('refund_${widget.orderId}');
+            }
           }
         }
 
@@ -190,7 +184,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               key: _formKey,
               child: Row(
                 children: [
-                  // ── Kolom Kiri (Struk) ──────────────────────────────────
                   Expanded(
                     flex: 4,
                     child: Container(
@@ -230,11 +223,9 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           ),
                           const Divider(height: 24, thickness: 1),
 
-                          // Subtotal
                           _buildSummaryRow(
                               "Subtotal", style.formatHarga(displaySubtotal)),
 
-                          // Diskon
                           if (localOrder!.discountAmount > 0)
                             _buildSummaryRow(
                               "Diskon",
@@ -242,7 +233,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                               color: Colors.red,
                             ),
 
-                          // Pajak
                           if (_masterTaxes.isNotEmpty)
                             ...() {
                               if (isEditMode) {
@@ -323,7 +313,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
                           const Divider(height: 32, thickness: 1),
 
-                          // Total Tagihan
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -355,7 +344,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                     ),
                   ),
 
-                  // ── Kolom Kanan (Log & Edit) ──────────────────────────
                   if (showRightSide)
                     Expanded(
                       flex: 3,
@@ -375,8 +363,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                               _buildSaveButton(),
                               const Divider(height: 40),
                             ],
-                            Row(
-                              children: const [
+                            const Row(
+                              children: [
                                 Icon(Icons.history_rounded,
                                     color: Colors.blueGrey),
                                 SizedBox(width: 8),
@@ -410,18 +398,15 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
-  // ─── Timeline Log ─────────────────────────────────────────────────────────
-
   Widget _buildTimelineLogs(AppStyle style) {
     return ListView.builder(
       itemCount: localOrder!.logs.length,
       itemBuilder: (context, index) {
         final log = localOrder!.logs[index];
 
-        // MENGUNCI REFUND KE LOG SPESIFIK BERDASARKAN JUDUL & ALASAN
-        // Ini dijamin permanen dan tidak akan tertimpa saat ada edit baru!
-        final logKey = 'refund_${widget.orderId}_${log.title}_${log.reason}';
-        final double logRefundAmount = _prefs?.getDouble(logKey) ?? 0.0;
+        if (!_prefsReady) return const SizedBox.shrink();
+        final logKey = _buildRefundKey(log);
+        final double logRefundAmount = _prefs!.getDouble(logKey) ?? 0.0;
         final bool showRefundHere = logRefundAmount > 0;
 
         final bool isLatest = index == 0;
@@ -437,7 +422,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Garis timeline ──
             Column(
               children: [
                 const SizedBox(height: 3),
@@ -452,8 +436,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                     boxShadow: isLatest
                         ? [
                             BoxShadow(
-                              color:
-                                  const Color(0xFF4285F4).withOpacity(0.35),
+                              color: const Color(0xFF4285F4).withValues(alpha: 0.35),
                               blurRadius: 6,
                               spreadRadius: 1,
                             )
@@ -470,8 +453,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          const Color(0xFF4285F4).withOpacity(0.3),
-                          Colors.blue.withOpacity(0.05),
+                          const Color(0xFF4285F4).withValues(alpha: 0.3),
+                          Colors.blue.withValues(alpha: 0.05),
                         ],
                       ),
                     ),
@@ -481,12 +464,10 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
             const SizedBox(width: 14),
 
-            // ── Konten log ──
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Baris atas: avatar + nama + badge terbaru
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -495,7 +476,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           CircleAvatar(
                             radius: 13,
                             backgroundColor:
-                                const Color(0xFF4285F4).withOpacity(0.12),
+                                const Color(0xFF4285F4).withValues(alpha: 0.12),
                             child: Text(
                               _getInitial(log.actor == "Staff"
                                   ? _currentUserName
@@ -521,8 +502,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color:
-                                const Color(0xFF4285F4).withOpacity(0.1),
+                            color: const Color(0xFF4285F4).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: const Text(
@@ -538,7 +518,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
                   const SizedBox(height: 6),
 
-                  // Tanggal & Waktu
                   Row(
                     children: [
                       const Icon(Icons.calendar_today_rounded,
@@ -574,7 +553,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
                   const SizedBox(height: 10),
 
-                  // Card utama
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
@@ -582,13 +560,13 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isLatest
-                            ? const Color(0xFF4285F4).withOpacity(0.22)
-                            : Colors.grey.withOpacity(0.1),
+                            ? const Color(0xFF4285F4).withValues(alpha: 0.22)
+                            : Colors.grey.withValues(alpha: 0.1),
                         width: isLatest ? 1.5 : 1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -597,12 +575,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Header card: judul aksi ──────────────────
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 11),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF4285F4).withOpacity(0.07),
+                            color: const Color(0xFF4285F4).withValues(alpha: 0.07),
                             borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(14)),
                           ),
@@ -624,7 +601,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           ),
                         ),
 
-                        // ── Alasan ───────────────────────────────────
                         Padding(
                           padding:
                               const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -650,12 +626,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           ),
                         ),
 
-                        // ── Refund banner untuk log KHUSUS INI ─────
                         if (showRefundHere) ...[
                           Divider(
                             height: 1,
                             thickness: 1,
-                            color: const Color(0xFF4CAF50).withOpacity(0.2),
+                            color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -722,10 +697,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
-
-  double _estimateLineHeight(bool withRefund) =>
-      withRefund ? 215 : 160;
+  double _estimateLineHeight(bool withRefund) => withRefund ? 215 : 160;
 
   String _getInitial(String name) {
     final parts = name.trim().split(' ');
@@ -742,13 +714,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
     try {
       DateTime? dt = DateTime.tryParse(rawDate);
-      
-      if (dt == null) {
-        dt = DateTime.tryParse(rawDate.replaceFirst(' ', 'T'));
-      }
+
+      dt ??= DateTime.tryParse(rawDate.replaceFirst(' ', 'T'));
 
       if (dt != null) {
-        dt = dt.toLocal(); 
+        dt = dt.toLocal();
         final day = dt.day.toString().padLeft(2, '0');
         final month = _monthName(dt.month);
         final year = dt.year;
@@ -767,7 +737,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       final time = match.group(0)!;
       final date = rawDate.replaceAll(time, '').trim();
       return {
-        'date': date.isNotEmpty ? date : rawDate, 
+        'date': date.isNotEmpty ? date : rawDate,
         'time': '$time WIB'
       };
     }
@@ -783,8 +753,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     ];
     return months[month];
   }
-
-  // ─── Widget helpers ───────────────────────────────────────────────────────
 
   Widget _buildHeaderCustom() {
     return Row(
@@ -804,8 +772,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               ),
               const SizedBox(height: 4),
               Text("${_parseLogDate(localOrder!.date)['date']} • Outlet 1",
-                  style:
-                      const TextStyle(color: Colors.grey, fontSize: 14)),
+                  style: const TextStyle(color: Colors.grey, fontSize: 14)),
             ],
           ),
         ),
@@ -814,6 +781,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           onPressed: () async {
             final printerService = TerminalPrinterService();
             final outletInfo = await ApiService.fetchOutletInfoLive();
+
+            if (!mounted) return;
 
             final List<CartItem> itemsForPrinting =
                 localOrder!.items.map((item) {
@@ -859,8 +828,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               style: TextStyle(color: Colors.white, fontSize: 16)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF4285F4),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8)),
           ),
@@ -885,8 +853,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     );
   }
 
-  Widget _buildInfoColumn(String label, String value,
-      {bool isRight = false}) {
+  Widget _buildInfoColumn(String label, String value, {bool isRight = false}) {
     return Column(
       crossAxisAlignment:
           isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -907,7 +874,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   }
 
   Widget _buildItemRowCustom(OrderItem item, AppStyle style) {
-    // 🔥 Pengecekan qty apakah 0 atau tidak
     final bool isZero = item.activeQty == 0;
 
     return Padding(
@@ -922,23 +888,27 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                 Text(
                   item.itemName,
                   style: TextStyle(
-                    fontSize: 18, 
+                    fontSize: 18,
                     fontWeight: FontWeight.w500,
-                    // 🔥 Jika 0, warna merah dan dicoret
                     color: isZero ? Colors.red : Colors.black87,
-                    decoration: isZero ? TextDecoration.lineThrough : TextDecoration.none,
+                    decoration: isZero
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none,
                     decorationColor: isZero ? Colors.red : null,
-                  )
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   "${item.activeQty} x ${style.formatHarga(item.unitPrice)}",
                   style: TextStyle(
-                    fontSize: 13, 
-                    // Teks harga abu-abu/merah redup dan dicoret jika 0
-                    color: isZero ? Colors.red.withOpacity(0.6) : Colors.grey,
-                    decoration: isZero ? TextDecoration.lineThrough : TextDecoration.none,
-                  )
+                    fontSize: 13,
+                    color: isZero
+                        ? Colors.red.withValues(alpha: 0.6)
+                        : Colors.grey,
+                    decoration: isZero
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none,
+                  ),
                 ),
                 if (item.notes.isNotEmpty)
                   Padding(
@@ -959,12 +929,12 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           Text(
             style.formatHarga(item.activeQty * item.unitPrice),
             style: TextStyle(
-                fontSize: 18, 
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
-                // Total dicoret merah jika qty 0
                 color: isZero ? Colors.red : Colors.black87,
-                decoration: isZero ? TextDecoration.lineThrough : TextDecoration.none,
-            ),
+                decoration: isZero
+                    ? TextDecoration.lineThrough
+                    : TextDecoration.none),
           ),
         ],
       ),
@@ -982,9 +952,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               style: const TextStyle(color: Colors.grey, fontSize: 16)),
           Text(value,
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: color)),
+                  fontSize: 16, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
@@ -1004,8 +972,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           style: const TextStyle(color: Colors.redAccent)),
       style: OutlinedButton.styleFrom(
         side: const BorderSide(color: Colors.redAccent),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );
   }
@@ -1060,8 +1028,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         ),
         onPressed: _handleSaveButton,
         child: const Text("Simpan Perubahan",
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
+            style:
+                TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -1071,8 +1039,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) =>
-            const Center(child: CircularProgressIndicator()),
+        builder: (_) => const Center(child: CircularProgressIndicator()),
       );
       try {
         final totalBefore = _totalBeforeEdit;
@@ -1086,31 +1053,32 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           totalPrice: totalAfter,
         );
 
+        if (!mounted) return;
         Navigator.pop(context);
 
         if (success) {
           final diff = totalBefore - totalAfter;
-          
-          final newOrder = await ApiService.fetchHistoryDetail(widget.orderId);
+          final newOrder =
+              await ApiService.fetchHistoryDetail(widget.orderId);
 
           if (diff > 0 && newOrder != null && newOrder.logs.isNotEmpty) {
-             final newLog = newOrder.logs.first;
-             // Mengunci kembalian menggunakan Judul Aksi dan Alasan
-             final logKey = 'refund_${widget.orderId}_${newLog.title}_${newLog.reason}';
-             
-             if (_prefs != null) {
-                await _prefs!.setDouble(logKey, diff);
-             }
+            final newLog = newOrder.logs.first;
+            final logKey = _buildRefundKey(newLog);
+            if (_prefs != null) {
+              await _prefs!.setDouble(logKey, diff);
+            }
           }
 
+          if (!mounted) return;
           setState(() {
             localOrder = newOrder;
-            _detailFuture = Future.value(newOrder); 
+            _detailFuture = Future.value(newOrder);
             isEditMode = false;
             _noteController.clear();
           });
         }
       } catch (e) {
+        if (!mounted) return;
         Navigator.pop(context);
       }
     }

@@ -33,31 +33,6 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Pre-clone Midtrans CocoaPods specs repo
-        # The midtrans_sdk plugin requires MidtransKit, hosted in a separate
-        # public spec repo. We clone it directly into ~/.cocoapods/repos/ so
-        # `pod install` (triggered by `flutter build ios`) finds it locally
-        # and does NOT try to clone it itself — that internal clone runs with
-        # CocoaPods' own git env where auth handling is fragile.
-        env:
-          # Force an empty credential helper for this step so Git will not
-          # try to prompt for username/password when cloning public repos.
-          GIT_TERMINAL_PROMPT: "0"
-        run: |
-          set -e
-          # Clear any inherited auth header / credential helper for github.com
-          git config --global --unset-all http.https://github.com/.extraheader || true
-          git config --global credential.helper "" || true
-          mkdir -p ~/.cocoapods/repos
-          if [ ! -d ~/.cocoapods/repos/midtrans-midtrans-cocoapods-specs ]; then
-            git -c credential.helper= -c http.https://github.com/.extraheader= \
-                clone --depth=1 \
-                https://github.com/Midtrans/midtrans-cocoapods-specs.git \
-                ~/.cocoapods/repos/midtrans-midtrans-cocoapods-specs
-          fi
-          # Pre-warm the trunk CDN cache (non-fatal if it fails)
-          pod repo update || true
-
       - name: Build iOS (no codesign)
         # `flutter build ios` runs `pod install` internally with the correct
         # working directory (ios/), so we do NOT run pod install separately.

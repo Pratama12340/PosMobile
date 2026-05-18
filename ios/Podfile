@@ -1,10 +1,6 @@
 # Uncomment this line to define a global platform for your project
 platform :ios, '13.0'
 
-# CocoaPods sources — Midtrans private spec repo MUST come before the CDN
-source 'https://github.com/Midtrans/midtrans-cocoapods-specs.git'
-source 'https://cdn.cocoapods.org/'
-
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 

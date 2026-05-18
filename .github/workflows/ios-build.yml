@@ -28,10 +28,26 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Update CocoaPods specs repos
-        # Pre-warms specs (incl. Midtrans private repo declared in ios/Podfile)
-        # so the pod install triggered by `flutter build ios` finds MidtransKit.
-        run: pod repo update
+      - name: Disable Git credential helper for anonymous public clones
+        # actions/checkout configures a credential helper that injects
+        # GITHUB_TOKEN for github.com URLs, which breaks anonymous clones
+        # of third-party public repos (e.g. Midtrans specs).
+        run: git config --global --unset-all http.https://github.com/.extraheader || true
+
+      - name: Pre-clone Midtrans CocoaPods specs repo
+        # The midtrans_sdk plugin requires MidtransKit, which lives in a
+        # private spec repo. Clone it directly into the CocoaPods repos
+        # directory so `pod install` (run by flutter build) finds it locally
+        # instead of trying to clone it itself (which fails in CI).
+        run: |
+          set -e
+          mkdir -p ~/.cocoapods/repos
+          if [ ! -d ~/.cocoapods/repos/midtrans-midtrans-cocoapods-specs ]; then
+            git clone --depth=1 https://github.com/Midtrans/midtrans-cocoapods-specs.git \
+              ~/.cocoapods/repos/midtrans-midtrans-cocoapods-specs
+          fi
+          # Also pre-warm the trunk CDN cache
+          pod repo update || true
 
       - name: Build iOS (no codesign)
         # `flutter build ios` runs `pod install` internally with the correct

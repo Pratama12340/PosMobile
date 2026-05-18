@@ -12,11 +12,11 @@ class ShiftScreen extends StatefulWidget {
   const ShiftScreen({super.key, required this.searchController});
 
   @override
-  State<ShiftScreen> createState() => _ShiftScreenState();
+  State<ShiftScreen> createState() => ShiftScreenState();
 }
 
-class _ShiftScreenState extends State<ShiftScreen> {
-  late Future<List<dynamic>> _shiftDataFuture;
+class ShiftScreenState extends State<ShiftScreen> {
+  late Future<List<dynamic>> shiftDataFuture;
 
   @override
   void initState() {
@@ -25,7 +25,7 @@ class _ShiftScreenState extends State<ShiftScreen> {
   }
 
   void _loadInitialData() {
-    _shiftDataFuture = Future.wait([
+    shiftDataFuture = Future.wait([
       StorageService.getCashierName(),
       ApiService.getShiftHistory(),
       ApiService.fetchHistory(),
@@ -34,6 +34,11 @@ class _ShiftScreenState extends State<ShiftScreen> {
     ]);
   }
 
+void refreshShift() {
+  setState(() {
+    _loadInitialData();
+  });
+}
   int _parseToInt(dynamic value) {
     if (value == null) return 0;
     if (value is int) return value;
@@ -191,7 +196,7 @@ class _ShiftScreenState extends State<ShiftScreen> {
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
       body: FutureBuilder<List<dynamic>>(
-        future: _shiftDataFuture,
+        future: shiftDataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

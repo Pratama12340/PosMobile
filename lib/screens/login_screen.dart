@@ -142,6 +142,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (result['success'] == true) {
         final bool isKasirOpened = result['data']['opening_balance'] != null;
+        final outletInfo = await ApiService.fetchOutletInfoLive();
+        await StorageService.saveOutletName(outletInfo['name']?.toString() ?? "Outlet Tidak Diketahui");
 
         if (!isKasirOpened) {
           DateTime now = DateTime.now();

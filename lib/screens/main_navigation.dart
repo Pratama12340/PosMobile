@@ -22,6 +22,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   bool _isSidebarVisible = false;
 
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
+  final GlobalKey<HistoryScreenState> _historyKey = GlobalKey<HistoryScreenState>();
+  final GlobalKey<ShiftScreenState> _shiftKey = GlobalKey<ShiftScreenState>(); 
   final ReverbService _reverbService = ReverbService(); // 🔥 TAMBAHKAN
 
   String _cashierName = "Loading...";
@@ -66,45 +68,62 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
-  void _connectReverb() async {
-    final int? outletId = await StorageService.getOutletId();
+void _connectReverb() async {
+  final int? outletId = await StorageService.getOutletId();
 
-    if (outletId == null) {
-      debugPrint('🔴 [REVERB] outlet_id tidak ditemukan');
-      return;
-    }
+  if (outletId == null) {
+    debugPrint('🔴 [REVERB] outlet_id tidak ditemukan');
+    return;
+  }
 
-    _reverbService.initConnection(
-      channelName: 'private-orders.outlet.$outletId',
-      eventName: '.order.created',
-      onEventReceived: (data) {
-        debugPrint('⚡ [ORDER CREATED]: $data');
-        _homeKey.currentState?.refreshPendingOrdersSilently();
+  // ✅ Event: Order Created → update Home + History
+  _reverbService.initConnection(
+    channelName: 'private-orders.outlet.$outletId',
+    eventName: '.order.created',
+    onEventReceived: (data) {
+      debugPrint('⚡ [ORDER CREATED]: $data');
+      _homeKey.currentState?.refreshPendingOrdersSilently();
+      _historyKey.currentState?.loadHistory();       // ✅ History update
+      _shiftKey.currentState?.refreshShift();        // ✅ Shift update
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.add_shopping_cart, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Text(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.add_shopping_cart, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
                     'Pesanan baru dari ${data['order']?['customer_name'] ?? 'Pelanggan'}!',
                   ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+                ),
+              ],
             ),
-          );
-        }
-      },
-    );
-  }
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    },
+  );
+
+  // ✅ Event: Order Updated → update Home + History + Shift
+  _reverbService.initConnection(
+    channelName: 'private-orders.outlet.$outletId',
+    eventName: '.order.updated',
+    onEventReceived: (data) {
+      debugPrint('⚡ [ORDER UPDATED]: $data');
+      _homeKey.currentState?.refreshPendingOrdersSilently();
+      _historyKey.currentState?.loadHistory();       // ✅ History update
+      _shiftKey.currentState?.refreshShift();        // ✅ Shift update
+    },
+  );
+}
 
   @override
   void dispose() {
@@ -179,22 +198,26 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                     child: IndexedStack(
                       index: _currentIndex,
                       children: [
-                        HomeScreen(
-                          key: _homeKey,
-                          searchController: _globalSearchController,
-                          onCartToggled: (isOpen) {
-                            if (isOpen) _closeSidebar();
-                          },
-                        ),
-                        ShiftScreen(searchController: _globalSearchController),
-                        HistoryScreen(
-                          searchController: _globalSearchController,
-                        ),
-                        SettingScreen(
-                          searchController: _globalSearchController,
-                        ),
-                      ],
-                    ),
+    HomeScreen(
+      key: _homeKey,                              // ✅ sudah ada
+      searchController: _globalSearchController,
+      onCartToggled: (isOpen) {
+        if (isOpen) _closeSidebar();
+      },
+    ),
+    ShiftScreen(
+      key: _shiftKey,                             // ✅ TAMBAHKAN
+      searchController: _globalSearchController,
+    ),
+    HistoryScreen(
+      key: _historyKey,                           // ✅ TAMBAHKAN (ini bug utamanya!)
+      searchController: _globalSearchController,
+    ),
+    SettingScreen(
+      searchController: _globalSearchController,
+    ),
+  ],
+),
                   ),
                 ],
               ),

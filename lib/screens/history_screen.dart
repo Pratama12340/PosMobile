@@ -4,8 +4,6 @@ import '../constants/style.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
 import '../widgets/edit_dialog.dart';
-import '../services/reverb_service.dart';
-import '../services/storage_service.dart';
 
 class HistoryScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -13,25 +11,22 @@ class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key, required this.searchController});
 
   @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
+  State<HistoryScreen> createState() => HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> {
+class HistoryScreenState extends State<HistoryScreen> {
   late Future<List<Order>> _historyFuture;
-  final ReverbService _reverbService = ReverbService();
 
   @override
   void initState() {
     super.initState();
     widget.searchController.addListener(_onSearchChanged);
-    _loadHistory();
-    _connectReverb();
+    loadHistory();
   }
 
   @override
   void dispose() {
     widget.searchController.removeListener(_onSearchChanged);
-    _reverbService.disconnect();
     super.dispose();
   }
 
@@ -39,24 +34,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     setState(() {});
   }
 
-  void _loadHistory() {
+  void loadHistory() {
     setState(() {
       _historyFuture = ApiService.fetchHistory();
     });
-  }
-
-  void _connectReverb() async {
-    final int? outletId = await StorageService.getOutletId();
-    if (outletId == null) return;
-
-    _reverbService.initConnection(
-      channelName: 'private-orders.outlet.$outletId',
-      eventName: '.order.updated',
-      onEventReceived: (data) {
-        debugPrint('⚡ [HISTORY] Order updated: $data');
-        _loadHistory();
-      },
-    );
   }
 
   Color _getSideColor(String method) {
@@ -265,7 +246,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               builder: (context) =>
                                   ReceiptDialog(orderId: order.id),
                             );
-                            _loadHistory();
+                            loadHistory();
                           },
                           child: Container(
                             height: double.infinity,

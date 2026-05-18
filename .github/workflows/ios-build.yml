@@ -34,21 +34,27 @@ jobs:
         run: flutter pub get
 
       - name: Patch midtrans_sdk podspec iOS deployment target
-        # midtrans_sdk 1.2.0 declares iOS 8.0 in its podspec, but its
-        # MidtransKit dependency requires iOS 9.0+. Flutter's pre-build check
-        # rejects this mismatch. We rewrite the plugin's podspec in the local
-        # pub cache to declare iOS 13.0, matching Runner and our Podfile.
+        # midtrans_sdk 1.2.0 declares iOS 8.0 in its podspec via
+        # `s.platform = :ios, '8.0'`, but its MidtransKit dependency requires
+        # iOS 9.0+. Flutter's pre-build check rejects this mismatch. Rewrite
+        # the plugin's podspec in the local pub cache to declare iOS 13.0.
         run: |
           set -e
           PLUGIN_PODSPEC=$(find "$PUB_CACHE/hosted" -path '*midtrans_sdk*/ios/midtrans_sdk.podspec' | head -n1)
           if [ -z "$PLUGIN_PODSPEC" ]; then
             echo "midtrans_sdk podspec not found in pub cache"
+            find "$PUB_CACHE/hosted" -name 'midtrans_sdk.podspec' || true
             exit 1
           fi
           echo "Patching: $PLUGIN_PODSPEC"
-          sed -i.bak "s/s\.ios\.deployment_target *= *'[0-9.]*'/s.ios.deployment_target = '13.0'/" "$PLUGIN_PODSPEC"
+          echo "----- Before patch -----"
+          cat "$PLUGIN_PODSPEC"
+          echo "------------------------"
+          # Handle both `s.platform = :ios, '8.0'` and `s.ios.deployment_target = '8.0'`
+          sed -i.bak -E "s/s\.platform[[:space:]]*=[[:space:]]*:ios,[[:space:]]*'[0-9.]+'/s.platform = :ios, '13.0'/" "$PLUGIN_PODSPEC"
+          sed -i.bak -E "s/s\.ios\.deployment_target[[:space:]]*=[[:space:]]*'[0-9.]+'/s.ios.deployment_target = '13.0'/" "$PLUGIN_PODSPEC"
           echo "----- After patch -----"
-          grep -E "deployment_target|MidtransKit" "$PLUGIN_PODSPEC"
+          cat "$PLUGIN_PODSPEC"
           echo "-----------------------"
 
       - name: Build iOS (no codesign)

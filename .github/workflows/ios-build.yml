@@ -30,32 +30,25 @@ jobs:
       - name: Show Flutter version
         run: flutter --version
 
-      - name: Install Flutter dependencies
-        run: flutter pub get
-
-      - name: Patch midtrans_sdk podspec iOS deployment target
-        # midtrans_sdk 1.2.0 declares iOS 8.0 in its podspec via
-        # `s.platform = :ios, '8.0'`, but its MidtransKit dependency requires
-        # iOS 9.0+. Flutter's pre-build check rejects this mismatch. Rewrite
-        # the plugin's podspec in the local pub cache to declare iOS 13.0.
+      - name: Remove midtrans_sdk from pubspec for iOS CI build
+        # The midtrans_sdk plugin has an unfixable iOS build problem: it pins
+        # MidtransKit 1.28.0 (missing from trunk) and declares iOS 8.0 while
+        # MidtransKit requires 9.0+. We strip it from pubspec.yaml ONLY in CI
+        # so the iOS .ipa can build. The Dart code does not import the plugin
+        # (confirmed: only static "midtrans" string references for our own
+        # backend API exist), so this is safe.
+        # The pubspec.yaml in the repo is unchanged; only the runner's copy
+        # is modified for this build.
         run: |
           set -e
-          PLUGIN_PODSPEC=$(find "$PUB_CACHE/hosted" -path '*midtrans_sdk*/ios/midtrans_sdk.podspec' | head -n1)
-          if [ -z "$PLUGIN_PODSPEC" ]; then
-            echo "midtrans_sdk podspec not found in pub cache"
-            find "$PUB_CACHE/hosted" -name 'midtrans_sdk.podspec' || true
-            exit 1
-          fi
-          echo "Patching: $PLUGIN_PODSPEC"
-          echo "----- Before patch -----"
-          cat "$PLUGIN_PODSPEC"
-          echo "------------------------"
-          # Handle both `s.platform = :ios, '8.0'` and `s.ios.deployment_target = '8.0'`
-          sed -i.bak -E "s/s\.platform[[:space:]]*=[[:space:]]*:ios,[[:space:]]*'[0-9.]+'/s.platform = :ios, '13.0'/" "$PLUGIN_PODSPEC"
-          sed -i.bak -E "s/s\.ios\.deployment_target[[:space:]]*=[[:space:]]*'[0-9.]+'/s.ios.deployment_target = '13.0'/" "$PLUGIN_PODSPEC"
-          echo "----- After patch -----"
-          cat "$PLUGIN_PODSPEC"
-          echo "-----------------------"
+          echo "-- Stripping midtrans_sdk line from pubspec.yaml --"
+          # Remove the line that begins with `  midtrans_sdk:` (allowing any version pin)
+          sed -i.bak '/^[[:space:]]*midtrans_sdk:/d' pubspec.yaml
+          echo "-- pubspec.yaml dependencies section after strip --"
+          sed -n '/^dependencies:/,/^[^[:space:]]/p' pubspec.yaml
+          echo "-- Regenerating pubspec.lock --"
+          rm -f pubspec.lock
+          flutter pub get
 
       - name: Build iOS (no codesign)
         # `flutter build ios` runs `pod install` internally with the correct

@@ -33,6 +33,24 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Patch midtrans_sdk podspec iOS deployment target
+        # midtrans_sdk 1.2.0 declares iOS 8.0 in its podspec, but its
+        # MidtransKit dependency requires iOS 9.0+. Flutter's pre-build check
+        # rejects this mismatch. We rewrite the plugin's podspec in the local
+        # pub cache to declare iOS 13.0, matching Runner and our Podfile.
+        run: |
+          set -e
+          PLUGIN_PODSPEC=$(find "$PUB_CACHE/hosted" -path '*midtrans_sdk*/ios/midtrans_sdk.podspec' | head -n1)
+          if [ -z "$PLUGIN_PODSPEC" ]; then
+            echo "midtrans_sdk podspec not found in pub cache"
+            exit 1
+          fi
+          echo "Patching: $PLUGIN_PODSPEC"
+          sed -i.bak "s/s\.ios\.deployment_target *= *'[0-9.]*'/s.ios.deployment_target = '13.0'/" "$PLUGIN_PODSPEC"
+          echo "----- After patch -----"
+          grep -E "deployment_target|MidtransKit" "$PLUGIN_PODSPEC"
+          echo "-----------------------"
+
       - name: Build iOS (no codesign)
         # `flutter build ios` runs `pod install` internally with the correct
         # working directory (ios/), so we do NOT run pod install separately.

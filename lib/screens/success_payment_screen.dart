@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/order_model.dart';
 import '../constants/style.dart';
 import '../services/printer_service.dart';
-import '../models/transaction_model.dart';
+import '../models/print_model.dart';
 
 class SuccessPaymentPage extends StatelessWidget {
   final String orderId;
@@ -200,16 +200,19 @@ class SuccessPaymentPage extends StatelessWidget {
             : () {
                 final printerService = TerminalPrinterService();
 
+                // 1. Mapping Item dari Cart
                 final List<CartItem> itemsForPrinting = cart.values.map((item) {
                   return CartItem(
                     itemName: item.itemName,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
-                    notes: item.notes,
+                    notes: item.notes, 
+                    stationId: item.stationId, 
                   );
                 }).toList();
 
-                final transaction = TransactionModel(
+              
+                final mainTransaction = TransactionModel(
                   orderId: orderId,
                   outletName: outletName,
                   outletAddress: outletAddress,
@@ -222,13 +225,44 @@ class SuccessPaymentPage extends StatelessWidget {
                   totalDariHalaman: grandTotal,
                 );
 
-                printerService.printToTerminal(transaction);
+                // Cetak Struk Utuh untuk Kasir / Pelanggan
+                printerService.printToTerminal(mainTransaction);
 
-                printerService.printKitchenToTerminal(transaction);
+                // 3. Kelompokkan item berdasarkan stationId
+                Map<String, List<CartItem>> groupedItems = {};
+                for (var item in itemsForPrinting) {
+                  // Jika ada item yang tidak punya stationId, masukkan ke grup 'Umum'
+                  String sId = item.stationId.isNotEmpty ? item.stationId : 'Umum';
+                  groupedItems.putIfAbsent(sId, () => []).add(item);
+                }
+
+                // 4. Iterasi dan Cetak per Station
+                groupedItems.forEach((stationId, stationItems) {
+                  // Buat objek transaksi khusus yang isinya cuma item untuk station tersebut
+                  final stationTransaction = TransactionModel(
+                    orderId: orderId,
+                    outletName: outletName,
+                    outletAddress: outletAddress,
+                    cashierName: cashierName,
+                    customerName: customerName,
+                    tableNumber: tableNumber,
+                    items: stationItems, 
+                    taxBreakdown: List<Map<String, dynamic>>.from(taxBreakdown),
+                    discountAmount: discountAmount,
+                    totalDariHalaman: grandTotal,
+                  );
+
+                  // TODO: Di file printer_service.dart, Anda sebaiknya membuat method baru 
+                  // seperti `printToStation(stationId, stationTransaction)` agar service
+                  // tahu IP/Koneksi mana yang harus ditembak berdasarkan ID-nya.
+                  
+                  // Sementara menggunakan method lama:
+                  printerService.printKitchenToTerminal(stationTransaction);
+                });
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text("Struk Pelanggan & Dapur Berhasil Dicetak"),
+                    content: Text("Struk Pelanggan & Station Sedang Diproses"),
                     backgroundColor: Colors.blue,
                   ),
                 );

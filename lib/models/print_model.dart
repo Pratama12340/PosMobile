@@ -3,12 +3,14 @@ class CartItem {
   final int quantity;
   final double unitPrice;
   final String notes;
+  final String stationId; 
 
   CartItem({
     required this.itemName,
     required this.quantity,
     required this.unitPrice,
     required this.notes,
+    required this.stationId, 
   });
 }
 
@@ -17,7 +19,7 @@ class TransactionModel {
   final String outletName;
   final String outletAddress;
   final String cashierName;
-  final String customerName;
+  final String customerName; 
   final String tableNumber;
   final List<CartItem> items;
   final double discountAmount;

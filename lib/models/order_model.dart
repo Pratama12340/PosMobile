@@ -44,12 +44,12 @@ class OrderItem {
   final int id, productId;
   int originalQty;
   int activeQty;
-
   final String itemName;
   final double unitPrice;
   final double originalPrice;
   final bool isVoided;
   String notes;
+  final String stationId;
 
   int get quantity => activeQty;
 
@@ -72,6 +72,8 @@ class OrderItem {
     double? originalPrice,
     this.isVoided = false,
     this.notes = "",
+    required this.stationId,
+    
   }) : originalPrice = originalPrice ?? unitPrice;
 
   double get subtotal =>
@@ -105,6 +107,7 @@ class OrderItem {
           json['status'] == 'void' ||
           (orig - canc <= 0),
       notes: json['notes'] ?? json['note'] ?? "",
+      stationId: json['station_id']?.toString() ?? "",
     );
   }
 

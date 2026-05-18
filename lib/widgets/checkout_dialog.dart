@@ -361,8 +361,8 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   isProductDiscountActive
                       ? Icons.verified_rounded
                       : (hasGlobalDiscount
-                            ? Icons.confirmation_number_rounded
-                            : Icons.local_offer_outlined),
+                          ? Icons.confirmation_number_rounded
+                          : Icons.local_offer_outlined),
                   size: 18,
                   color: isHighlighted ? Colors.orange : Colors.black45,
                 ),
@@ -578,7 +578,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                                 () => _amountTendered = v.isEmpty
                                     ? 0
                                     : double.tryParse(v.replaceAll('.', '')) ??
-                                          0,
+                                        0,
                               );
                             },
                           ),
@@ -588,13 +588,15 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                             runSpacing: 12,
                             alignment: WrapAlignment.center,
                             children: [
-                              grandTotal,
-                              20000.0,
-                              50000.0,
-                              100000.0,
-                              150000.0,
-                              200000.0,
-                            ].map((v) => _quickBtn(v)).toList(),
+                              _quickBtn(grandTotal, label: "Bayar Pas"),
+                              ...[
+                                20000.0,
+                                50000.0,
+                                100000.0,
+                                150000.0,
+                                200000.0,
+                              ].map((v) => _quickBtn(v)),
+                            ],
                           ),
                           const Spacer(),
                           if (change >= 0)
@@ -731,8 +733,8 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                                                   Padding(
                                                     padding:
                                                         const EdgeInsets.only(
-                                                          top: 2,
-                                                        ),
+                                                      top: 2,
+                                                    ),
                                                     child: Text(
                                                       "Note: ${item.notes}",
                                                       style: const TextStyle(
@@ -795,8 +797,8 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                                   onPressed: _isLoading
                                       ? null
                                       : (uangMasukInt < tagihanInt
-                                            ? null
-                                            : _processPayment),
+                                          ? null
+                                          : _processPayment),
                                   child: _isLoading
                                       ? const SizedBox(
                                           width: 24,
@@ -1160,7 +1162,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     );
   }
 
-  Widget _quickBtn(double v) => GestureDetector(
+  Widget _quickBtn(double v, {String? label}) => GestureDetector(
     onTap: () => setState(() {
       if (_errorMessage != null) _errorMessage = null;
       _amountTendered = v;
@@ -1176,7 +1178,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         border: Border.all(color: const Color(0xFFEEEEEE)),
       ),
       child: Text(
-        widget.formatCurrency(v),
+        label ?? widget.formatCurrency(v),
         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
       ),
     ),

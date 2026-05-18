@@ -5,7 +5,7 @@ import '../models/order_model.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/printer_service.dart';
-import '../models/transaction_model.dart';
+import '../models/print_model.dart';
 
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
@@ -791,6 +791,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                 quantity: item.activeQty,
                 unitPrice: item.unitPrice,
                 notes: item.notes,
+                stationId: item.stationId,
               );
             }).toList();
 
@@ -846,7 +847,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildInfoColumn("KASIR", _currentUserName),
+          _buildInfoColumn("CUSTOMER", localOrder!.customerName),
           _buildInfoColumn("TABLE", localOrder!.tableNo, isRight: true),
         ],
       ),
@@ -990,11 +991,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         Text("${item.activeQty}",
             style: const TextStyle(
                 fontWeight: FontWeight.bold, fontSize: 16)),
-        IconButton(
-          icon: const Icon(Icons.add_circle_outline,
-              color: Color(0xFF4285F4)),
-          onPressed: () => setState(() => item.activeQty++),
-        ),
       ],
     );
   }

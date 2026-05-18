@@ -77,11 +77,15 @@ class _ShiftScreenState extends State<ShiftScreen> {
     }
 
     if (isShiftBelumHabis) {
-      await showDialog(
+      // Menunggu hasil dari modal (true jika lanjut, false/null jika batal)
+      final bool? proceed = await showDialog<bool>(
         context: context,
         builder: (context) => _buildWarningModal(),
       );
-      _showClosingDialog();
+      
+      if (proceed == true) {
+        _showClosingDialog();
+      }
     } else {
       _showClosingDialog();
     }
@@ -121,26 +125,53 @@ class _ShiftScreenState extends State<ShiftScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.grey),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text(
+                        "Batal",
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ),
-                  elevation: 0,
                 ),
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "Lanjutkan Tutup Shift",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text(
+                        "Lanjutkan",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

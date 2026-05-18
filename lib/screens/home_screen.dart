@@ -302,6 +302,7 @@ class HomeScreenState extends State<HomeScreen> {
           originalQty: item.quantity,
           activeQty: item.quantity,
           unitPrice: unitPrice,
+          stationId: item.stationId,
         );
       }
 
@@ -1166,6 +1167,7 @@ class HomeScreenState extends State<HomeScreen> {
                                 originalQty: 1,
                                 activeQty: 1,
                                 unitPrice: p.price.toDouble(),
+                                stationId: p.stationId,
                               );
                             }
                           }),

@@ -18,6 +18,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
       'conn': 'LAN',
       'ip': '192.168.1.100',
       'color': Colors.green,
+      'station_name': 'Kasir (Semua Item)', 
     },
     {
       'name': 'Printer Dapur',
@@ -26,6 +27,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
       'conn': 'Bluetooth',
       'ip': 'BT:00:11:22',
       'color': Colors.red,
+      'station_name': 'Dapur',
     },
   ];
 
@@ -205,7 +207,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  _buildInfoRow("Jenis", data['type']),
+                  // Mengubah label "Jenis" menjadi "Station" agar lebih relevan dengan alur baru
+                  _buildInfoRow("Station", data['station_name'] ?? "Semua Item"),
                   const SizedBox(height: 8),
                   _buildInfoRow("Koneksi", data['conn']),
                   const SizedBox(height: 8),

@@ -1,5 +1,5 @@
 import 'package:intl/intl.dart';
-import '../models/transaction_model.dart';
+import '../models/print_model.dart';
 import 'package:flutter/foundation.dart';
 
 class TerminalPrinterService {

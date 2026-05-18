@@ -15,6 +15,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Do not persist the GITHUB_TOKEN-based credential helper globally;
+          # it breaks anonymous clones of unrelated public github.com repos
+          # (e.g. the Midtrans CocoaPods specs repo) inside CocoaPods.
+          persist-credentials: false
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -28,25 +33,29 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Disable Git credential helper for anonymous public clones
-        # actions/checkout configures a credential helper that injects
-        # GITHUB_TOKEN for github.com URLs, which breaks anonymous clones
-        # of third-party public repos (e.g. Midtrans specs).
-        run: git config --global --unset-all http.https://github.com/.extraheader || true
-
       - name: Pre-clone Midtrans CocoaPods specs repo
-        # The midtrans_sdk plugin requires MidtransKit, which lives in a
-        # private spec repo. Clone it directly into the CocoaPods repos
-        # directory so `pod install` (run by flutter build) finds it locally
-        # instead of trying to clone it itself (which fails in CI).
+        # The midtrans_sdk plugin requires MidtransKit, hosted in a separate
+        # public spec repo. We clone it directly into ~/.cocoapods/repos/ so
+        # `pod install` (triggered by `flutter build ios`) finds it locally
+        # and does NOT try to clone it itself — that internal clone runs with
+        # CocoaPods' own git env where auth handling is fragile.
+        env:
+          # Force an empty credential helper for this step so Git will not
+          # try to prompt for username/password when cloning public repos.
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           set -e
+          # Clear any inherited auth header / credential helper for github.com
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          git config --global credential.helper "" || true
           mkdir -p ~/.cocoapods/repos
           if [ ! -d ~/.cocoapods/repos/midtrans-midtrans-cocoapods-specs ]; then
-            git clone --depth=1 https://github.com/Midtrans/midtrans-cocoapods-specs.git \
-              ~/.cocoapods/repos/midtrans-midtrans-cocoapods-specs
+            git -c credential.helper= -c http.https://github.com/.extraheader= \
+                clone --depth=1 \
+                https://github.com/Midtrans/midtrans-cocoapods-specs.git \
+                ~/.cocoapods/repos/midtrans-midtrans-cocoapods-specs
           fi
-          # Also pre-warm the trunk CDN cache
+          # Pre-warm the trunk CDN cache (non-fatal if it fails)
           pod repo update || true
 
       - name: Build iOS (no codesign)

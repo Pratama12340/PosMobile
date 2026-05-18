@@ -28,16 +28,14 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Pre-generate Flutter iOS config
-        # Generates ios/Flutter/Generated.xcconfig which the committed Podfile reads
-        run: flutter build ios --config-only --no-codesign
-
-      - name: Install CocoaPods dependencies
-        run: |
-          cd ios
-          pod install --repo-update
+      - name: Update CocoaPods specs repos
+        # Pre-warms specs (incl. Midtrans private repo declared in ios/Podfile)
+        # so the pod install triggered by `flutter build ios` finds MidtransKit.
+        run: pod repo update
 
       - name: Build iOS (no codesign)
+        # `flutter build ios` runs `pod install` internally with the correct
+        # working directory (ios/), so we do NOT run pod install separately.
         run: flutter build ios --release --no-codesign
 
       - name: Package unsigned .ipa

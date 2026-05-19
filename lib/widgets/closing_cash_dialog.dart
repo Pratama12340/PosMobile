@@ -85,13 +85,19 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
     final bool isTablet = screenWidth > 600;
 
     return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Container(
-        width: isTablet ? screenWidth * 0.55 : 450,
-        constraints: const BoxConstraints(maxWidth: 650, maxHeight: 750),
-        padding: const EdgeInsets.all(35),
+  backgroundColor: Colors.transparent,
+  elevation: 0,
+  insetPadding: EdgeInsets.only(
+    left: 20,
+    right: 20,
+    top: 24,
+    bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+  ),
+  child: SingleChildScrollView(
+    child: Container(
+      width: isTablet ? screenWidth * 0.55 : 450,
+      constraints: const BoxConstraints(maxWidth: 650),
+      padding: const EdgeInsets.all(35),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(35),
@@ -301,9 +307,10 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
-    );
-  }
+    ),   // tutup Container
+  ),     // tutup SingleChildScrollView
+);
+}
 }

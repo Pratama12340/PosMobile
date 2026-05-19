@@ -51,8 +51,6 @@ class HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _selectedCategory = "All Menu";
 
-  bool _isCartVisible = false;
-
   void closeCart() {
     setState(() {
       if (_cart.isNotEmpty) {
@@ -77,7 +75,6 @@ class HomeScreenState extends State<HomeScreen> {
         widget.onCartToggled?.call(false);
       }
 
-      _isCartVisible = false;
       _isPendingPanelVisible = false;
       _isDraftPanelVisible = false;
     });
@@ -272,7 +269,6 @@ class HomeScreenState extends State<HomeScreen> {
         _currentPendingOrderId = null;
         _currentPendingDiscountId = null;
 
-        _isCartVisible = false;
         _isDraftPanelVisible = false; // Menyembunyikan draft panel saat berhasil tersimpan
         widget.onCartToggled?.call(false);
       }
@@ -317,7 +313,6 @@ class HomeScreenState extends State<HomeScreen> {
 
       _isPendingPanelVisible = false;
       _isDraftPanelVisible = false;
-      _isCartVisible = true;
       widget.onCartToggled?.call(true);
     });
   }
@@ -347,7 +342,6 @@ class HomeScreenState extends State<HomeScreen> {
           _currentPendingDiscountId = null;
         }
 
-        _isCartVisible = false;
         _isDraftPanelVisible = false;
         widget.onCartToggled?.call(false);
 
@@ -376,24 +370,29 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    bool hasDiscountedItem = _isPendingOrderLoaded
-        ? false
-        : _cart.values.any((cartItem) {
-            int index = _allProducts.indexWhere(
-              (p) => p.id == cartItem.productId,
-            );
-            return index != -1 && _allProducts[index].discount != null;
-          });
+@override
+Widget build(BuildContext context) {
+  final mediaQuery = MediaQuery.of(context);
 
-    double originalTotalAmount = _isPendingOrderLoaded
-        ? 0.0
-        : _cart.values.fold(0.0, (sum, cartItem) {
-            return sum + (cartItem.unitPrice * cartItem.quantity);
-          });
+  bool hasDiscountedItem = _isPendingOrderLoaded
+      ? false
+      : _cart.values.any((cartItem) {
+          int index = _allProducts.indexWhere(
+            (p) => p.id == cartItem.productId,
+          );
+          return index != -1 && _allProducts[index].discount != null;
+        });
 
-    return Scaffold(
+  double originalTotalAmount = _isPendingOrderLoaded
+      ? 0.0
+      : _cart.values.fold(0.0, (sum, cartItem) {
+          return sum + (cartItem.unitPrice * cartItem.quantity);
+        });
+
+  return MediaQuery(
+    data: mediaQuery.copyWith(viewInsets: EdgeInsets.zero),
+    child: Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: AppStyle.bgLightBlue,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -403,15 +402,9 @@ class HomeScreenState extends State<HomeScreen> {
                   child: GestureDetector(
                     onTap: () {
                       if (_isPendingPanelVisible) {
-                        setState(() {
-                          _isPendingPanelVisible = false;
-                        });
+                        setState(() => _isPendingPanelVisible = false);
                       } else if (_isDraftPanelVisible) {
-                        setState(() {
-                          _isDraftPanelVisible = false;
-                        });
-                      } else if (_isCartVisible) {
-                        closeCart();
+                        setState(() => _isDraftPanelVisible = false);
                       }
                     },
                     behavior: HitTestBehavior.translucent,
@@ -424,12 +417,8 @@ class HomeScreenState extends State<HomeScreen> {
                             children: [
                               Expanded(child: _buildCategoryChips()),
                               const SizedBox(width: 15),
-                              
-                              // TOMBOL ICON DRAFT
                               if (_drafts.isNotEmpty && !_isDraftPanelVisible)
-                              _buildDraftButton(),
-
-                              // TOMBOL PENDING ORDER
+                                _buildDraftButton(),
                               if (_pendingOrders.isNotEmpty &&
                                   !_isPendingPanelVisible &&
                                   !_isPendingOrderLoaded) ...[
@@ -455,9 +444,7 @@ class HomeScreenState extends State<HomeScreen> {
                                         borderRadius: BorderRadius.circular(12),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.05,
-                                            ),
+                                            color: Colors.black.withValues(alpha: 0.05),
                                             blurRadius: 10,
                                             offset: const Offset(0, 4),
                                           ),
@@ -480,7 +467,7 @@ class HomeScreenState extends State<HomeScreen> {
                               builder: (context, constraints) {
                                 double spacing = 18.0;
                                 double itemHeight =
-                                    (constraints.maxHeight - spacing) / 2;
+                                    (constraints.maxHeight - (spacing * 2)) / 3;
                                 double itemWidth =
                                     (constraints.maxWidth - (spacing * 3)) / 4;
                                 return GridView.builder(
@@ -506,17 +493,14 @@ class HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // LOGIKA SISI KANAN (TAMPILAN PANEL)
+                // PANEL KANAN
                 if (_isPendingPanelVisible)
                   _buildPendingOrderPanel()
                 else if (_isDraftPanelVisible)
                   DraftPanel(
                     drafts: _drafts,
-                    onClose: () {
-                      setState(() {
-                        _isDraftPanelVisible = false;
-                      });
-                    },
+                    onClose: () =>
+                        setState(() => _isDraftPanelVisible = false),
                     onRestore: (index) {
                       setState(() {
                         final selectedDraft = _drafts[index];
@@ -525,30 +509,21 @@ class HomeScreenState extends State<HomeScreen> {
                         _currentCustomerName = selectedDraft['customerName'];
                         _currentTableNumber = selectedDraft['tableNumber'];
                         _currentTableId = selectedDraft['tableId'];
-
                         _isPendingOrderLoaded = false;
                         _currentPendingOrderId = null;
-
                         _drafts.removeAt(index);
-                        
                         _isDraftPanelVisible = false;
-                        _isCartVisible = true;
                         widget.onCartToggled?.call(true);
                       });
                     },
                     onDelete: (index) {
                       setState(() {
                         _drafts.removeAt(index);
-                        if (_drafts.isEmpty) {
-                          _isDraftPanelVisible = false;
-                        }
+                        if (_drafts.isEmpty) _isDraftPanelVisible = false;
                       });
                     },
                   )
-                else if (_isCartVisible &&
-                    (_cart.isNotEmpty ||
-                        _currentCustomerName != null ||
-                        _currentTableNumber != null))
+                else
                   CartPanel(
                     cart: _cart,
                     hasDiscountedItem: hasDiscountedItem,
@@ -584,11 +559,8 @@ class HomeScreenState extends State<HomeScreen> {
                               _currentCustomerName = null;
                               _currentTableNumber = null;
                               _currentTableId = null;
-
                               _isPendingOrderLoaded = false;
                               _currentPendingOrderId = null;
-
-                              _isCartVisible = false;
                               widget.onCartToggled?.call(false);
                             }
                           }
@@ -602,11 +574,8 @@ class HomeScreenState extends State<HomeScreen> {
                           _currentCustomerName = null;
                           _currentTableNumber = null;
                           _currentTableId = null;
-
                           _isPendingOrderLoaded = false;
                           _currentPendingOrderId = null;
-
-                          _isCartVisible = false;
                           widget.onCartToggled?.call(false);
                         }
                       });
@@ -625,17 +594,13 @@ class HomeScreenState extends State<HomeScreen> {
                             }
                           }
                         });
-
                         _cart.clear();
                         _currentCustomerName = null;
                         _currentTableNumber = null;
                         _currentTableId = null;
-
                         _isPendingOrderLoaded = false;
                         _currentPendingOrderId = null;
                         _currentPendingDiscountId = null;
-
-                        _isCartVisible = false;
                         widget.onCartToggled?.call(false);
                         _loadInitialData();
                       });
@@ -645,9 +610,9 @@ class HomeScreenState extends State<HomeScreen> {
                   ),
               ],
             ),
-    );
-  }
-
+    ),
+  );
+}
   // WIDGET TOMBOL DRAFT
   Widget _buildDraftButton() {
     return InkWell(
@@ -676,7 +641,6 @@ class HomeScreenState extends State<HomeScreen> {
             }
 
             _isPendingPanelVisible = false;
-            _isCartVisible = false;
             widget.onCartToggled?.call(false);
             _isDraftPanelVisible = true;
           }
@@ -1183,7 +1147,6 @@ Widget _buildPendingOrderPanel() {
 
                               _isPendingPanelVisible = false;
                               _isDraftPanelVisible = false;
-                              _isCartVisible = true;
                               widget.onCartToggled?.call(true);
 
                               if (_cart.containsKey(p.id)) {

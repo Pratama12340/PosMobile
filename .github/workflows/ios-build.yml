@@ -1,0 +1,127 @@
+name: Build iOS IPA (Unsigned)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Which part of the version to bump'
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    name: Build unsigned iOS .ipa
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Compute next release tag
+        # Reads the latest tag matching `v<num>.<num>.<num>` and bumps the
+        # selected component. If no tag exists yet, starts at v0.1.0.
+        id: nexttag
+        run: |
+          set -e
+          BUMP="${{ inputs.bump }}"
+          LAST=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$LAST" ]; then
+            echo "No previous v* tag found; starting from v0.1.0"
+            NEXT="v0.1.0"
+          else
+            echo "Last tag: $LAST"
+            STRIPPED="${LAST#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$STRIPPED"
+            case "$BUMP" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+            esac
+            NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "Next tag: $NEXT"
+          echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Remove midtrans_sdk from pubspec for iOS CI build
+        # midtrans_sdk has an unfixable iOS build problem (pins missing
+        # MidtransKit 1.28.0 and declares iOS 8.0). Strip it in CI only;
+        # repo pubspec.yaml is unchanged. Dart code does not import it.
+        run: |
+          set -e
+          sed -i.bak '/^[[:space:]]*midtrans_sdk:/d' pubspec.yaml
+          rm -f pubspec.lock
+          flutter pub get
+
+      - name: Read app version from pubspec
+        id: version
+        run: |
+          set -e
+          VERSION=$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//' | tr -d '"')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned .ipa
+        id: package
+        run: |
+          set -e
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Runner.app not found at $APP_PATH"
+            exit 1
+          fi
+          IPA_NAME="sistem-pos-${{ steps.nexttag.outputs.tag }}-unsigned.ipa"
+          mkdir -p build/ios/ipa/Payload
+          cp -R "$APP_PATH" build/ios/ipa/Payload/
+          cd build/ios/ipa
+          zip -qq -r "$IPA_NAME" Payload
+          ls -lh "$IPA_NAME"
+          echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create git tag
+        run: |
+          set -e
+          git tag "${{ steps.nexttag.outputs.tag }}"
+          git push origin "${{ steps.nexttag.outputs.tag }}"
+
+      - name: Create GitHub Release and attach .ipa
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.nexttag.outputs.tag }}
+          name: Release ${{ steps.nexttag.outputs.tag }}
+          body: |
+            Automated iOS build from commit ${{ github.sha }}.
+
+            **Release tag:** `${{ steps.nexttag.outputs.tag }}`
+            **App version (pubspec):** `${{ steps.version.outputs.version }}`
+            **Bump type:** `${{ inputs.bump }}`
+            **Build:** unsigned `.ipa` (sideload via AltStore / Sideloadly required)
+
+            > Note: `midtrans_sdk` plugin is excluded from this iOS build —
+            > see workflow comments for the reason.
+          files: build/ios/ipa/${{ steps.package.outputs.ipa_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

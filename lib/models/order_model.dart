@@ -253,7 +253,7 @@ class Order {
           double.tryParse((d['subtotal_price'] ?? '0').toString()) ?? 0.0,
       discountAmount:
           double.tryParse((d['discount_amount'] ?? '0').toString()) ?? 0.0,
-      taxAmount: double.tryParse((d['tax_amount'] ?? '0').toString()) ?? 0.0,
+      taxAmount: double.tryParse((d['taxAmount'] ?? d['tax_amount'] ?? '0').toString()) ?? 0.0,
       taxBreakdown: json['tax_breakdown'] ?? d['tax_breakdown'],
       totalPrice: double.tryParse((d['total_price'] ?? '0').toString()) ?? 0.0,
       paidAmount:

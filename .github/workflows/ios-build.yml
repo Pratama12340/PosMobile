@@ -3,22 +3,32 @@ name: Build iOS IPA (Unsigned)
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag name for the release (e.g. v1.0.0). Leave empty to skip release creation.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
   build-ios:
     name: Build unsigned iOS .ipa
     runs-on: macos-14
 
+    outputs:
+      ipa_name: ${{ steps.package.outputs.ipa_name }}
+      version: ${{ steps.version.outputs.version }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Do not persist the GITHUB_TOKEN-based credential helper globally;
-          # it breaks anonymous clones of unrelated public github.com repos
-          # (e.g. the Midtrans CocoaPods specs repo) inside CocoaPods.
           persist-credentials: false
 
       - name: Set up Flutter
@@ -31,31 +41,28 @@ jobs:
         run: flutter --version
 
       - name: Remove midtrans_sdk from pubspec for iOS CI build
-        # The midtrans_sdk plugin has an unfixable iOS build problem: it pins
-        # MidtransKit 1.28.0 (missing from trunk) and declares iOS 8.0 while
-        # MidtransKit requires 9.0+. We strip it from pubspec.yaml ONLY in CI
-        # so the iOS .ipa can build. The Dart code does not import the plugin
-        # (confirmed: only static "midtrans" string references for our own
-        # backend API exist), so this is safe.
-        # The pubspec.yaml in the repo is unchanged; only the runner's copy
-        # is modified for this build.
+        # midtrans_sdk has an unfixable iOS build problem (pins missing
+        # MidtransKit 1.28.0 and declares iOS 8.0). Strip it in CI only;
+        # repo pubspec.yaml is unchanged. Dart code does not import it.
         run: |
           set -e
-          echo "-- Stripping midtrans_sdk line from pubspec.yaml --"
-          # Remove the line that begins with `  midtrans_sdk:` (allowing any version pin)
           sed -i.bak '/^[[:space:]]*midtrans_sdk:/d' pubspec.yaml
-          echo "-- pubspec.yaml dependencies section after strip --"
-          sed -n '/^dependencies:/,/^[^[:space:]]/p' pubspec.yaml
-          echo "-- Regenerating pubspec.lock --"
           rm -f pubspec.lock
           flutter pub get
 
+      - name: Read app version from pubspec
+        id: version
+        run: |
+          set -e
+          VERSION=$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//' | tr -d '"')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "App version: $VERSION"
+
       - name: Build iOS (no codesign)
-        # `flutter build ios` runs `pod install` internally with the correct
-        # working directory (ios/), so we do NOT run pod install separately.
         run: flutter build ios --release --no-codesign
 
       - name: Package unsigned .ipa
+        id: package
         run: |
           set -e
           APP_PATH="build/ios/iphoneos/Runner.app"
@@ -63,16 +70,44 @@ jobs:
             echo "Runner.app not found at $APP_PATH"
             exit 1
           fi
+          # Filename includes version + short SHA for traceability
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IPA_NAME="sistem-pos-${{ steps.version.outputs.version }}-${SHORT_SHA}-unsigned.ipa"
           mkdir -p build/ios/ipa/Payload
           cp -R "$APP_PATH" build/ios/ipa/Payload/
           cd build/ios/ipa
-          zip -qq -r app-unsigned.ipa Payload
-          ls -lh app-unsigned.ipa
+          zip -qq -r "$IPA_NAME" Payload
+          ls -lh "$IPA_NAME"
+          echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Upload .ipa artifact
+      - name: Upload .ipa as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-unsigned-ipa
-          path: build/ios/ipa/app-unsigned.ipa
+          name: ${{ steps.package.outputs.ipa_name }}
+          path: build/ios/ipa/${{ steps.package.outputs.ipa_name }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
+
+      - name: Create GitHub Release and attach .ipa
+        # Runs only when:
+        #   - a tag starting with `v` is pushed, OR
+        #   - workflow_dispatch is run with a non-empty `release_tag` input
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        uses: softprops/action-gh-release@v2
+        with:
+          # Use the pushed tag, or the manually-provided tag for workflow_dispatch
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+          name: Release ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+          body: |
+            Automated iOS build from commit ${{ github.sha }}.
+
+            **App version:** `${{ steps.version.outputs.version }}`
+            **Build:** unsigned `.ipa` (sideload via AltStore / Sideloadly required)
+
+            > Note: `midtrans_sdk` plugin is excluded from this iOS build —
+            > see workflow comments for the reason.
+          files: build/ios/ipa/${{ steps.package.outputs.ipa_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

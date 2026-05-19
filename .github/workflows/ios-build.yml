@@ -1,17 +1,17 @@
 name: Build iOS IPA (Unsigned)
 
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'Tag name for the release (e.g. v1.0.0). Leave empty to skip release creation.'
-        required: false
-        type: string
+      bump:
+        description: 'Which part of the version to bump'
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: write
@@ -21,15 +21,37 @@ jobs:
     name: Build unsigned iOS .ipa
     runs-on: macos-14
 
-    outputs:
-      ipa_name: ${{ steps.package.outputs.ipa_name }}
-      version: ${{ steps.version.outputs.version }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Compute next release tag
+        # Reads the latest tag matching `v<num>.<num>.<num>` and bumps the
+        # selected component. If no tag exists yet, starts at v0.1.0.
+        id: nexttag
+        run: |
+          set -e
+          BUMP="${{ inputs.bump }}"
+          LAST=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$LAST" ]; then
+            echo "No previous v* tag found; starting from v0.1.0"
+            NEXT="v0.1.0"
+          else
+            echo "Last tag: $LAST"
+            STRIPPED="${LAST#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$STRIPPED"
+            case "$BUMP" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+            esac
+            NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "Next tag: $NEXT"
+          echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -56,7 +78,6 @@ jobs:
           set -e
           VERSION=$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//' | tr -d '"')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "App version: $VERSION"
 
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
@@ -70,9 +91,7 @@ jobs:
             echo "Runner.app not found at $APP_PATH"
             exit 1
           fi
-          # Filename includes version + short SHA for traceability
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          IPA_NAME="sistem-pos-${{ steps.version.outputs.version }}-${SHORT_SHA}-unsigned.ipa"
+          IPA_NAME="sistem-pos-${{ steps.nexttag.outputs.tag }}-unsigned.ipa"
           mkdir -p build/ios/ipa/Payload
           cp -R "$APP_PATH" build/ios/ipa/Payload/
           cd build/ios/ipa
@@ -80,28 +99,23 @@ jobs:
           ls -lh "$IPA_NAME"
           echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Upload .ipa as workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.package.outputs.ipa_name }}
-          path: build/ios/ipa/${{ steps.package.outputs.ipa_name }}
-          if-no-files-found: error
-          retention-days: 30
+      - name: Create git tag
+        run: |
+          set -e
+          git tag "${{ steps.nexttag.outputs.tag }}"
+          git push origin "${{ steps.nexttag.outputs.tag }}"
 
       - name: Create GitHub Release and attach .ipa
-        # Runs only when:
-        #   - a tag starting with `v` is pushed, OR
-        #   - workflow_dispatch is run with a non-empty `release_tag` input
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         uses: softprops/action-gh-release@v2
         with:
-          # Use the pushed tag, or the manually-provided tag for workflow_dispatch
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
-          name: Release ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
+          tag_name: ${{ steps.nexttag.outputs.tag }}
+          name: Release ${{ steps.nexttag.outputs.tag }}
           body: |
             Automated iOS build from commit ${{ github.sha }}.
 
-            **App version:** `${{ steps.version.outputs.version }}`
+            **Release tag:** `${{ steps.nexttag.outputs.tag }}`
+            **App version (pubspec):** `${{ steps.version.outputs.version }}`
+            **Bump type:** `${{ inputs.bump }}`
             **Build:** unsigned `.ipa` (sideload via AltStore / Sideloadly required)
 
             > Note: `midtrans_sdk` plugin is excluded from this iOS build —

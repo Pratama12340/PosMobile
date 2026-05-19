@@ -185,6 +185,7 @@ void _connectReverb() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: AppStyle.bgLightBlue,
       body: SafeArea(
         child: Column(
@@ -243,9 +244,6 @@ void _connectReverb() async {
             onPressed: () {
               setState(() {
                 _isSidebarVisible = !_isSidebarVisible;
-                if (_isSidebarVisible) {
-                  _homeKey.currentState?.closeCart();
-                }
               });
             },
           ),

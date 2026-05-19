@@ -507,10 +507,16 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     String currentDate = DateFormat('dd MMM yyyy').format(DateTime.now());
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Container(
-        width: 1000,
-        height: 680,
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+  insetPadding: EdgeInsets.only(
+    left: 20,
+    right: 20,
+    top: 24,
+    bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+  ),
+  child: Container(
+    width: 1000,
+    height: 680,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,

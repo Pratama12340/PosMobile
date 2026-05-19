@@ -279,9 +279,15 @@ void refreshShift() {
                 ..sort((a, b) => b.value.compareTo(a.value));
           var topProducts = filteredProducts.take(5).toList();
 
-          return SingleChildScrollView(
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(24.0),
+          return RefreshIndicator(
+  onRefresh: () async {
+    setState(() => _loadInitialData());
+    await shiftDataFuture;
+  },
+  color: AppStyle.primaryBlue,
+  child: SingleChildScrollView(
+    physics: const AlwaysScrollableScrollPhysics(), // ← ganti dari NeverScrollable
+    padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -324,6 +330,7 @@ void refreshShift() {
                 ),
               ],
             ),
+        )
           );
         },
       ),
@@ -407,14 +414,6 @@ void refreshShift() {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => setState(() => _loadInitialData()),
-                icon: const Icon(
-                  Icons.refresh_rounded,
-                  color: AppStyle.primaryBlue,
-                ),
-              ),
-              const SizedBox(width: 16),
               ElevatedButton.icon(
                 onPressed: () => _handleTutupShift(shift),
                 icon: const Icon(Icons.logout_rounded, size: 18),

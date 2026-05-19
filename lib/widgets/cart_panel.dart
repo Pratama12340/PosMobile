@@ -5,6 +5,7 @@ import '../constants/style.dart';
 import '../services/storage_service.dart';
 import 'checkout_dialog.dart';
 import 'table_panel.dart';
+import 'package:flutter/services.dart'; // ← untuk FilteringTextInputFormatter
 
 class CartPanel extends StatefulWidget {
   final Map<int, OrderItem> cart;
@@ -57,6 +58,9 @@ class _CartPanelState extends State<CartPanel> {
   late TextEditingController _customerController;
 
   final Map<int, TextEditingController> _noteControllers = {};
+  final Map<int, GlobalKey> _itemKeys = {};        // ← BENAR DI SINI
+  final Map<int, FocusNode> _noteFocusNodes = {}; 
+  final ScrollController _listScrollController = ScrollController(); 
 
   String _orderId = "";
   String _cashierName = "Loading...";
@@ -96,21 +100,61 @@ class _CartPanelState extends State<CartPanel> {
     _syncNoteControllers();
   }
 
-  void _syncNoteControllers() {
-    widget.cart.forEach((id, item) {
-      if (!_noteControllers.containsKey(id)) {
-        _noteControllers[id] = TextEditingController(text: item.notes);
-      } else {
-        if (_noteControllers[id]!.text != item.notes) {
-          _noteControllers[id]!.text = item.notes;
+void _syncNoteControllers() {
+  widget.cart.forEach((id, item) {
+    if (!_noteControllers.containsKey(id)) {
+      _noteControllers[id] = TextEditingController(text: item.notes);
+    } else {
+      if (_noteControllers[id]!.text != item.notes) {
+        _noteControllers[id]!.text = item.notes;
+      }
+    }
+
+    if (!_itemKeys.containsKey(id)) {
+      _itemKeys[id] = GlobalKey();
+    }
+
+    if (!_noteFocusNodes.containsKey(id)) {
+      final node = FocusNode();
+      _noteFocusNodes[id] = node;
+      node.addListener(() {
+  if (node.hasFocus) {
+    final screenHeight = MediaQuery.sizeOf(context).height; // ← pindah ke sini, sebelum delay
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      final ctx = _itemKeys[id]?.currentContext;
+      if (ctx != null) {
+        final box = ctx.findRenderObject() as RenderBox?;
+        if (box == null) return;
+        final itemOffset = box.localToGlobal(Offset.zero).dy;
+        final keyboardHeight = 320.0; // estimasi tinggi keyboard
+        final visibleBottom = screenHeight - keyboardHeight;
+
+        if (itemOffset + box.size.height > visibleBottom) {
+          _listScrollController.animateTo(
+            _listScrollController.offset +
+                (itemOffset + box.size.height - visibleBottom) + 20,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
         }
       }
     });
-
-    _noteControllers.removeWhere(
-      (id, controller) => !widget.cart.containsKey(id),
-    );
   }
+});
+    }
+  });
+
+  _noteControllers.removeWhere((id, _) => !widget.cart.containsKey(id));
+  _itemKeys.removeWhere((id, _) => !widget.cart.containsKey(id));
+  _noteFocusNodes.removeWhere((id, node) {
+    if (!widget.cart.containsKey(id)) {
+      node.dispose();
+      return true;
+    }
+    return false;
+  });
+}
 
   Future<void> _loadCashierData() async {
     final name = await StorageService.getCashierName();
@@ -124,15 +168,19 @@ class _CartPanelState extends State<CartPanel> {
     });
   }
 
-  @override
-  void dispose() {
-    _tableController.dispose();
-    _customerController.dispose();
-    for (var controller in _noteControllers.values) {
-      controller.dispose();
-    }
-    super.dispose();
+@override
+void dispose() {
+  _tableController.dispose();
+  _customerController.dispose();
+  for (var controller in _noteControllers.values) {
+    controller.dispose();
   }
+  for (var node in _noteFocusNodes.values) {
+    node.dispose();
+  }
+  _listScrollController.dispose();
+  super.dispose();
+}
 
   @override
   Widget build(BuildContext context) {
@@ -246,6 +294,7 @@ class _CartPanelState extends State<CartPanel> {
                 ),
                 Expanded(
                   child: ListView.builder(
+                    controller: _listScrollController, 
                     itemCount: widget.cart.length,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 15,
@@ -262,11 +311,13 @@ class _CartPanelState extends State<CartPanel> {
                       }
 
                       return _buildCartItem(
-                        id,
-                        item,
-                        _noteControllers[id]!,
-                        key: ValueKey("cart_$id"),
-                      );
+  id,
+  item,
+  _noteControllers[id]!,
+  itemKey: _itemKeys[id] ?? GlobalKey(),
+  focusNode: _noteFocusNodes[id],
+  key: ValueKey("cart_$id"),
+);
                     },
                   ),
                 ),
@@ -397,6 +448,8 @@ class _CartPanelState extends State<CartPanel> {
     OrderItem item,
     TextEditingController noteController, {
     Key? key,
+    GlobalKey? itemKey,     // ← TAMBAHKAN
+    FocusNode? focusNode, 
   }) {
     return Container(
       key: key,
@@ -454,20 +507,54 @@ class _CartPanelState extends State<CartPanel> {
                     isPrimary: false,
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: SizedBox(
-                      width: 30,
-                      child: Text(
-                        "${item.quantity}",
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                    ),
-                  ),
+  padding: const EdgeInsets.symmetric(horizontal: 6),
+  child: SizedBox(
+    width: 36,
+    child: TextField(
+      keyboardType: TextInputType.number,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 15,
+        fontFamily: 'Poppins',
+      ),
+      decoration: InputDecoration(
+  isDense: true,
+  contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+  enabledBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(6),
+    borderSide: BorderSide(
+      color: AppStyle.primaryBlue.withValues(alpha: 0.3),
+      width: 1,
+    ),
+  ),
+  focusedBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(6),
+    borderSide: const BorderSide(
+      color: AppStyle.primaryBlue,
+      width: 1.5,
+    ),
+  ),
+  filled: true,
+  fillColor: AppStyle.primaryBlue.withValues(alpha: 0.05),
+),
+      controller: TextEditingController(text: "${item.quantity}")
+        ..selection = TextSelection.collapsed(offset: "${item.quantity}".length),
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      onChanged: (val) {
+        final parsed = int.tryParse(val);
+        if (parsed != null && parsed > 0) {
+          final diff = parsed - item.quantity;
+          if (diff > 0) {
+            for (int i = 0; i < diff; i++) { widget.onIncrease(id); }
+    } else if (diff < 0) {
+      for (int i = 0; i < diff.abs(); i++) { widget.onDecrease(id); }
+          }
+        }
+      },
+    ),
+  ),
+),
                   _qtyButton(
                     Icons.add,
                     () => widget.onIncrease(id),

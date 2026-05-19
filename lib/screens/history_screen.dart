@@ -97,9 +97,15 @@ class HistoryScreenState extends State<HistoryScreen> {
             );
           }
 
-          return GridView.builder(
-            padding: const EdgeInsets.all(32),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          return RefreshIndicator(
+  onRefresh: () async {
+    loadHistory();
+    await _historyFuture;
+  },
+  color: AppStyle.primaryBlue,
+  child: GridView.builder(
+    padding: const EdgeInsets.all(32),
+    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               crossAxisSpacing: 20,
               mainAxisSpacing: 20,
@@ -269,9 +275,10 @@ class HistoryScreenState extends State<HistoryScreen> {
                 ),
               );
             },
+          )
           );
         },
       ),
-    );
+    ); // tutup RefreshIndicator
   }
 }

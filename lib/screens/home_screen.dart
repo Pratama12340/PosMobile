@@ -8,6 +8,7 @@ import '../models/discount_model.dart';
 import '../widgets/cart_panel.dart';
 import '../services/reverb_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/draft_panel.dart'; // Import panel draft
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -38,6 +39,7 @@ class HomeScreenState extends State<HomeScreen> {
   int? _currentPendingDiscountId;
 
   bool _isPendingPanelVisible = false;
+  bool _isDraftPanelVisible = false; // State tambahan untuk panel draft
   bool _isLoadingPendingOrders = false;
 
   List<Product> _allProducts = [];
@@ -77,14 +79,15 @@ class HomeScreenState extends State<HomeScreen> {
 
       _isCartVisible = false;
       _isPendingPanelVisible = false;
+      _isDraftPanelVisible = false;
     });
   }
 
   String formatHarga(double price) => NumberFormat.currency(
-    locale: 'id_ID',
-    symbol: 'Rp ',
-    decimalDigits: 0,
-  ).format(price);
+        locale: 'id_ID',
+        symbol: 'Rp ',
+        decimalDigits: 0,
+      ).format(price);
 
   String _getInitials(String name) {
     if (name.isEmpty) return "";
@@ -129,9 +132,8 @@ class HomeScreenState extends State<HomeScreen> {
         final List<Order> historyData = results[4] as List<Order>;
         final List<Order> pendingData = results[5] as List<Order>;
 
-        List<Order> loadedPendingOrders = pendingData.isNotEmpty
-            ? pendingData
-            : [];
+        List<Order> loadedPendingOrders =
+            pendingData.isNotEmpty ? pendingData : [];
         Map<int, int> productSales = {};
 
         for (var order in historyData) {
@@ -156,8 +158,7 @@ class HomeScreenState extends State<HomeScreen> {
             if (data.containsKey('product_id')) {
               int pId =
                   int.tryParse(data['product_id']?.toString() ?? '0') ?? 0;
-              int qty =
-                  int.tryParse(
+              int qty = int.tryParse(
                     data['qty']?.toString() ??
                         data['total_qty']?.toString() ??
                         data['sold']?.toString() ??
@@ -199,9 +200,8 @@ class HomeScreenState extends State<HomeScreen> {
               )
               .toList();
 
-          product.discount = specificDiscount.isNotEmpty
-              ? specificDiscount.first
-              : null;
+          product.discount =
+              specificDiscount.isNotEmpty ? specificDiscount.first : null;
         }
 
         final sortedBySales = List<Product>.from(productsData)
@@ -238,8 +238,7 @@ class HomeScreenState extends State<HomeScreen> {
     String query = widget.searchController.text.toLowerCase();
     setState(() {
       _filteredProducts = _allProducts.where((p) {
-        bool matchCategory =
-            _selectedCategory == "All Menu" ||
+        bool matchCategory = _selectedCategory == "All Menu" ||
             p.category.toLowerCase().contains(_selectedCategory.toLowerCase());
         bool matchQuery = query.isEmpty || p.name.toLowerCase().contains(query);
         return matchCategory && matchQuery;
@@ -248,8 +247,8 @@ class HomeScreenState extends State<HomeScreen> {
         (a, b) => (a.stock <= 0 && b.stock > 0)
             ? 1
             : (a.stock > 0 && b.stock <= 0)
-            ? -1
-            : 0,
+                ? -1
+                : 0,
       );
     });
   }
@@ -274,6 +273,7 @@ class HomeScreenState extends State<HomeScreen> {
         _currentPendingDiscountId = null;
 
         _isCartVisible = false;
+        _isDraftPanelVisible = false; // Menyembunyikan draft panel saat berhasil tersimpan
         widget.onCartToggled?.call(false);
       }
     });
@@ -316,6 +316,7 @@ class HomeScreenState extends State<HomeScreen> {
       _currentPendingDiscountId = order.discountId;
 
       _isPendingPanelVisible = false;
+      _isDraftPanelVisible = false;
       _isCartVisible = true;
       widget.onCartToggled?.call(true);
     });
@@ -326,7 +327,28 @@ class HomeScreenState extends State<HomeScreen> {
       if (_isPendingPanelVisible) {
         _isPendingPanelVisible = false;
       } else {
+        // PERBAIKAN: Jika keranjang ada isinya, amankan dulu ke draft sebelum membuka pending order
+        if (_cart.isNotEmpty) {
+          if (!_isPendingOrderLoaded) {
+            _drafts.add({
+              'cart': Map<int, OrderItem>.from(_cart),
+              'customerName': _currentCustomerName ?? "",
+              'tableNumber': _currentTableNumber ?? "",
+              'tableId': _currentTableId,
+            });
+          }
+          // Bersihkan isi keranjang aktif
+          _cart.clear();
+          _currentCustomerName = null;
+          _currentTableNumber = null;
+          _currentTableId = null;
+          _isPendingOrderLoaded = false;
+          _currentPendingOrderId = null;
+          _currentPendingDiscountId = null;
+        }
+
         _isCartVisible = false;
+        _isDraftPanelVisible = false;
         widget.onCartToggled?.call(false);
 
         _isPendingPanelVisible = true;
@@ -384,6 +406,10 @@ class HomeScreenState extends State<HomeScreen> {
                         setState(() {
                           _isPendingPanelVisible = false;
                         });
+                      } else if (_isDraftPanelVisible) {
+                        setState(() {
+                          _isDraftPanelVisible = false;
+                        });
                       } else if (_isCartVisible) {
                         closeCart();
                       }
@@ -398,9 +424,12 @@ class HomeScreenState extends State<HomeScreen> {
                             children: [
                               Expanded(child: _buildCategoryChips()),
                               const SizedBox(width: 15),
-                              if (_cart.isEmpty && _drafts.isNotEmpty)
-                                _buildDraftDropdownButton(),
+                              
+                              // TOMBOL ICON DRAFT
+                              if (_drafts.isNotEmpty && !_isDraftPanelVisible)
+                              _buildDraftButton(),
 
+                              // TOMBOL PENDING ORDER
                               if (_pendingOrders.isNotEmpty &&
                                   !_isPendingPanelVisible &&
                                   !_isPendingOrderLoaded) ...[
@@ -457,17 +486,16 @@ class HomeScreenState extends State<HomeScreen> {
                                 return GridView.builder(
                                   gridDelegate:
                                       SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 4,
-                                        childAspectRatio:
-                                            itemWidth / itemHeight,
-                                        crossAxisSpacing: spacing,
-                                        mainAxisSpacing: spacing,
-                                      ),
+                                    crossAxisCount: 4,
+                                    childAspectRatio: itemWidth / itemHeight,
+                                    crossAxisSpacing: spacing,
+                                    mainAxisSpacing: spacing,
+                                  ),
                                   itemCount: _filteredProducts.length,
                                   itemBuilder: (context, index) =>
                                       _buildProductCard(
-                                        _filteredProducts[index],
-                                      ),
+                                    _filteredProducts[index],
+                                  ),
                                 );
                               },
                             ),
@@ -478,8 +506,45 @@ class HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
+                // LOGIKA SISI KANAN (TAMPILAN PANEL)
                 if (_isPendingPanelVisible)
                   _buildPendingOrderPanel()
+                else if (_isDraftPanelVisible)
+                  DraftPanel(
+                    drafts: _drafts,
+                    onClose: () {
+                      setState(() {
+                        _isDraftPanelVisible = false;
+                      });
+                    },
+                    onRestore: (index) {
+                      setState(() {
+                        final selectedDraft = _drafts[index];
+                        _cart.addAll(
+                            selectedDraft['cart'] as Map<int, OrderItem>);
+                        _currentCustomerName = selectedDraft['customerName'];
+                        _currentTableNumber = selectedDraft['tableNumber'];
+                        _currentTableId = selectedDraft['tableId'];
+
+                        _isPendingOrderLoaded = false;
+                        _currentPendingOrderId = null;
+
+                        _drafts.removeAt(index);
+                        
+                        _isDraftPanelVisible = false;
+                        _isCartVisible = true;
+                        widget.onCartToggled?.call(true);
+                      });
+                    },
+                    onDelete: (index) {
+                      setState(() {
+                        _drafts.removeAt(index);
+                        if (_drafts.isEmpty) {
+                          _isDraftPanelVisible = false;
+                        }
+                      });
+                    },
+                  )
                 else if (_isCartVisible &&
                     (_cart.isNotEmpty ||
                         _currentCustomerName != null ||
@@ -492,11 +557,9 @@ class HomeScreenState extends State<HomeScreen> {
                     initialCustomerName: _currentCustomerName,
                     initialTableNumber: _currentTableNumber,
                     initialTableId: _currentTableId,
-
                     isPendingMode: _isPendingOrderLoaded,
                     pendingOrderId: _currentPendingOrderId,
                     pendingDiscountId: _currentPendingDiscountId,
-
                     onIncrease: (id) {
                       setState(() {
                         if (_cart.containsKey(id)) {
@@ -585,6 +648,96 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // WIDGET TOMBOL DRAFT
+  Widget _buildDraftButton() {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          if (_isDraftPanelVisible) {
+            _isDraftPanelVisible = false;
+          } else {
+            // PERBAIKAN: Jika keranjang ada isinya, amankan dulu ke draft sebelum membuka panel list draft
+            if (_cart.isNotEmpty) {
+              if (!_isPendingOrderLoaded) {
+                _drafts.add({
+                  'cart': Map<int, OrderItem>.from(_cart),
+                  'customerName': _currentCustomerName ?? "",
+                  'tableNumber': _currentTableNumber ?? "",
+                  'tableId': _currentTableId,
+                });
+              }
+              _cart.clear();
+              _currentCustomerName = null;
+              _currentTableNumber = null;
+              _currentTableId = null;
+              _isPendingOrderLoaded = false;
+              _currentPendingOrderId = null;
+              _currentPendingDiscountId = null;
+            }
+
+            _isPendingPanelVisible = false;
+            _isCartVisible = false;
+            widget.onCartToggled?.call(false);
+            _isDraftPanelVisible = true;
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 45,
+        height: 45,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(
+              Icons.shopping_cart_outlined,
+              color: AppStyle.primaryBlue,
+              size: 28,
+            ),
+            if (_drafts.isNotEmpty)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
+                  child: Text(
+                    '${_drafts.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _connectReverb() async {
     final int? outletId = await StorageService.getOutletId();
 
@@ -650,106 +803,107 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildPendingOrderPanel() {
+Widget _buildPendingOrderPanel() {
     return Container(
-      width: 360,
+      width: 340, // Lebar disamakan dengan draft/cart
+      margin: const EdgeInsets.all(15), // Margin luar
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(left: BorderSide(color: Colors.grey.shade200, width: 1)),
+        borderRadius: BorderRadius.circular(24), // Sudut melengkung 24
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 15,
-            offset: const Offset(-5, 0),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppStyle.primaryBlue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.receipt_long,
-                    color: AppStyle.primaryBlue,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    "Pesanan Tertunda",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.black87,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.black54),
-                  onPressed: () {
-                    setState(() {
-                      _isPendingPanelVisible = false;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFF5F5F5)),
-
-          Expanded(
-            child: _isLoadingPendingOrders
-                ? const Center(
-                    child: CircularProgressIndicator(
+                    child: const Icon(
+                      Icons.receipt_long,
                       color: AppStyle.primaryBlue,
+                      size: 20,
                     ),
-                  )
-                : _pendingOrders.isEmpty
-                ? const Center(
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
                     child: Text(
-                      "Tidak ada pesanan tertunda.",
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                      "Pesanan Tertunda",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.black87,
+                        fontFamily: 'Poppins', 
+                      ),
                     ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(15),
-                    itemCount: _pendingOrders.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final order = _pendingOrders[index];
-
-                      String custName = order.customerName;
-                      String tableNo = order.tableId?.toString() ?? '-';
-                      double total = (order.totalPrice).toDouble();
-
-                      return InkWell(
-                        onTap: () {
-                          _loadPendingOrderToCart(order);
-                        },
-                        borderRadius: BorderRadius.circular(15),
-                        child: Container(
-                          padding: const EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade200),
-                            borderRadius: BorderRadius.circular(15),
-                            color: Colors.white,
+                  ),
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _isPendingPanelVisible = false;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: Colors.black54,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF5F5F5)),
+            
+            Expanded(
+              child: _isLoadingPendingOrders
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppStyle.primaryBlue,
+                      ),
+                    )
+                  : _pendingOrders.isEmpty
+                      ? const Center(
+                          child: Text(
+                            "Tidak ada pesanan tertunda.",
+                            style: TextStyle(color: Colors.grey, fontSize: 14),
                           ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: AppStyle.primaryBlue
-                                    .withValues(alpha: 0.1),
-                                radius: 20,
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          itemCount: _pendingOrders.length,
+                          separatorBuilder: (context, index) =>
+                              const Divider(height: 1, color: Color(0xFFF5F5F5)),
+                          itemBuilder: (context, index) {
+                            final order = _pendingOrders[index];
+
+                            String custName = order.customerName;
+                            String tableNo = order.tableId?.toString() ?? '-';
+                            double total = (order.totalPrice).toDouble();
+
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 8,
+                              ),
+                              leading: CircleAvatar(
+                                backgroundColor: const Color(0xFFF8FAFC),
                                 child: Text(
                                   tableNo,
                                   style: const TextStyle(
@@ -759,163 +913,42 @@ class HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 15),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      custName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      "Total: ${formatHarga(total)}",
-                                      style: const TextStyle(
-                                        color: AppStyle.primaryBlue,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
+                              title: Text(
+                                custName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
                                 ),
                               ),
-                              const Icon(
-                                Icons.arrow_forward_ios,
-                                size: 14,
-                                color: Colors.grey,
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  "Total: ${formatHarga(total)}",
+                                  style: const TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: 13,
+                                  ),
+                                ),
                               ),
-                            ],
-                          ),
+                              trailing: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 12,
+                                  color: AppStyle.primaryBlue,
+                                ),
+                              ),
+                              onTap: () {
+                                _loadPendingOrderToCart(order);
+                              },
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDraftDropdownButton() {
-    return PopupMenuButton<int>(
-      tooltip: "Pilih Draft",
-      offset: const Offset(0, 50),
-      constraints: const BoxConstraints(minWidth: 280, maxWidth: 280),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      onSelected: (int index) {
-        setState(() {
-          final selectedDraft = _drafts[index];
-          _cart.addAll(selectedDraft['cart'] as Map<int, OrderItem>);
-          _currentCustomerName = selectedDraft['customerName'];
-          _currentTableNumber = selectedDraft['tableNumber'];
-          _currentTableId = selectedDraft['tableId'];
-
-          _isPendingOrderLoaded = false;
-          _currentPendingOrderId = null;
-
-          _drafts.removeAt(index);
-
-          _isPendingPanelVisible = false;
-          _isCartVisible = true;
-          widget.onCartToggled?.call(true);
-        });
-      },
-      itemBuilder: (context) => List.generate(_drafts.length, (index) {
-        final draft = _drafts[index];
-        String customerName = draft['customerName']?.toString().trim() ?? "";
-        String label = customerName.isEmpty
-            ? "Draft ${index + 1}"
-            : customerName;
-
-        return PopupMenuItem<int>(
-          value: index,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.person_outline,
-                    size: 18,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _drafts.removeAt(index);
-                  });
-                  Navigator.pop(context);
-                },
-                child: const Icon(Icons.close, size: 18, color: Colors.red),
-              ),
-            ],
-          ),
-        );
-      }),
-      child: Container(
-        width: 45,
-        height: 45,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
             ),
-          ],
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            const Icon(
-              Icons.shopping_cart_outlined,
-              color: AppStyle.primaryBlue,
-              size: 28,
-            ),
-            if (_drafts.isNotEmpty)
-              Positioned(
-                right: -2,
-                top: -2,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  child: Text(
-                    '${_drafts.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -1010,7 +1043,6 @@ class HomeScreenState extends State<HomeScreen> {
             Positioned.fill(
               child: Container(color: Colors.black.withValues(alpha: 0.3)),
             ),
-
             Positioned(
               top: 10,
               left: 0,
@@ -1039,9 +1071,7 @@ class HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-
                   if (isBestseller && isDiskon) const SizedBox(height: 4),
-
                   if (isDiskon)
                     ClipPath(
                       clipper: TagClipper(),
@@ -1067,7 +1097,6 @@ class HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
             Positioned(
               top: 10,
               right: 10,
@@ -1087,7 +1116,6 @@ class HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-
             Positioned(
               bottom: 15,
               left: 15,
@@ -1135,42 +1163,43 @@ class HomeScreenState extends State<HomeScreen> {
                     onTap: isOutOfStock
                         ? null
                         : () => setState(() {
-                            if (_isPendingOrderLoaded &&
-                                !_cart.containsKey(p.id)) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Text(
-                                    "Tidak bisa menambah menu baru ke pesanan pending.\nHanya bisa mengubah jumlah menu yang sudah ada.",
+                              if (_isPendingOrderLoaded &&
+                                  !_cart.containsKey(p.id)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                      "Tidak bisa menambah menu baru ke pesanan pending.\nHanya bisa mengubah jumlah menu yang sudah ada.",
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                    behavior: SnackBarBehavior.floating,
+                                    duration: const Duration(seconds: 3),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
-                                  backgroundColor: Colors.orange,
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: const Duration(seconds: 3),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
+                                );
+                                return;
+                              }
 
-                            _isPendingPanelVisible = false;
-                            _isCartVisible = true;
-                            widget.onCartToggled?.call(true);
+                              _isPendingPanelVisible = false;
+                              _isDraftPanelVisible = false;
+                              _isCartVisible = true;
+                              widget.onCartToggled?.call(true);
 
-                            if (_cart.containsKey(p.id)) {
-                              _cart[p.id]!.quantity++;
-                            } else {
-                              _cart[p.id] = OrderItem(
-                                id: 0,
-                                productId: p.id,
-                                itemName: p.name,
-                                originalQty: 1,
-                                activeQty: 1,
-                                unitPrice: p.price.toDouble(),
-                                stationId: p.stationId,
-                              );
-                            }
-                          }),
+                              if (_cart.containsKey(p.id)) {
+                                _cart[p.id]!.quantity++;
+                              } else {
+                                _cart[p.id] = OrderItem(
+                                  id: 0,
+                                  productId: p.id,
+                                  itemName: p.name,
+                                  originalQty: 1,
+                                  activeQty: 1,
+                                  unitPrice: p.price.toDouble(),
+                                  stationId: p.stationId,
+                                );
+                              }
+                            }),
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: const BoxDecoration(
@@ -1179,9 +1208,8 @@ class HomeScreenState extends State<HomeScreen> {
                       ),
                       child: Icon(
                         Icons.add,
-                        color: isOutOfStock
-                            ? Colors.grey
-                            : AppStyle.primaryBlue,
+                        color:
+                            isOutOfStock ? Colors.grey : AppStyle.primaryBlue,
                       ),
                     ),
                   ),

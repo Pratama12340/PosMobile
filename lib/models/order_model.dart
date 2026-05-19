@@ -14,10 +14,10 @@ class OrderLog {
   factory OrderLog.fromJson(Map<String, dynamic> json) {
     // 🔥 PERBAIKAN: Tangkap 'updated_at' atau 'date' dari database, bukan cuma 'created_at'
     String rawDate = json['updated_at']?.toString() ?? 
-                     json['date']?.toString() ?? 
-                     json['created_at']?.toString() ?? 
-                     "";
-                     
+                    json['date']?.toString() ?? 
+                    json['created_at']?.toString() ?? 
+                    "";
+
     String formattedLogDate = rawDate;
     if (rawDate.isNotEmpty) {
       try {

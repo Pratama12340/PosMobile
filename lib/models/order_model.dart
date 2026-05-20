@@ -247,7 +247,7 @@ class Order {
       tableNo: tNo,
       tableId: tId,
       discountId: int.tryParse(d['discount_id']?.toString() ?? ''),
-      paymentMethod: (d['payment_method']?.toString() ?? "CASH").toUpperCase(),
+      paymentMethod: d['payment_method']?.toString().toUpperCase() ?? "",
       status: d['status'] ?? "paid",
       subtotalPrice:
           double.tryParse((d['subtotal_price'] ?? '0').toString()) ?? 0.0,

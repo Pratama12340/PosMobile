@@ -8,7 +8,9 @@ import '../models/discount_model.dart';
 import '../widgets/cart_panel.dart';
 import '../services/reverb_service.dart';
 import '../services/storage_service.dart';
-import '../widgets/draft_panel.dart'; // Import panel draft
+import '../widgets/draft_panel.dart';
+import '../services/printer_service.dart'; 
+import '../models/print_model.dart';        
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -28,18 +30,20 @@ class HomeScreenState extends State<HomeScreen> {
   final Map<int, OrderItem> _cart = {};
   final List<Map<String, dynamic>> _drafts = [];
   final ReverbService _reverbService = ReverbService();
+  final TerminalPrinterService _printerService = TerminalPrinterService();
 
   String? _currentCustomerName;
   String? _currentTableNumber;
   int? _currentTableId;
 
   List<Order> _pendingOrders = [];
+  List<Order> _paidOrders = []; // ✅ List untuk paid orders yang belum di-accept
   bool _isPendingOrderLoaded = false;
   int? _currentPendingOrderId;
   int? _currentPendingDiscountId;
 
   bool _isPendingPanelVisible = false;
-  bool _isDraftPanelVisible = false; // State tambahan untuk panel draft
+  bool _isDraftPanelVisible = false;
   bool _isLoadingPendingOrders = false;
 
   List<Product> _allProducts = [];
@@ -119,6 +123,7 @@ class HomeScreenState extends State<HomeScreen> {
         ApiService.getReports().catchError((e) => []),
         ApiService.fetchHistory().catchError((e) => <Order>[]),
         ApiService.getPendingOrders().catchError((e) => <Order>[]),
+        ApiService.getPaidOrders().catchError((e) => <Order>[]), // ✅ TAMBAH
       ]);
 
       if (mounted) {
@@ -128,9 +133,9 @@ class HomeScreenState extends State<HomeScreen> {
         final List reportsData = results[3];
         final List<Order> historyData = results[4] as List<Order>;
         final List<Order> pendingData = results[5] as List<Order>;
+        final List<Order> paidData = results[6] as List<Order>; // ✅ TAMBAH
 
-        List<Order> loadedPendingOrders =
-            pendingData.isNotEmpty ? pendingData : [];
+       List<Order> loadedPendingOrders = pendingData;
         Map<int, int> productSales = {};
 
         for (var order in historyData) {
@@ -139,10 +144,6 @@ class HomeScreenState extends State<HomeScreen> {
               productSales[item.productId] =
                   (productSales[item.productId] ?? 0) + item.quantity;
             }
-          }
-          if (pendingData.isEmpty &&
-              (order.status == 'pending' || order.status == 'unpaid')) {
-            loadedPendingOrders.add(order);
           }
         }
 
@@ -222,6 +223,7 @@ class HomeScreenState extends State<HomeScreen> {
           _allProducts = productsData;
           _bestsellerProductIds = calculatedBestsellers;
           _pendingOrders = loadedPendingOrders;
+          _paidOrders = paidData; // ✅ TAMBAH
           _isLoading = false;
         });
         _applyFilters();
@@ -269,7 +271,7 @@ class HomeScreenState extends State<HomeScreen> {
         _currentPendingOrderId = null;
         _currentPendingDiscountId = null;
 
-        _isDraftPanelVisible = false; // Menyembunyikan draft panel saat berhasil tersimpan
+        _isDraftPanelVisible = false;
         widget.onCartToggled?.call(false);
       }
     });
@@ -322,7 +324,6 @@ class HomeScreenState extends State<HomeScreen> {
       if (_isPendingPanelVisible) {
         _isPendingPanelVisible = false;
       } else {
-        // PERBAIKAN: Jika keranjang ada isinya, amankan dulu ke draft sebelum membuka pending order
         if (_cart.isNotEmpty) {
           if (!_isPendingOrderLoaded) {
             _drafts.add({
@@ -332,7 +333,6 @@ class HomeScreenState extends State<HomeScreen> {
               'tableId': _currentTableId,
             });
           }
-          // Bersihkan isi keranjang aktif
           _cart.clear();
           _currentCustomerName = null;
           _currentTableNumber = null;
@@ -352,280 +352,414 @@ class HomeScreenState extends State<HomeScreen> {
 
     if (_isPendingPanelVisible) {
       try {
-        final freshPendingOrders = await ApiService.getPendingOrders();
-
-        if (mounted) {
-          setState(() {
-            _pendingOrders = freshPendingOrders;
-            _isLoadingPendingOrders = false;
-          });
-        }
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _isLoadingPendingOrders = false;
-          });
-        }
-      }
+  final freshPending = await ApiService.getPendingOrders();
+  if (mounted) {
+    setState(() {
+      _pendingOrders = freshPending;
+      _isLoadingPendingOrders = false;
+    });
+  }
+} catch (e) {
+  if (mounted) {
+    setState(() => _isLoadingPendingOrders = false);
+  }
+}
     }
   }
 
-@override
-Widget build(BuildContext context) {
-  final mediaQuery = MediaQuery.of(context);
+ Future<void> _acceptOrder(Order order) async {
+  print("Menghubungi API accept untuk Order ID: ${order.id}");
+  final success = await ApiService.acceptOrder(order.id);
+  if (success && mounted) {
+    setState(() => _pendingOrders.remove(order)); // ← ganti _paidOrders → _pendingOrders
 
-  bool hasDiscountedItem = _isPendingOrderLoaded
-      ? false
-      : _cart.values.any((cartItem) {
-          int index = _allProducts.indexWhere(
-            (p) => p.id == cartItem.productId,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 10),
+            Text('Order berhasil di-accept!'),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  } else if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Gagal accept order.'),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+}
+  Future<void> _connectReverb() async {
+    final int? outletId = await StorageService.getOutletId();
+
+    if (outletId == null) {
+      debugPrint('🔴 [REVERB HOME] outlet_id tidak ditemukan');
+      return;
+    }
+
+    await _reverbService.initConnection(
+      channelName: 'private-orders.outlet.$outletId',
+      eventName: '.order.created',
+      onEventReceived: (data) {
+        debugPrint('⚡ [HOME] Event Reverb diterima: $data');
+
+        // ✅ Cek status order dari event
+        final String status = data['order']?['status']?.toString() ??
+            data['status']?.toString() ??
+            '';
+
+        if (status == 'paid') {
+          // Order sudah dibayar → masuk ke list paid untuk di-accept & cetak
+          try {
+            final Order newOrder = Order.fromJson(data['order'] ?? data);
+            if (mounted) {
+              setState(() => _paidOrders.add(newOrder));
+            }
+          } catch (e) {
+            // Jika parse gagal, refresh saja dari API
+            _refreshPaidOrdersSilently();
+          }
+        } else {
+          // Order baru pending → refresh pending list
+          _refreshPendingOrdersSilently();
+        }
+
+        if (mounted) {
+          final customerName =
+              data['order']?['customer_name'] ?? 'Pelanggan';
+          final isPaid = status == 'paid';
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(
+                    isPaid
+                        ? Icons.payment
+                        : Icons.notifications_active,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      isPaid
+                          ? 'Pembayaran dari $customerName berhasil! Siap cetak struk.'
+                          : 'Pesanan baru dari $customerName masuk!',
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: isPaid ? Colors.blue : Colors.green,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
           );
-          return index != -1 && _allProducts[index].discount != null;
-        });
+        }
+      },
+    );
+  }
 
-  double originalTotalAmount = _isPendingOrderLoaded
-      ? 0.0
-      : _cart.values.fold(0.0, (sum, cartItem) {
-          return sum + (cartItem.unitPrice * cartItem.quantity);
-        });
+  Future<void> refreshPendingOrdersSilently() async {
+    try {
+      final freshOrders = await ApiService.getPendingOrders();
+      if (mounted) {
+        setState(() => _pendingOrders = freshOrders);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Gagal refresh pending orders: $e');
+    }
+  }
 
-  return MediaQuery(
-    data: mediaQuery.copyWith(viewInsets: EdgeInsets.zero),
-    child: Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: AppStyle.bgLightBlue,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      if (_isPendingPanelVisible) {
-                        setState(() => _isPendingPanelVisible = false);
-                      } else if (_isDraftPanelVisible) {
-                        setState(() => _isDraftPanelVisible = false);
-                      }
-                    },
-                    behavior: HitTestBehavior.translucent,
-                    child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(child: _buildCategoryChips()),
-                              const SizedBox(width: 15),
-                              if (_drafts.isNotEmpty && !_isDraftPanelVisible)
-                                _buildDraftButton(),
-                              if (_pendingOrders.isNotEmpty &&
-                                  !_isPendingPanelVisible &&
-                                  !_isPendingOrderLoaded) ...[
+  Future<void> _refreshPendingOrdersSilently() async {
+    try {
+      final freshOrders = await ApiService.getPendingOrders();
+      if (mounted) {
+        setState(() => _pendingOrders = freshOrders);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Gagal refresh pending orders: $e');
+    }
+  }
+
+  // ✅ Refresh paid orders dari API
+  Future<void> _refreshPaidOrdersSilently() async {
+    try {
+      final freshOrders = await ApiService.getPaidOrders();
+      if (mounted) {
+        setState(() => _paidOrders = freshOrders);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Gagal refresh paid orders: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+
+    bool hasDiscountedItem = _isPendingOrderLoaded
+        ? false
+        : _cart.values.any((cartItem) {
+            int index = _allProducts.indexWhere(
+              (p) => p.id == cartItem.productId,
+            );
+            return index != -1 && _allProducts[index].discount != null;
+          });
+
+    double originalTotalAmount = _isPendingOrderLoaded
+        ? 0.0
+        : _cart.values.fold(0.0, (sum, cartItem) {
+            return sum + (cartItem.unitPrice * cartItem.quantity);
+          });
+
+    // ✅ Total badge = pending + paid
+    final int totalOrderBadge = _pendingOrders.length + _paidOrders.length;
+
+    return MediaQuery(
+      data: mediaQuery.copyWith(viewInsets: EdgeInsets.zero),
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        backgroundColor: AppStyle.bgLightBlue,
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (_isPendingPanelVisible) {
+                          setState(() => _isPendingPanelVisible = false);
+                        } else if (_isDraftPanelVisible) {
+                          setState(() => _isDraftPanelVisible = false);
+                        }
+                      },
+                      behavior: HitTestBehavior.translucent,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(child: _buildCategoryChips()),
                                 const SizedBox(width: 15),
-                                Badge(
-                                  label: Text(
-                                    '${_pendingOrders.length}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  backgroundColor: Colors.redAccent,
-                                  child: InkWell(
-                                    onTap: _togglePendingPanel,
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      width: 45,
-                                      height: 45,
-                                      decoration: BoxDecoration(
+                                if (_drafts.isNotEmpty && !_isDraftPanelVisible)
+                                  _buildDraftButton(),
+                                // ✅ Badge button muncul jika ada pending ATAU paid orders
+                                if (totalOrderBadge > 0 &&
+                                    !_isPendingPanelVisible &&
+                                    !_isPendingOrderLoaded) ...[
+                                  const SizedBox(width: 15),
+                                  Badge(
+                                    label: Text(
+                                      '$totalOrderBadge',
+                                      style: const TextStyle(
                                         color: Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: 0.05),
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      child: const Icon(
-                                        Icons.receipt_long,
-                                        color: Colors.orange,
-                                        size: 26,
+                                    ),
+                                    backgroundColor: Colors.redAccent,
+                                    child: InkWell(
+                                      onTap: _togglePendingPanel,
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Container(
+                                        width: 45,
+                                        height: 45,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black
+                                                  .withValues(alpha: 0.05),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.receipt_long,
+                                          color: Colors.orange,
+                                          size: 26,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ],
-                            ],
-                          ),
-                          const SizedBox(height: 15),
-                          Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                double spacing = 18.0;
-                                double itemHeight =
-                                    (constraints.maxHeight - (spacing * 2)) / 3;
-                                double itemWidth =
-                                    (constraints.maxWidth - (spacing * 3)) / 4;
-                                return GridView.builder(
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 4,
-                                    childAspectRatio: itemWidth / itemHeight,
-                                    crossAxisSpacing: spacing,
-                                    mainAxisSpacing: spacing,
-                                  ),
-                                  itemCount: _filteredProducts.length,
-                                  itemBuilder: (context, index) =>
-                                      _buildProductCard(
-                                    _filteredProducts[index],
-                                  ),
-                                );
-                              },
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 15),
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  double spacing = 18.0;
+                                  double itemHeight =
+                                      (constraints.maxHeight - (spacing * 2)) /
+                                          3;
+                                  double itemWidth =
+                                      (constraints.maxWidth - (spacing * 3)) /
+                                          4;
+                                  return GridView.builder(
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 4,
+                                      childAspectRatio: itemWidth / itemHeight,
+                                      crossAxisSpacing: spacing,
+                                      mainAxisSpacing: spacing,
+                                    ),
+                                    itemCount: _filteredProducts.length,
+                                    itemBuilder: (context, index) =>
+                                        _buildProductCard(
+                                      _filteredProducts[index],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
 
-                // PANEL KANAN
-                if (_isPendingPanelVisible)
-                  _buildPendingOrderPanel()
-                else if (_isDraftPanelVisible)
-                  DraftPanel(
-                    drafts: _drafts,
-                    onClose: () =>
-                        setState(() => _isDraftPanelVisible = false),
-                    onRestore: (index) {
-                      setState(() {
-                        final selectedDraft = _drafts[index];
-                        _cart.addAll(
-                            selectedDraft['cart'] as Map<int, OrderItem>);
-                        _currentCustomerName = selectedDraft['customerName'];
-                        _currentTableNumber = selectedDraft['tableNumber'];
-                        _currentTableId = selectedDraft['tableId'];
-                        _isPendingOrderLoaded = false;
-                        _currentPendingOrderId = null;
-                        _drafts.removeAt(index);
-                        _isDraftPanelVisible = false;
-                        widget.onCartToggled?.call(true);
-                      });
-                    },
-                    onDelete: (index) {
-                      setState(() {
-                        _drafts.removeAt(index);
-                        if (_drafts.isEmpty) _isDraftPanelVisible = false;
-                      });
-                    },
-                  )
-                else
-                  CartPanel(
-                    cart: _cart,
-                    hasDiscountedItem: hasDiscountedItem,
-                    originalTotalAmount: originalTotalAmount,
-                    formatCurrency: formatHarga,
-                    initialCustomerName: _currentCustomerName,
-                    initialTableNumber: _currentTableNumber,
-                    initialTableId: _currentTableId,
-                    isPendingMode: _isPendingOrderLoaded,
-                    pendingOrderId: _currentPendingOrderId,
-                    pendingDiscountId: _currentPendingDiscountId,
-                    onIncrease: (id) {
-                      setState(() {
-                        if (_cart.containsKey(id)) {
-                          _cart.update(id, (item) {
-                            item.quantity += 1;
-                            return item;
-                          });
-                        }
-                      });
-                    },
-                    onDecrease: (id) {
-                      setState(() {
-                        if (_cart.containsKey(id)) {
-                          if (_cart[id]!.quantity > 1) {
+                  // PANEL KANAN
+                  if (_isPendingPanelVisible)
+                    _buildPendingOrderPanel()
+                  else if (_isDraftPanelVisible)
+                    DraftPanel(
+                      drafts: _drafts,
+                      onClose: () =>
+                          setState(() => _isDraftPanelVisible = false),
+                      onRestore: (index) {
+                        setState(() {
+                          final selectedDraft = _drafts[index];
+                          _cart.addAll(
+                              selectedDraft['cart'] as Map<int, OrderItem>);
+                          _currentCustomerName =
+                              selectedDraft['customerName'];
+                          _currentTableNumber =
+                              selectedDraft['tableNumber'];
+                          _currentTableId = selectedDraft['tableId'];
+                          _isPendingOrderLoaded = false;
+                          _currentPendingOrderId = null;
+                          _drafts.removeAt(index);
+                          _isDraftPanelVisible = false;
+                          widget.onCartToggled?.call(true);
+                        });
+                      },
+                      onDelete: (index) {
+                        setState(() {
+                          _drafts.removeAt(index);
+                          if (_drafts.isEmpty) _isDraftPanelVisible = false;
+                        });
+                      },
+                    )
+                  else
+                    CartPanel(
+                      cart: _cart,
+                      hasDiscountedItem: hasDiscountedItem,
+                      originalTotalAmount: originalTotalAmount,
+                      formatCurrency: formatHarga,
+                      initialCustomerName: _currentCustomerName,
+                      initialTableNumber: _currentTableNumber,
+                      initialTableId: _currentTableId,
+                      isPendingMode: _isPendingOrderLoaded,
+                      pendingOrderId: _currentPendingOrderId,
+                      pendingDiscountId: _currentPendingDiscountId,
+                      onIncrease: (id) {
+                        setState(() {
+                          if (_cart.containsKey(id)) {
                             _cart.update(id, (item) {
-                              item.quantity -= 1;
+                              item.quantity += 1;
                               return item;
                             });
-                          } else {
-                            _cart.remove(id);
-                            if (_cart.isEmpty) {
-                              _currentCustomerName = null;
-                              _currentTableNumber = null;
-                              _currentTableId = null;
-                              _isPendingOrderLoaded = false;
-                              _currentPendingOrderId = null;
-                              widget.onCartToggled?.call(false);
+                          }
+                        });
+                      },
+                      onDecrease: (id) {
+                        setState(() {
+                          if (_cart.containsKey(id)) {
+                            if (_cart[id]!.quantity > 1) {
+                              _cart.update(id, (item) {
+                                item.quantity -= 1;
+                                return item;
+                              });
+                            } else {
+                              _cart.remove(id);
+                              if (_cart.isEmpty) {
+                                _currentCustomerName = null;
+                                _currentTableNumber = null;
+                                _currentTableId = null;
+                                _isPendingOrderLoaded = false;
+                                _currentPendingOrderId = null;
+                                widget.onCartToggled?.call(false);
+                              }
                             }
                           }
-                        }
-                      });
-                    },
-                    onDelete: (id) {
-                      setState(() {
-                        _cart.remove(id);
-                        if (_cart.isEmpty) {
+                        });
+                      },
+                      onDelete: (id) {
+                        setState(() {
+                          _cart.remove(id);
+                          if (_cart.isEmpty) {
+                            _currentCustomerName = null;
+                            _currentTableNumber = null;
+                            _currentTableId = null;
+                            _isPendingOrderLoaded = false;
+                            _currentPendingOrderId = null;
+                            widget.onCartToggled?.call(false);
+                          }
+                        });
+                      },
+                      onCheckoutSuccess: (res) {
+                        setState(() {
+                          _cart.forEach((productId, cartItem) {
+                            int productIndex = _allProducts.indexWhere(
+                              (p) => p.id == productId,
+                            );
+                            if (productIndex != -1) {
+                              _allProducts[productIndex].stock -=
+                                  cartItem.quantity;
+                              if (_allProducts[productIndex].stock < 0) {
+                                _allProducts[productIndex].stock = 0;
+                              }
+                            }
+                          });
+                          _cart.clear();
                           _currentCustomerName = null;
                           _currentTableNumber = null;
                           _currentTableId = null;
                           _isPendingOrderLoaded = false;
                           _currentPendingOrderId = null;
+                          _currentPendingDiscountId = null;
                           widget.onCartToggled?.call(false);
-                        }
-                      });
-                    },
-                    onCheckoutSuccess: (res) {
-                      setState(() {
-                        _cart.forEach((productId, cartItem) {
-                          int productIndex = _allProducts.indexWhere(
-                            (p) => p.id == productId,
-                          );
-                          if (productIndex != -1) {
-                            _allProducts[productIndex].stock -=
-                                cartItem.quantity;
-                            if (_allProducts[productIndex].stock < 0) {
-                              _allProducts[productIndex].stock = 0;
-                            }
-                          }
+                          _loadInitialData();
                         });
-                        _cart.clear();
-                        _currentCustomerName = null;
-                        _currentTableNumber = null;
-                        _currentTableId = null;
-                        _isPendingOrderLoaded = false;
-                        _currentPendingOrderId = null;
-                        _currentPendingDiscountId = null;
-                        widget.onCartToggled?.call(false);
-                        _loadInitialData();
-                      });
-                    },
-                    onSaveDraft: (name, table, id) =>
-                        _saveToDraft(name, table, id),
-                        onCancelPendingMode: () {
-  setState(() {
-    _cart.clear();
-    _currentCustomerName = null;
-    _currentTableNumber = null;
-    _currentTableId = null;
-    _isPendingOrderLoaded = false;
-    _currentPendingOrderId = null;
-    _currentPendingDiscountId = null;
-    widget.onCartToggled?.call(false);
-  });
-},
-                  ),
-              ],
-            ),
-    ),
-  );
-}
-  // WIDGET TOMBOL DRAFT
+                      },
+                      onSaveDraft: (name, table, id) =>
+                          _saveToDraft(name, table, id),
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+
   Widget _buildDraftButton() {
     return InkWell(
       onTap: () {
@@ -633,7 +767,6 @@ Widget build(BuildContext context) {
           if (_isDraftPanelVisible) {
             _isDraftPanelVisible = false;
           } else {
-            // PERBAIKAN: Jika keranjang ada isinya, amankan dulu ke draft sebelum membuka panel list draft
             if (_cart.isNotEmpty) {
               if (!_isPendingOrderLoaded) {
                 _drafts.add({
@@ -714,78 +847,22 @@ Widget build(BuildContext context) {
     );
   }
 
-  Future<void> _connectReverb() async {
-    final int? outletId = await StorageService.getOutletId();
+  // ✅ Panel gabungan: pending (orange) + paid/siap cetak (blue)
+  Widget _buildPendingOrderPanel() {
+    final Set<int> seenIds = {};
+    final List<Map<String, dynamic>> allItems = [
+      ..._pendingOrders.map((o) => {'order': o, 'type': 'pending'}),
+    ].where((item) {
+  final Order o = item['order'] as Order;
+  return seenIds.add(o.id); // false kalau sudah ada → dibuang
+}).toList();
 
-    if (outletId == null) {
-      debugPrint('🔴 [REVERB HOME] outlet_id tidak ditemukan');
-      return;
-    }
-
-    await _reverbService.initConnection(
-      channelName: 'private-orders.outlet.$outletId',
-      eventName: '.order.created',
-      onEventReceived: (data) {
-        debugPrint('⚡ [HOME] Event Reverb diterima: $data');
-        _refreshPendingOrdersSilently();
-
-        if (mounted) {
-          final customerName = data['order']?['customer_name'] ?? 'Pelanggan';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.notifications_active, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text('Pesanan baru dari $customerName masuk!'),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-        }
-      },
-    );
-  }
-
-  Future<void> refreshPendingOrdersSilently() async {
-    try {
-      final freshOrders = await ApiService.getPendingOrders();
-      if (mounted) {
-        setState(() => _pendingOrders = freshOrders);
-      }
-    } catch (e) {
-      debugPrint('⚠️ Gagal refresh pending orders: $e');
-    }
-  }
-
-  Future<void> _refreshPendingOrdersSilently() async {
-    try {
-      final freshOrders = await ApiService.getPendingOrders();
-      if (mounted) {
-        setState(() {
-          _pendingOrders = freshOrders;
-        });
-      }
-    } catch (e) {
-      debugPrint('⚠️ Gagal refresh pending orders: $e');
-    }
-  }
-
-Widget _buildPendingOrderPanel() {
     return Container(
-      width: 340, // Lebar disamakan dengan draft/cart
-      margin: const EdgeInsets.all(15), // Margin luar
+      width: 340,
+      margin: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24), // Sudut melengkung 24
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
@@ -798,8 +875,10 @@ Widget _buildPendingOrderPanel() {
         borderRadius: BorderRadius.circular(24),
         child: Column(
           children: [
+            // Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
                   Container(
@@ -815,23 +894,38 @@ Widget _buildPendingOrderPanel() {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      "Pesanan Tertunda",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.black87,
-                        fontFamily: 'Poppins', 
-                      ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Pesanan",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.black87,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            if (_pendingOrders.isNotEmpty)
+                              _buildStatusBadge(
+                                '${_pendingOrders.length} Tertunda',
+                                Colors.orange,
+                              ),
+                            if (_pendingOrders.isNotEmpty &&
+                                _paidOrders.isNotEmpty)
+                              const SizedBox(width: 6),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                   InkWell(
-                    onTap: () {
-                      setState(() {
-                        _isPendingPanelVisible = false;
-                      });
-                    },
+                    onTap: () =>
+                        setState(() => _isPendingPanelVisible = false),
                     borderRadius: BorderRadius.circular(20),
                     child: const Padding(
                       padding: EdgeInsets.all(4.0),
@@ -846,7 +940,7 @@ Widget _buildPendingOrderPanel() {
               ),
             ),
             const Divider(height: 1, thickness: 1, color: Color(0xFFF5F5F5)),
-            
+
             Expanded(
               child: _isLoadingPendingOrders
                   ? const Center(
@@ -854,74 +948,27 @@ Widget _buildPendingOrderPanel() {
                         color: AppStyle.primaryBlue,
                       ),
                     )
-                  : _pendingOrders.isEmpty
+                  : allItems.isEmpty
                       ? const Center(
                           child: Text(
-                            "Tidak ada pesanan tertunda.",
-                            style: TextStyle(color: Colors.grey, fontSize: 14),
+                            "Tidak ada pesanan.",
+                            style:
+                                TextStyle(color: Colors.grey, fontSize: 14),
                           ),
                         )
                       : ListView.separated(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          itemCount: _pendingOrders.length,
-                          separatorBuilder: (context, index) =>
-                              const Divider(height: 1, color: Color(0xFFF5F5F5)),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 10),
+                          itemCount: allItems.length,
+                          separatorBuilder: (_, __) => const Divider(
+                            height: 1,
+                            color: Color(0xFFF5F5F5),
+                          ),
                           itemBuilder: (context, index) {
-                            final order = _pendingOrders[index];
-
-                            String custName = order.customerName;
-                            String tableNo = order.tableId?.toString() ?? '-';
-                            double total = (order.totalPrice).toDouble();
-
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 8,
-                              ),
-                              leading: CircleAvatar(
-                                backgroundColor: const Color(0xFFF8FAFC),
-                                child: Text(
-                                  tableNo,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: AppStyle.primaryBlue,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                custName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Text(
-                                  "Total: ${formatHarga(total)}",
-                                  style: const TextStyle(
-                                    color: Colors.black54,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                              trailing: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppStyle.primaryBlue.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 12,
-                                  color: AppStyle.primaryBlue,
-                                ),
-                              ),
-                              onTap: () {
-                                _loadPendingOrderToCart(order);
-                              },
-                            );
+                            final item = allItems[index];
+                            final Order order = item['order'];
+                            final bool isPaid = item['type'] == 'paid';
+                            return _buildOrderTile(order, isPaid);
                           },
                         ),
             ),
@@ -930,6 +977,138 @@ Widget _buildPendingOrderPanel() {
       ),
     );
   }
+
+  // Badge kecil di header panel
+  Widget _buildStatusBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'Poppins',
+        ),
+      ),
+    );
+  }
+
+ Widget _buildOrderTile(Order order, bool isPaid) {
+  final String tableNo = order.tableId?.toString() ?? '-';
+  
+  // Cek apakah cash — null/kosong dianggap non-cash
+  final bool isCash = order.paymentMethod.toLowerCase() == 'cash';
+
+
+  return ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+    leading: CircleAvatar(
+      backgroundColor: isPaid
+          ? Colors.blue.withValues(alpha: 0.1)
+          : isCash
+              ? Colors.orange.withValues(alpha: 0.1)
+              : Colors.green.withValues(alpha: 0.1),
+      child: Text(
+        tableNo,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: isPaid
+              ? Colors.blue
+              : isCash
+                  ? Colors.orange
+                  : Colors.green,
+          fontSize: 14,
+        ),
+      ),
+    ),
+    title: Text(
+      order.customerName,
+      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+    ),
+    subtitle: Padding(
+      padding: const EdgeInsets.only(top: 4.0),
+      child: Text(
+        "Total: ${formatHarga(order.totalPrice)}",
+        style: const TextStyle(color: Colors.black54, fontSize: 13),
+      ),
+    ),
+    trailing: isPaid
+        // ✅ PAID → tombol Cetak
+        ? InkWell(
+            onTap: () => _acceptOrder(order),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.print, size: 14, color: Colors.blue),
+                  SizedBox(width: 4),
+                  Text("Cetak",
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Poppins')),
+                ],
+              ),
+            ),
+          )
+        : isCash
+            // ✅ PENDING + CASH → arrow kuning → ke checkout
+            ? InkWell(
+                onTap: () => _loadPendingOrderToCart(order),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.arrow_forward_ios,
+                      size: 12, color: Colors.orange),
+                ),
+              )
+            // ✅ PENDING + NON-CASH → tombol Accept hijau
+            : InkWell(
+                onTap: () => _acceptOrder(order),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          size: 14, color: Colors.green),
+                      SizedBox(width: 4),
+                      Text("Terima",
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Poppins')),
+                    ],
+                  ),
+                ),
+              ),
+    // onTap hanya aktif untuk cash pending
+    onTap: (!isPaid && isCash) ? () => _loadPendingOrderToCart(order) : null,
+  );
+}
 
   Widget _buildCategoryChips() {
     return SingleChildScrollView(
@@ -958,7 +1137,8 @@ Widget _buildPendingOrderPanel() {
         },
         selectedColor: const Color(0xFFE8F0FE),
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         showCheckmark: false,
       ),
     );
@@ -1017,7 +1197,8 @@ Widget _buildPendingOrderPanel() {
                     ),
             ),
             Positioned.fill(
-              child: Container(color: Colors.black.withValues(alpha: 0.3)),
+              child:
+                  Container(color: Colors.black.withValues(alpha: 0.3)),
             ),
             Positioned(
               top: 10,
@@ -1077,7 +1258,8 @@ Widget _buildPendingOrderPanel() {
               top: 10,
               right: 10,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 decoration: BoxDecoration(
                   color: isOutOfStock ? Colors.red : AppStyle.primaryBlue,
                   borderRadius: BorderRadius.circular(8),
@@ -1150,7 +1332,8 @@ Widget _buildPendingOrderPanel() {
                                     behavior: SnackBarBehavior.floating,
                                     duration: const Duration(seconds: 3),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius:
+                                          BorderRadius.circular(10),
                                     ),
                                   ),
                                 );
@@ -1183,8 +1366,9 @@ Widget _buildPendingOrderPanel() {
                       ),
                       child: Icon(
                         Icons.add,
-                        color:
-                            isOutOfStock ? Colors.grey : AppStyle.primaryBlue,
+                        color: isOutOfStock
+                            ? Colors.grey
+                            : AppStyle.primaryBlue,
                       ),
                     ),
                   ),
@@ -1202,8 +1386,8 @@ class TagClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
-    final double pointWidth = 12.0;
-    final double radius = 4.0;
+    const double pointWidth = 12.0;
+    const double radius = 4.0;
     path.moveTo(0, 0);
     path.lineTo(size.width - pointWidth, 0);
     path.lineTo(size.width - (radius / 2), (size.height / 2) - radius);

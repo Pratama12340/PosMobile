@@ -5,7 +5,7 @@ import '../constants/style.dart';
 import '../services/storage_service.dart';
 import 'checkout_dialog.dart';
 import 'table_panel.dart';
-import 'package:flutter/services.dart'; // ← untuk FilteringTextInputFormatter
+import 'package:flutter/services.dart'; 
 
 class CartPanel extends StatefulWidget {
   final Map<int, OrderItem> cart;
@@ -60,7 +60,7 @@ class _CartPanelState extends State<CartPanel> {
   late TextEditingController _customerController;
 
   final Map<int, TextEditingController> _noteControllers = {};
-  final Map<int, GlobalKey> _itemKeys = {};        // ← BENAR DI SINI
+  final Map<int, GlobalKey> _itemKeys = {};       
   final Map<int, FocusNode> _noteFocusNodes = {}; 
   final ScrollController _listScrollController = ScrollController(); 
 
@@ -121,7 +121,7 @@ void _syncNoteControllers() {
       _noteFocusNodes[id] = node;
       node.addListener(() {
   if (node.hasFocus) {
-    final screenHeight = MediaQuery.sizeOf(context).height; // ← pindah ke sini, sebelum delay
+    final screenHeight = MediaQuery.sizeOf(context).height; 
     Future.delayed(const Duration(milliseconds: 350), () {
       if (!mounted) return;
       final ctx = _itemKeys[id]?.currentContext;
@@ -129,7 +129,7 @@ void _syncNoteControllers() {
         final box = ctx.findRenderObject() as RenderBox?;
         if (box == null) return;
         final itemOffset = box.localToGlobal(Offset.zero).dy;
-        final keyboardHeight = 320.0; // estimasi tinggi keyboard
+        final keyboardHeight = 320.0; 
         final visibleBottom = screenHeight - keyboardHeight;
 
         if (itemOffset + box.size.height > visibleBottom) {

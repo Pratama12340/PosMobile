@@ -483,7 +483,13 @@ class ApiService {
         headers: headers,
       );
 
+      print('=== RAW PENDING RESPONSE ===');
+      print(response.body); // ← TAMBAH INI
+
+
       if (response.statusCode == 200) {
+        print('=== RAW PENDING RESPONSE ===');
+        print(response.body); // ← lihat field apa saja yang dikirim
         final result = jsonDecode(response.body);
         List<dynamic> rawData = [];
         if (result['data'] != null) {
@@ -500,6 +506,66 @@ class ApiService {
       return [];
     }
   }
+
+  // --- 5D. ACCEPT ORDER ---
+static Future<bool> acceptOrder(int orderId) async {
+  try {
+    final headers = await _getHeaders();
+    
+    // ✅ Tambah body scope
+    final body = jsonEncode({'scope': 'cashier'});
+    
+    print('=== ACCEPT ORDER ===');
+    print('URL: $baseUrl/orders/$orderId/accept');
+    print('Body: $body');
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/orders/$orderId/accept'),
+      headers: headers,
+      body: body,  // ← INI YANG KURANG
+    );
+
+    print('Status: ${response.statusCode}');
+    print('Response: ${response.body}');
+
+    if (response.statusCode == 200) {
+      return true;
+    }
+
+    debugPrint('acceptOrder failed: ${response.statusCode} - ${response.body}');
+    return false;
+
+  } catch (e) {
+    debugPrint('acceptOrder error: $e');
+    return false;
+  }
+}
+
+// --- 5E. GET PAID ORDERS (belum di-accept) ---
+static Future<List<Order>> getPaidOrders() async {
+  try {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/orders?status=paid'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      List<dynamic> rawData = [];
+      if (result['data'] != null) {
+        if (result['data'] is Map && result['data'].containsKey('data')) {
+          rawData = result['data']['data'];
+        } else if (result['data'] is List) {
+          rawData = result['data'];
+        }
+      }
+      return rawData.map((json) => Order.fromJson(json)).toList();
+    }
+    return [];
+  } catch (e) {
+    return [];
+  }
+}
 
   // --- 6. API HISTORY TRANSACTIONS ---
   static Future<List<Order>> fetchHistory() async {

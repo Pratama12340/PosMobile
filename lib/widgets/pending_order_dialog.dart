@@ -7,6 +7,7 @@ class PendingOrderPanel extends StatelessWidget {
   final bool isLoading;
   final String Function(double) formatHarga;
   final Function(Order) onOrderSelected;
+  final Function(Order) onAcceptOrder;
   final VoidCallback onClose;
 
   const PendingOrderPanel({
@@ -15,6 +16,7 @@ class PendingOrderPanel extends StatelessWidget {
     required this.isLoading,
     required this.formatHarga,
     required this.onOrderSelected,
+    required this.onAcceptOrder,
     required this.onClose,
   });
 
@@ -142,22 +144,56 @@ class PendingOrderPanel extends StatelessWidget {
                               ),
                             ),
                           ),
-                          trailing: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: AppStyle.primaryBlue.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Icon(
-                              Icons.arrow_forward_ios,
-                              size: 12,
-                              color: AppStyle.primaryBlue,
-                            ),
-                          ),
-                          onTap: () {
-                            onOrderSelected(order);
-                          },
-                        );
+      trailing: order.paymentMethod.toLowerCase() == 'cash'
+    // CASH → tetap arrow, masuk cart checkout
+    ? InkWell(
+        onTap: () => onOrderSelected(order),
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Icon(
+            Icons.arrow_forward_ios,
+            size: 12,
+            color: AppStyle.primaryBlue,
+          ),
+        ),
+      )
+    // NON-CASH → hanya tombol Accept, tanpa arrow
+    : InkWell(
+        onTap: () => onAcceptOrder(order),
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.green.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
+              SizedBox(width: 4),
+              Text(
+                "Terima",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.blueAccent,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+
+// onTap juga disesuaikan
+onTap: order.paymentMethod == 'cash' ? () => onOrderSelected(order) : null,
+);
                       },
                     ),
             ),

@@ -28,6 +28,7 @@ class CartPanel extends StatefulWidget {
   final int? pendingOrderId;
   final int? pendingDiscountId;
   final double originalTotalAmount;
+  final VoidCallback? onCancelPendingMode;
 
   const CartPanel({
     super.key,
@@ -47,6 +48,7 @@ class CartPanel extends StatefulWidget {
 
     this.isPendingMode = false,
     this.pendingOrderId,
+    this.onCancelPendingMode,
   });
 
   @override
@@ -236,42 +238,57 @@ void dispose() {
                             ),
                           ),
 
-                          if (!widget.isPendingMode)
-                            TextButton.icon(
-                              onPressed: () => widget.onSaveDraft(
-                                _customerController.text,
-                                _tableController.text,
-                                _selectedTableId,
-                              ),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                backgroundColor: AppStyle.primaryBlue
-                                    .withValues(alpha: 0.1),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              icon: const Icon(
-                                Icons.inventory_2_outlined,
-                                color: AppStyle.primaryBlue,
-                                size: 16,
-                              ),
-                              label: const Text(
-                                "Draft",
-                                style: TextStyle(
-                                  color: AppStyle.primaryBlue,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
+                          if (widget.isPendingMode)
+  GestureDetector(
+    onTap: () => widget.onCancelPendingMode?.call(),
+    child: Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(
+        Icons.close_rounded,
+        color: Colors.redAccent,
+        size: 20,
+      ),
+    ),
+  )
+else
+  TextButton.icon(
+    onPressed: () => widget.onSaveDraft(
+      _customerController.text,
+      _tableController.text,
+      _selectedTableId,
+    ),
+    style: TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ),
+      backgroundColor: AppStyle.primaryBlue.withValues(alpha: 0.1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    ),
+    icon: const Icon(
+      Icons.inventory_2_outlined,
+      color: AppStyle.primaryBlue,
+      size: 16,
+    ),
+    label: const Text(
+      "Draft",
+      style: TextStyle(
+        color: AppStyle.primaryBlue,
+        fontSize: 13,
+        fontWeight: FontWeight.bold,
+        fontFamily: 'Poppins',
+      ),
+    ),
+  ),
+],
+),
+const SizedBox(height: 15),
 
                       _buildInput(
                         controller: _customerController,

@@ -607,6 +607,18 @@ Widget build(BuildContext context) {
                     },
                     onSaveDraft: (name, table, id) =>
                         _saveToDraft(name, table, id),
+                        onCancelPendingMode: () {
+  setState(() {
+    _cart.clear();
+    _currentCustomerName = null;
+    _currentTableNumber = null;
+    _currentTableId = null;
+    _isPendingOrderLoaded = false;
+    _currentPendingOrderId = null;
+    _currentPendingDiscountId = null;
+    widget.onCartToggled?.call(false);
+  });
+},
                   ),
               ],
             ),

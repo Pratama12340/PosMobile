@@ -38,6 +38,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   List<Order> _pendingOrders = [];
   List<Order> _paidOrders = []; // ✅ List untuk paid orders yang belum di-accept
+  final Set<int> _dismissedOrderIds = {};
   bool _isPendingOrderLoaded = false;
   int? _currentPendingOrderId;
   int? _currentPendingDiscountId;
@@ -97,6 +98,10 @@ class HomeScreenState extends State<HomeScreen> {
       return (words[0][0] + words[1][0]).toUpperCase();
     }
     return words[0][0].toUpperCase();
+  }
+
+  bool _shouldKeepOrder(Order order) {
+    return !_dismissedOrderIds.contains(order.id) && !order.isAccepted;
   }
 
   @override
@@ -224,8 +229,8 @@ class HomeScreenState extends State<HomeScreen> {
           _categories = categoriesData;
           _allProducts = productsData;
           _bestsellerProductIds = calculatedBestsellers;
-          _pendingOrders = loadedPendingOrders;
-          _paidOrders = paidData; // ✅ TAMBAH
+          _pendingOrders = loadedPendingOrders.where(_shouldKeepOrder).toList();
+          _paidOrders = paidData.where(_shouldKeepOrder).toList(); // ✅ TAMBAH
           _isLoading = false;
         });
         _applyFilters();
@@ -375,6 +380,7 @@ class HomeScreenState extends State<HomeScreen> {
     final success = await ApiService.acceptOrder(order.id);
     if (success && mounted) {
       setState(() {
+        _dismissedOrderIds.add(order.id);
         _pendingOrders.removeWhere((item) => item.id == order.id);
         _paidOrders.removeWhere((item) => item.id == order.id);
       });
@@ -439,7 +445,7 @@ class HomeScreenState extends State<HomeScreen> {
           // Order sudah dibayar → masuk ke list paid untuk di-accept & cetak
           try {
             final Order newOrder = Order.fromJson(data['order'] ?? data);
-            if (mounted && !newOrder.isAccepted) {
+            if (mounted && _shouldKeepOrder(newOrder)) {
               setState(() => _paidOrders.add(newOrder));
             }
           } catch (e) {
@@ -490,7 +496,9 @@ class HomeScreenState extends State<HomeScreen> {
     try {
       final freshOrders = await ApiService.getPendingOrders();
       if (mounted) {
-        setState(() => _pendingOrders = freshOrders);
+        setState(
+          () => _pendingOrders = freshOrders.where(_shouldKeepOrder).toList(),
+        );
       }
     } catch (e) {
       debugPrint('⚠️ Gagal refresh pending orders: $e');
@@ -501,7 +509,9 @@ class HomeScreenState extends State<HomeScreen> {
     try {
       final freshOrders = await ApiService.getPendingOrders();
       if (mounted) {
-        setState(() => _pendingOrders = freshOrders);
+        setState(
+          () => _pendingOrders = freshOrders.where(_shouldKeepOrder).toList(),
+        );
       }
     } catch (e) {
       debugPrint('⚠️ Gagal refresh pending orders: $e');
@@ -513,7 +523,9 @@ class HomeScreenState extends State<HomeScreen> {
     try {
       final freshOrders = await ApiService.getPaidOrders();
       if (mounted) {
-        setState(() => _paidOrders = freshOrders);
+        setState(
+          () => _paidOrders = freshOrders.where(_shouldKeepOrder).toList(),
+        );
       }
     } catch (e) {
       debugPrint('⚠️ Gagal refresh paid orders: $e');

@@ -9,8 +9,8 @@ import '../widgets/cart_panel.dart';
 import '../services/reverb_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/draft_panel.dart';
-import '../services/printer_service.dart'; 
-import '../models/print_model.dart';        
+import '../services/printer_service.dart';
+import '../models/print_model.dart';
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -38,6 +38,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   List<Order> _pendingOrders = [];
   List<Order> _paidOrders = []; // ✅ List untuk paid orders yang belum di-accept
+  final Set<int> _dismissedOrderIds = {};
   bool _isPendingOrderLoaded = false;
   int? _currentPendingOrderId;
   int? _currentPendingDiscountId;
@@ -85,10 +86,10 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   String formatHarga(double price) => NumberFormat.currency(
-        locale: 'id_ID',
-        symbol: 'Rp ',
-        decimalDigits: 0,
-      ).format(price);
+    locale: 'id_ID',
+    symbol: 'Rp ',
+    decimalDigits: 0,
+  ).format(price);
 
   String _getInitials(String name) {
     if (name.isEmpty) return "";
@@ -97,6 +98,10 @@ class HomeScreenState extends State<HomeScreen> {
       return (words[0][0] + words[1][0]).toUpperCase();
     }
     return words[0][0].toUpperCase();
+  }
+
+  bool _shouldKeepOrder(Order order) {
+    return !_dismissedOrderIds.contains(order.id) && !order.isAccepted;
   }
 
   @override
@@ -135,7 +140,7 @@ class HomeScreenState extends State<HomeScreen> {
         final List<Order> pendingData = results[5] as List<Order>;
         final List<Order> paidData = results[6] as List<Order>; // ✅ TAMBAH
 
-       List<Order> loadedPendingOrders = pendingData;
+        List<Order> loadedPendingOrders = pendingData;
         Map<int, int> productSales = {};
 
         for (var order in historyData) {
@@ -156,7 +161,8 @@ class HomeScreenState extends State<HomeScreen> {
             if (data.containsKey('product_id')) {
               int pId =
                   int.tryParse(data['product_id']?.toString() ?? '0') ?? 0;
-              int qty = int.tryParse(
+              int qty =
+                  int.tryParse(
                     data['qty']?.toString() ??
                         data['total_qty']?.toString() ??
                         data['sold']?.toString() ??
@@ -198,8 +204,9 @@ class HomeScreenState extends State<HomeScreen> {
               )
               .toList();
 
-          product.discount =
-              specificDiscount.isNotEmpty ? specificDiscount.first : null;
+          product.discount = specificDiscount.isNotEmpty
+              ? specificDiscount.first
+              : null;
         }
 
         final sortedBySales = List<Product>.from(productsData)
@@ -222,8 +229,8 @@ class HomeScreenState extends State<HomeScreen> {
           _categories = categoriesData;
           _allProducts = productsData;
           _bestsellerProductIds = calculatedBestsellers;
-          _pendingOrders = loadedPendingOrders;
-          _paidOrders = paidData; // ✅ TAMBAH
+          _pendingOrders = loadedPendingOrders.where(_shouldKeepOrder).toList();
+          _paidOrders = paidData.where(_shouldKeepOrder).toList(); // ✅ TAMBAH
           _isLoading = false;
         });
         _applyFilters();
@@ -237,7 +244,8 @@ class HomeScreenState extends State<HomeScreen> {
     String query = widget.searchController.text.toLowerCase();
     setState(() {
       _filteredProducts = _allProducts.where((p) {
-        bool matchCategory = _selectedCategory == "All Menu" ||
+        bool matchCategory =
+            _selectedCategory == "All Menu" ||
             p.category.toLowerCase().contains(_selectedCategory.toLowerCase());
         bool matchQuery = query.isEmpty || p.name.toLowerCase().contains(query);
         return matchCategory && matchQuery;
@@ -246,8 +254,8 @@ class HomeScreenState extends State<HomeScreen> {
         (a, b) => (a.stock <= 0 && b.stock > 0)
             ? 1
             : (a.stock > 0 && b.stock <= 0)
-                ? -1
-                : 0,
+            ? -1
+            : 0,
       );
     });
   }
@@ -352,53 +360,67 @@ class HomeScreenState extends State<HomeScreen> {
 
     if (_isPendingPanelVisible) {
       try {
-  final freshPending = await ApiService.getPendingOrders();
-  if (mounted) {
-    setState(() {
-      _pendingOrders = freshPending;
-      _isLoadingPendingOrders = false;
-    });
-  }
-} catch (e) {
-  if (mounted) {
-    setState(() => _isLoadingPendingOrders = false);
-  }
-}
+        final freshPending = await ApiService.getPendingOrders();
+        if (mounted) {
+          setState(() {
+            _pendingOrders = freshPending;
+            _isLoadingPendingOrders = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoadingPendingOrders = false);
+        }
+      }
     }
   }
 
- Future<void> _acceptOrder(Order order) async {
-  print("Menghubungi API accept untuk Order ID: ${order.id}");
-  final success = await ApiService.acceptOrder(order.id);
-  if (success && mounted) {
-    setState(() => _pendingOrders.remove(order)); // ← ganti _paidOrders → _pendingOrders
+  Future<void> _acceptOrder(Order order) async {
+    print("Menghubungi API accept untuk Order ID: ${order.id}");
+    final success = await ApiService.acceptOrder(order.id);
+    if (success && mounted) {
+      setState(() {
+        _dismissedOrderIds.add(order.id);
+        _pendingOrders.removeWhere((item) => item.id == order.id);
+        _paidOrders.removeWhere((item) => item.id == order.id);
+      });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 10),
-            Text('Order berhasil di-accept!'),
-          ],
+      await Future.wait([
+        _refreshPendingOrdersSilently(),
+        _refreshPaidOrdersSilently(),
+      ]);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 10),
+              Text('Order berhasil di-accept!'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          duration: const Duration(seconds: 3),
         ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  } else if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Gagal accept order.'),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Gagal accept order.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
   }
-}
+
   Future<void> _connectReverb() async {
     final int? outletId = await StorageService.getOutletId();
 
@@ -414,7 +436,8 @@ class HomeScreenState extends State<HomeScreen> {
         debugPrint('⚡ [HOME] Event Reverb diterima: $data');
 
         // ✅ Cek status order dari event
-        final String status = data['order']?['status']?.toString() ??
+        final String status =
+            data['order']?['status']?.toString() ??
             data['status']?.toString() ??
             '';
 
@@ -422,7 +445,7 @@ class HomeScreenState extends State<HomeScreen> {
           // Order sudah dibayar → masuk ke list paid untuk di-accept & cetak
           try {
             final Order newOrder = Order.fromJson(data['order'] ?? data);
-            if (mounted) {
+            if (mounted && _shouldKeepOrder(newOrder)) {
               setState(() => _paidOrders.add(newOrder));
             }
           } catch (e) {
@@ -435,8 +458,7 @@ class HomeScreenState extends State<HomeScreen> {
         }
 
         if (mounted) {
-          final customerName =
-              data['order']?['customer_name'] ?? 'Pelanggan';
+          final customerName = data['order']?['customer_name'] ?? 'Pelanggan';
           final isPaid = status == 'paid';
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -444,9 +466,7 @@ class HomeScreenState extends State<HomeScreen> {
               content: Row(
                 children: [
                   Icon(
-                    isPaid
-                        ? Icons.payment
-                        : Icons.notifications_active,
+                    isPaid ? Icons.payment : Icons.notifications_active,
                     color: Colors.white,
                   ),
                   const SizedBox(width: 10),
@@ -476,7 +496,9 @@ class HomeScreenState extends State<HomeScreen> {
     try {
       final freshOrders = await ApiService.getPendingOrders();
       if (mounted) {
-        setState(() => _pendingOrders = freshOrders);
+        setState(
+          () => _pendingOrders = freshOrders.where(_shouldKeepOrder).toList(),
+        );
       }
     } catch (e) {
       debugPrint('⚠️ Gagal refresh pending orders: $e');
@@ -487,7 +509,9 @@ class HomeScreenState extends State<HomeScreen> {
     try {
       final freshOrders = await ApiService.getPendingOrders();
       if (mounted) {
-        setState(() => _pendingOrders = freshOrders);
+        setState(
+          () => _pendingOrders = freshOrders.where(_shouldKeepOrder).toList(),
+        );
       }
     } catch (e) {
       debugPrint('⚠️ Gagal refresh pending orders: $e');
@@ -499,7 +523,9 @@ class HomeScreenState extends State<HomeScreen> {
     try {
       final freshOrders = await ApiService.getPaidOrders();
       if (mounted) {
-        setState(() => _paidOrders = freshOrders);
+        setState(
+          () => _paidOrders = freshOrders.where(_shouldKeepOrder).toList(),
+        );
       }
     } catch (e) {
       debugPrint('⚠️ Gagal refresh paid orders: $e');
@@ -581,12 +607,14 @@ class HomeScreenState extends State<HomeScreen> {
                                         height: 45,
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black
-                                                  .withValues(alpha: 0.05),
+                                              color: Colors.black.withValues(
+                                                alpha: 0.05,
+                                              ),
                                               blurRadius: 10,
                                               offset: const Offset(0, 4),
                                             ),
@@ -610,23 +638,24 @@ class HomeScreenState extends State<HomeScreen> {
                                   double spacing = 18.0;
                                   double itemHeight =
                                       (constraints.maxHeight - (spacing * 2)) /
-                                          3;
+                                      3;
                                   double itemWidth =
                                       (constraints.maxWidth - (spacing * 3)) /
-                                          4;
+                                      4;
                                   return GridView.builder(
                                     gridDelegate:
                                         SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 4,
-                                      childAspectRatio: itemWidth / itemHeight,
-                                      crossAxisSpacing: spacing,
-                                      mainAxisSpacing: spacing,
-                                    ),
+                                          crossAxisCount: 4,
+                                          childAspectRatio:
+                                              itemWidth / itemHeight,
+                                          crossAxisSpacing: spacing,
+                                          mainAxisSpacing: spacing,
+                                        ),
                                     itemCount: _filteredProducts.length,
                                     itemBuilder: (context, index) =>
                                         _buildProductCard(
-                                      _filteredProducts[index],
-                                    ),
+                                          _filteredProducts[index],
+                                        ),
                                   );
                                 },
                               ),
@@ -649,11 +678,10 @@ class HomeScreenState extends State<HomeScreen> {
                         setState(() {
                           final selectedDraft = _drafts[index];
                           _cart.addAll(
-                              selectedDraft['cart'] as Map<int, OrderItem>);
-                          _currentCustomerName =
-                              selectedDraft['customerName'];
-                          _currentTableNumber =
-                              selectedDraft['tableNumber'];
+                            selectedDraft['cart'] as Map<int, OrderItem>,
+                          );
+                          _currentCustomerName = selectedDraft['customerName'];
+                          _currentTableNumber = selectedDraft['tableNumber'];
                           _currentTableId = selectedDraft['tableId'];
                           _isPendingOrderLoaded = false;
                           _currentPendingOrderId = null;
@@ -850,12 +878,13 @@ class HomeScreenState extends State<HomeScreen> {
   // ✅ Panel gabungan: pending (orange) + paid/siap cetak (blue)
   Widget _buildPendingOrderPanel() {
     final Set<int> seenIds = {};
-    final List<Map<String, dynamic>> allItems = [
-      ..._pendingOrders.map((o) => {'order': o, 'type': 'pending'}),
-    ].where((item) {
-  final Order o = item['order'] as Order;
-  return seenIds.add(o.id); // false kalau sudah ada → dibuang
-}).toList();
+    final List<Map<String, dynamic>> allItems =
+        [
+          ..._pendingOrders.map((o) => {'order': o, 'type': 'pending'}),
+        ].where((item) {
+          final Order o = item['order'] as Order;
+          return seenIds.add(o.id); // false kalau sudah ada → dibuang
+        }).toList();
 
     return Container(
       width: 340,
@@ -877,8 +906,7 @@ class HomeScreenState extends State<HomeScreen> {
           children: [
             // Header
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
                   Container(
@@ -924,8 +952,7 @@ class HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   InkWell(
-                    onTap: () =>
-                        setState(() => _isPendingPanelVisible = false),
+                    onTap: () => setState(() => _isPendingPanelVisible = false),
                     borderRadius: BorderRadius.circular(20),
                     child: const Padding(
                       padding: EdgeInsets.all(4.0),
@@ -949,28 +976,24 @@ class HomeScreenState extends State<HomeScreen> {
                       ),
                     )
                   : allItems.isEmpty
-                      ? const Center(
-                          child: Text(
-                            "Tidak ada pesanan.",
-                            style:
-                                TextStyle(color: Colors.grey, fontSize: 14),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 10),
-                          itemCount: allItems.length,
-                          separatorBuilder: (_, __) => const Divider(
-                            height: 1,
-                            color: Color(0xFFF5F5F5),
-                          ),
-                          itemBuilder: (context, index) {
-                            final item = allItems[index];
-                            final Order order = item['order'];
-                            final bool isPaid = item['type'] == 'paid';
-                            return _buildOrderTile(order, isPaid);
-                          },
-                        ),
+                  ? const Center(
+                      child: Text(
+                        "Tidak ada pesanan.",
+                        style: TextStyle(color: Colors.grey, fontSize: 14),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      itemCount: allItems.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, color: Color(0xFFF5F5F5)),
+                      itemBuilder: (context, index) {
+                        final item = allItems[index];
+                        final Order order = item['order'];
+                        final bool isPaid = item['type'] == 'paid';
+                        return _buildOrderTile(order, isPaid);
+                      },
+                    ),
             ),
           ],
         ),
@@ -998,117 +1021,133 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
- Widget _buildOrderTile(Order order, bool isPaid) {
-  final String tableNo = order.tableId?.toString() ?? '-';
-  
-  // Cek apakah cash — null/kosong dianggap non-cash
-  final bool isCash = order.paymentMethod.toLowerCase() == 'cash';
+  Widget _buildOrderTile(Order order, bool isPaid) {
+    final String tableNo = order.tableId?.toString() ?? '-';
 
+    // Cek apakah cash — null/kosong dianggap non-cash
+    final bool isCash = order.paymentMethod.toLowerCase() == 'cash';
 
-  return ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-    leading: CircleAvatar(
-      backgroundColor: isPaid
-          ? Colors.blue.withValues(alpha: 0.1)
-          : isCash
-              ? Colors.orange.withValues(alpha: 0.1)
-              : Colors.green.withValues(alpha: 0.1),
-      child: Text(
-        tableNo,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: isPaid
-              ? Colors.blue
-              : isCash
-                  ? Colors.orange
-                  : Colors.green,
-          fontSize: 14,
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: CircleAvatar(
+        backgroundColor: isPaid
+            ? Colors.blue.withValues(alpha: 0.1)
+            : isCash
+            ? Colors.orange.withValues(alpha: 0.1)
+            : Colors.green.withValues(alpha: 0.1),
+        child: Text(
+          tableNo,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isPaid
+                ? Colors.blue
+                : isCash
+                ? Colors.orange
+                : Colors.green,
+            fontSize: 14,
+          ),
         ),
       ),
-    ),
-    title: Text(
-      order.customerName,
-      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-    ),
-    subtitle: Padding(
-      padding: const EdgeInsets.only(top: 4.0),
-      child: Text(
-        "Total: ${formatHarga(order.totalPrice)}",
-        style: const TextStyle(color: Colors.black54, fontSize: 13),
+      title: Text(
+        order.customerName,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
       ),
-    ),
-    trailing: isPaid
-        // ✅ PAID → tombol Cetak
-        ? InkWell(
-            onTap: () => _acceptOrder(order),
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.print, size: 14, color: Colors.blue),
-                  SizedBox(width: 4),
-                  Text("Cetak",
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4.0),
+        child: Text(
+          "Total: ${formatHarga(order.totalPrice)}",
+          style: const TextStyle(color: Colors.black54, fontSize: 13),
+        ),
+      ),
+      trailing: isPaid
+          // ✅ PAID → tombol Cetak
+          ? InkWell(
+              onTap: () => _acceptOrder(order),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.print, size: 14, color: Colors.blue),
+                    SizedBox(width: 4),
+                    Text(
+                      "Cetak",
                       style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w600,
-                          fontFamily: 'Poppins')),
-                ],
+                        fontSize: 12,
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : isCash
+          // ✅ PENDING + CASH → arrow kuning → ke checkout
+          ? InkWell(
+              onTap: () => _loadPendingOrderToCart(order),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                  color: Colors.orange,
+                ),
+              ),
+            )
+          // ✅ PENDING + NON-CASH → tombol Accept hijau
+          : InkWell(
+              onTap: () => _acceptOrder(order),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 14,
+                      color: Colors.green,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      "Terima",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          )
-        : isCash
-            // ✅ PENDING + CASH → arrow kuning → ke checkout
-            ? InkWell(
-                onTap: () => _loadPendingOrderToCart(order),
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(Icons.arrow_forward_ios,
-                      size: 12, color: Colors.orange),
-                ),
-              )
-            // ✅ PENDING + NON-CASH → tombol Accept hijau
-            : InkWell(
-                onTap: () => _acceptOrder(order),
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle_outline,
-                          size: 14, color: Colors.green),
-                      SizedBox(width: 4),
-                      Text("Terima",
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.green,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'Poppins')),
-                    ],
-                  ),
-                ),
-              ),
-    // onTap hanya aktif untuk cash pending
-    onTap: (!isPaid && isCash) ? () => _loadPendingOrderToCart(order) : null,
-  );
-}
+      // onTap hanya aktif untuk cash pending
+      onTap: (!isPaid && isCash) ? () => _loadPendingOrderToCart(order) : null,
+    );
+  }
 
   Widget _buildCategoryChips() {
     return SingleChildScrollView(
@@ -1137,8 +1176,7 @@ class HomeScreenState extends State<HomeScreen> {
         },
         selectedColor: const Color(0xFFE8F0FE),
         backgroundColor: Colors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         showCheckmark: false,
       ),
     );
@@ -1197,8 +1235,7 @@ class HomeScreenState extends State<HomeScreen> {
                     ),
             ),
             Positioned.fill(
-              child:
-                  Container(color: Colors.black.withValues(alpha: 0.3)),
+              child: Container(color: Colors.black.withValues(alpha: 0.3)),
             ),
             Positioned(
               top: 10,
@@ -1258,8 +1295,7 @@ class HomeScreenState extends State<HomeScreen> {
               top: 10,
               right: 10,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 decoration: BoxDecoration(
                   color: isOutOfStock ? Colors.red : AppStyle.primaryBlue,
                   borderRadius: BorderRadius.circular(8),
@@ -1321,43 +1357,42 @@ class HomeScreenState extends State<HomeScreen> {
                     onTap: isOutOfStock
                         ? null
                         : () => setState(() {
-                              if (_isPendingOrderLoaded &&
-                                  !_cart.containsKey(p.id)) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text(
-                                      "Tidak bisa menambah menu baru ke pesanan pending.\nHanya bisa mengubah jumlah menu yang sudah ada.",
-                                    ),
-                                    backgroundColor: Colors.orange,
-                                    behavior: SnackBarBehavior.floating,
-                                    duration: const Duration(seconds: 3),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(10),
-                                    ),
+                            if (_isPendingOrderLoaded &&
+                                !_cart.containsKey(p.id)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Text(
+                                    "Tidak bisa menambah menu baru ke pesanan pending.\nHanya bisa mengubah jumlah menu yang sudah ada.",
                                   ),
-                                );
-                                return;
-                              }
+                                  backgroundColor: Colors.orange,
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: const Duration(seconds: 3),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
 
-                              _isPendingPanelVisible = false;
-                              _isDraftPanelVisible = false;
-                              widget.onCartToggled?.call(true);
+                            _isPendingPanelVisible = false;
+                            _isDraftPanelVisible = false;
+                            widget.onCartToggled?.call(true);
 
-                              if (_cart.containsKey(p.id)) {
-                                _cart[p.id]!.quantity++;
-                              } else {
-                                _cart[p.id] = OrderItem(
-                                  id: 0,
-                                  productId: p.id,
-                                  itemName: p.name,
-                                  originalQty: 1,
-                                  activeQty: 1,
-                                  unitPrice: p.price.toDouble(),
-                                  stationId: p.stationId,
-                                );
-                              }
-                            }),
+                            if (_cart.containsKey(p.id)) {
+                              _cart[p.id]!.quantity++;
+                            } else {
+                              _cart[p.id] = OrderItem(
+                                id: 0,
+                                productId: p.id,
+                                itemName: p.name,
+                                originalQty: 1,
+                                activeQty: 1,
+                                unitPrice: p.price.toDouble(),
+                                stationId: p.stationId,
+                              );
+                            }
+                          }),
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: const BoxDecoration(

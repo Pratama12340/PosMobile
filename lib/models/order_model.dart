@@ -13,10 +13,11 @@ class OrderLog {
 
   factory OrderLog.fromJson(Map<String, dynamic> json) {
     // 🔥 PERBAIKAN: Tangkap 'updated_at' atau 'date' dari database, bukan cuma 'created_at'
-    String rawDate = json['updated_at']?.toString() ?? 
-                    json['date']?.toString() ?? 
-                    json['created_at']?.toString() ?? 
-                    "";
+    String rawDate =
+        json['updated_at']?.toString() ??
+        json['date']?.toString() ??
+        json['created_at']?.toString() ??
+        "";
 
     String formattedLogDate = rawDate;
     if (rawDate.isNotEmpty) {
@@ -30,7 +31,7 @@ class OrderLog {
         formattedLogDate = rawDate.replaceAll('T', ' ').split('.')[0];
       }
     }
-    
+
     return OrderLog(
       title: json['title'] ?? json['action'] ?? "Perubahan Pesanan",
       reason: json['reason'] ?? json['notes'] ?? "-",
@@ -73,7 +74,6 @@ class OrderItem {
     this.isVoided = false,
     this.notes = "",
     required this.stationId,
-    
   }) : originalPrice = originalPrice ?? unitPrice;
 
   double get subtotal =>
@@ -129,6 +129,7 @@ class Order {
 
   final int? tableId;
   final int? discountId;
+  final Map<String, dynamic>? latestAcceptance;
 
   final double subtotalPrice,
       discountAmount,
@@ -152,6 +153,7 @@ class Order {
     required this.tableNo,
     this.tableId,
     this.discountId,
+    this.latestAcceptance,
     required this.paymentMethod,
     required this.status,
     required this.subtotalPrice,
@@ -176,17 +178,25 @@ class Order {
     final Map<String, dynamic> orderRelasi = d['order'] is Map
         ? d['order']
         : {};
-        
+
     var itemsRaw =
         (orderRelasi['order_items'] ?? orderRelasi['items'] ?? d['items'] ?? [])
             as List;
-            
+
     // 🔥 PERBAIKAN: Antisipasi jika Backend mengirimkan Logs dalam bentuk String JSON
-    var logsRawData = d['logs'] ??
-                      d['order_logs'] ??
-                      orderRelasi['logs'] ??
-                      orderRelasi['order_logs'];
-                      
+    var logsRawData =
+        d['logs'] ??
+        d['order_logs'] ??
+        orderRelasi['logs'] ??
+        orderRelasi['order_logs'];
+
+    final Map<String, dynamic>? latestAcceptanceData =
+        d['latest_acceptance'] is Map
+        ? Map<String, dynamic>.from(d['latest_acceptance'] as Map)
+        : d['latestAcceptance'] is Map
+        ? Map<String, dynamic>.from(d['latestAcceptance'] as Map)
+        : null;
+
     List logsRaw = [];
     if (logsRawData is String) {
       try {
@@ -200,13 +210,13 @@ class Order {
 
     // 🔥 PERBAIKAN: Prioritaskan membaca 'updated_at' sesuai instruksi Anda
     String rawDate =
-        d['updated_at']?.toString() ?? 
-        d['paid_at']?.toString() ?? 
-        d['created_at']?.toString() ?? 
-        orderRelasi['updated_at']?.toString() ?? 
-        orderRelasi['created_at']?.toString() ?? 
+        d['updated_at']?.toString() ??
+        d['paid_at']?.toString() ??
+        d['created_at']?.toString() ??
+        orderRelasi['updated_at']?.toString() ??
+        orderRelasi['created_at']?.toString() ??
         "";
-        
+
     String formattedDate = "-";
     if (rawDate.isNotEmpty) {
       try {
@@ -247,13 +257,18 @@ class Order {
       tableNo: tNo,
       tableId: tId,
       discountId: int.tryParse(d['discount_id']?.toString() ?? ''),
+      latestAcceptance: latestAcceptanceData,
       paymentMethod: d['payment_method']?.toString().toUpperCase() ?? "",
       status: d['status'] ?? "paid",
       subtotalPrice:
           double.tryParse((d['subtotal_price'] ?? '0').toString()) ?? 0.0,
       discountAmount:
           double.tryParse((d['discount_amount'] ?? '0').toString()) ?? 0.0,
-      taxAmount: double.tryParse((d['taxAmount'] ?? d['tax_amount'] ?? '0').toString()) ?? 0.0,
+      taxAmount:
+          double.tryParse(
+            (d['taxAmount'] ?? d['tax_amount'] ?? '0').toString(),
+          ) ??
+          0.0,
       taxBreakdown: json['tax_breakdown'] ?? d['tax_breakdown'],
       totalPrice: double.tryParse((d['total_price'] ?? '0').toString()) ?? 0.0,
       paidAmount:
@@ -266,5 +281,10 @@ class Order {
       items: itemsRaw.map((i) => OrderItem.fromJson(i)).toList(),
       logs: logsRaw.map((l) => OrderLog.fromJson(l)).toList(),
     );
+  }
+
+  bool get isAccepted {
+    final acceptedAt = latestAcceptance?['accepted_at']?.toString();
+    return acceptedAt != null && acceptedAt.isNotEmpty;
   }
 }

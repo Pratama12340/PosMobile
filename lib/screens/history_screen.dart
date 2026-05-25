@@ -35,10 +35,14 @@ class HistoryScreenState extends State<HistoryScreen> {
   }
 
   void loadHistory() {
-    setState(() {
-      _historyFuture = ApiService.fetchHistory();
+  setState(() {
+    _historyFuture = ApiService.fetchHistory().then((data) {
+      debugPrint("Total data dari API: ${data.length}");
+      return data;
     });
-  }
+  });
+}
+  
 
   Color _getSideColor(String method) {
     String m = method.toUpperCase();

@@ -100,7 +100,7 @@ class PendingOrderPanel extends StatelessWidget {
                       ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
                       itemCount: pendingOrders.length,
                       separatorBuilder: (context, index) =>
                           const Divider(height: 1, color: Color(0xFFF5F5F5)),

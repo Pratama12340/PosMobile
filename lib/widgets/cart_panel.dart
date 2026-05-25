@@ -526,7 +526,7 @@ const SizedBox(height: 15),
                   Padding(
   padding: const EdgeInsets.symmetric(horizontal: 6),
   child: SizedBox(
-    width: 36,
+    width: 52,
     child: TextField(
       keyboardType: TextInputType.number,
       textAlign: TextAlign.center,
@@ -537,7 +537,7 @@ const SizedBox(height: 15),
       ),
       decoration: InputDecoration(
   isDense: true,
-  contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+  contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
   enabledBorder: OutlineInputBorder(
     borderRadius: BorderRadius.circular(6),
     borderSide: BorderSide(

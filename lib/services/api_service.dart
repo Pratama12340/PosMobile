@@ -483,12 +483,12 @@ class ApiService {
         headers: headers,
       );
 
-      print('=== RAW PENDING RESPONSE ===');
-      print(response.body); // ← TAMBAH INI
+      debugPrint('=== RAW PENDING RESPONSE ===');
+      debugPrint(response.body); // ← TAMBAH INI
 
       if (response.statusCode == 200) {
-        print('=== RAW PENDING RESPONSE ===');
-        print(response.body); // ← lihat field apa saja yang dikirim
+        debugPrint('=== RAW PENDING RESPONSE ===');
+        debugPrint(response.body); // ← lihat field apa saja yang dikirim
         final result = jsonDecode(response.body);
         List<dynamic> rawData = [];
         if (result['data'] != null) {
@@ -509,40 +509,37 @@ class ApiService {
     }
   }
 
-  // --- 5D. ACCEPT ORDER ---
-  static Future<bool> acceptOrder(int orderId) async {
-    try {
-      final headers = await _getHeaders();
+ // --- 5D. ACCEPT ORDER ---
+static Future<bool> acceptOrder(int orderId) async {
+  try {
+    final headers = await _getHeaders();
 
-      // ✅ Tambah body scope
-      final body = jsonEncode({'scope': 'cashier'});
+    final body = jsonEncode({'scope': 'cashier'});
 
-      print('=== ACCEPT ORDER ===');
-      print('URL: $baseUrl/orders/$orderId/accept');
-      print('Body: $body');
+    debugPrint('=== ACCEPT ORDER ===');
+    debugPrint('URL: $baseUrl/orders/$orderId/accept');
+    debugPrint('Body: $body');
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/orders/$orderId/accept'),
-        headers: headers,
-        body: body, // ← INI YANG KURANG
-      );
+    final response = await http.post(
+      Uri.parse('$baseUrl/orders/$orderId/accept'),
+      headers: headers,
+      body: body,
+    );
 
-      print('Status: ${response.statusCode}');
-      print('Response: ${response.body}');
+    debugPrint('Status: ${response.statusCode}');
+    debugPrint('Response: ${response.body}');
 
-      if (response.statusCode == 200) {
-        return true;
-      }
-
-      debugPrint(
-        'acceptOrder failed: ${response.statusCode} - ${response.body}',
-      );
-      return false;
-    } catch (e) {
-      debugPrint('acceptOrder error: $e');
-      return false;
+    if (response.statusCode == 200) {
+      return true;
     }
+
+    debugPrint('acceptOrder failed: ${response.statusCode} - ${response.body}');
+    return false;
+  } catch (e) {
+    debugPrint('acceptOrder error: $e');
+    return false;
   }
+}
 
   // --- 5E. GET PAID ORDERS (belum di-accept) ---
   static Future<List<Order>> getPaidOrders() async {
@@ -574,48 +571,65 @@ class ApiService {
   }
 
   // --- 6. API HISTORY TRANSACTIONS ---
-  static Future<List<Order>> fetchHistory() async {
-    try {
-      final headers = await _getHeaders();
-      final int? outletId = await StorageService.getOutletId();
-      final String? shiftId = await StorageService.getCurrentShiftId();
+ // ✅ Method 1 - sudah diupdate dengan pagination
+static Future<List<Order>> fetchHistory() async {
+  try {
+    final headers = await _getHeaders();
+    final int? outletId = await StorageService.getOutletId();
+    final String? shiftId = await StorageService.getCurrentShiftId();
+
+    List<Order> allOrders = [];
+    int currentPage = 1;
+    int lastPage = 1;
+
+    do {
       final response = await http.get(
         Uri.parse(
-          '$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=100',
+          '$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=100&page=$currentPage',
         ),
         headers: headers,
       );
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        List<dynamic> data = (result['data'] is List)
-            ? result['data']
-            : result['data']['data'] ?? [];
-        return data.map((json) => Order.fromJson(json)).toList();
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  }
 
-  static Future<Order?> fetchHistoryDetail(int id) async {
-    try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/history-transactions/$id'),
-        headers: headers,
-      );
-      // ✅ FIX 5: Ambil bagian 'data' dari response sebelum parsing ke model
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        final data = result['data'] ?? result;
-        return Order.fromJson(data);
-      }
-    } catch (e) {
-      debugPrint("💥 [API ERROR] fetchHistoryDetail: $e");
-    }
-    return null;
+      if (response.statusCode != 200) break;
+
+      final result = jsonDecode(response.body);
+      final dynamic paginatedData =
+          (result['data'] is Map) ? result['data'] : result;
+      final List<dynamic> pageData =
+          (paginatedData['data'] is List) ? paginatedData['data'] : [];
+
+      lastPage = paginatedData['last_page'] ?? 1;
+      allOrders.addAll(pageData.map((json) => Order.fromJson(json)).toList());
+      debugPrint("📦 Page $currentPage/$lastPage — ${pageData.length} orders");
+      currentPage++;
+    } while (currentPage <= lastPage);
+
+    debugPrint("✅ Total semua data: ${allOrders.length}");
+    return allOrders;
+  } catch (e) {
+    debugPrint("💥 fetchHistory: $e");
+    return [];
   }
+}
+
+// ✅ Method 2 - JANGAN SAMPAI TERHAPUS, dipakai oleh edit_dialog.dart
+static Future<Order?> fetchHistoryDetail(int id) async {
+  try {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/history-transactions/$id'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      final data = result['data'] ?? result;
+      return Order.fromJson(data);
+    }
+  } catch (e) {
+    debugPrint("💥 fetchHistoryDetail: $e");
+  }
+  return null;
+}
 
   // --- 7. UPDATE ORDER (VOID ITEMS) ---
   static Future<bool> updateOrder({

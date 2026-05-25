@@ -51,6 +51,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   final TextEditingController _manualTenderController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isExactChange = false;
+  double? _selectedQuickAmount;
 
   bool _showDiscountList = false;
   Discount? _selectedDiscount;
@@ -753,12 +755,14 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                 if (_errorMessage != null) {
                   setState(() => _errorMessage = null);
                 }
-                setState(
-                  () => _amountTendered = v.isEmpty
-                      ? 0
-                      : double.tryParse(v.replaceAll('.', '')) ?? 0,
-                );
-              },
+                setState(() {
+    _isExactChange = false; 
+    _selectedQuickAmount = null;
+    _amountTendered = v.isEmpty
+        ? 0
+        : double.tryParse(v.replaceAll('.', '')) ?? 0;
+  });
+},
             ),
             const SizedBox(height: 25),
             Wrap(
@@ -766,7 +770,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
               runSpacing: 12,
               alignment: WrapAlignment.center,
               children: [
-                _quickBtn(grandTotal, label: "Bayar Pas"),
+               _quickBtn(grandTotal, label: "Bayar Pas", isExact: true),
                 ...[
                   20000.0,
                   50000.0,
@@ -821,8 +825,18 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     var taxData = _calculateTaxesAndGrandTotal(baseAmount);
     List<Map<String, dynamic>> taxBreakdown = taxData['tax_breakdown'];
     double grandTotal = taxData['grand_total'];
-
     if (grandTotal < 0) grandTotal = 0;
+
+    if (_isExactChange && _amountTendered != grandTotal) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+    setState(() {
+      _amountTendered = grandTotal;
+      _manualTenderController.text =
+          NumberFormat.decimalPattern('id').format(grandTotal.toInt());
+    });
+  });
+}
 
     int tagihanInt = grandTotal.toInt();
     int uangMasukInt = _amountTendered.toInt();
@@ -882,8 +896,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                     ),
                   ),
                 ),
-
-                // ─── RIGHT PANEL (Receipt Summary) ─────────────────────────
                 Expanded(
                   flex: 4,
                   child: Container(
@@ -1070,7 +1082,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
               ],
             ),
 
-            // ─── Error Banner ───────────────────────────────────────────────
             if (_errorMessage != null)
               Positioned(
                 top: 24,
@@ -1189,11 +1200,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
       var mappedItems = [...existingItems, ...newItems];
 
-      // =========================================================================
-      // PERBAIKAN: Payload dibersihkan. Hanya kirim key yang tervalidasi Backend.
-      // Dihapus: invoice_number, subtotal_price, total_price, discount_amount,
-      // change_amount, dan status.
-      // =========================================================================
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
         'customer_name': widget.customerName,
@@ -1203,7 +1209,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         'payment_method': _paymentMethod.toLowerCase(),
         'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
         'items': mappedItems,
-        if (_selectedDiscount != null) 'discount_id': _selectedDiscount!.id,
+        if (_selectedDiscount != null) 'discount_ids': [_selectedDiscount!.id],
       };
 
       debugPrint("=== DEBUG CHECKOUT ===");
@@ -1389,28 +1395,54 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     );
   }
 
-  Widget _quickBtn(double v, {String? label}) => GestureDetector(
-        onTap: () => setState(() {
-          if (_errorMessage != null) _errorMessage = null;
-          _amountTendered = v;
-          _manualTenderController.text =
-              NumberFormat.decimalPattern('id').format(v.toInt());
-        }),
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFEEEEEE)),
-          ),
-          child: Text(
-            label ?? widget.formatCurrency(v),
-            style: const TextStyle(
-                fontSize: 13, fontWeight: FontWeight.bold),
-          ),
+  Widget _quickBtn(double v, {String? label, bool isExact = false}) {
+  bool isSelected = _selectedQuickAmount == v && 
+      (label == null || _isExactChange == isExact);
+  
+  // Khusus "Bayar Pas": selected kalau _isExactChange true
+  if (label == "Bayar Pas") {
+    isSelected = _isExactChange;
+  }
+
+  return GestureDetector(
+    onTap: () => setState(() {
+      if (_errorMessage != null) _errorMessage = null;
+      _isExactChange = isExact;
+      _selectedQuickAmount = v;
+      _amountTendered = v;
+      _manualTenderController.text =
+          NumberFormat.decimalPattern('id').format(v.toInt());
+    }),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      decoration: BoxDecoration(
+        color: isSelected ? AppStyle.primaryBlue : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isSelected ? AppStyle.primaryBlue : const Color(0xFFEEEEEE),
         ),
-      );
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: AppStyle.primaryBlue.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : [],
+      ),
+      child: Text(
+        label ?? widget.formatCurrency(v),
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: isSelected ? Colors.white : AppStyle.textMain,
+        ),
+      ),
+    ),
+  );
+}
 
   Widget _buildChangeDisplay(double c) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),

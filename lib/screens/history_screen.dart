@@ -118,7 +118,7 @@ class HistoryScreenState extends State<HistoryScreen> {
             itemCount: filteredOrders.length,
             itemBuilder: (context, index) {
               final order = filteredOrders[index];
-              final sideColor = _getSideColor(order.paymentMethod);
+              final sideColor = _getSideColor(order.paymentMethod ?? '');
 
               return Container(
                 decoration: BoxDecoration(
@@ -236,7 +236,7 @@ class HistoryScreenState extends State<HistoryScreen> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                order.paymentMethod.toUpperCase(),
+                                order.paymentMethod?.toUpperCase() ?? '-',
                                 style: TextStyle(
                                   color: sideColor,
                                   fontSize: 9,

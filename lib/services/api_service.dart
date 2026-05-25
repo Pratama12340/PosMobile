@@ -483,12 +483,20 @@ class ApiService {
         headers: headers,
       );
 
-      debugPrint('=== RAW PENDING RESPONSE ===');
-      debugPrint(response.body); // ← TAMBAH INI
-
       if (response.statusCode == 200) {
-        debugPrint('=== RAW PENDING RESPONSE ===');
-        debugPrint(response.body); // ← lihat field apa saja yang dikirim
+        
+        print('=== RAW JSON ORDER 43 ===');
+  final decoded = jsonDecode(response.body);
+  final rawList = decoded['data'] is Map 
+      ? decoded['data']['data'] 
+      : decoded['data'];
+  for (var o in rawList) {
+    if (o['id'] == 43 || o['id'] == 42) {
+      print('ID ${o['id']} raw payment_method: ${o['payment_method']}');
+      print('Semua field: ${o.keys.toList()}');
+    }
+  }
+
         final result = jsonDecode(response.body);
         List<dynamic> rawData = [];
         if (result['data'] != null) {
@@ -498,13 +506,29 @@ class ApiService {
             rawData = result['data'];
           }
         }
-        return rawData
-            .map((json) => Order.fromJson(json))
-            .where((order) => !order.isAccepted)
-            .toList();
+
+        print('=== PENDING ORDERS DEBUG ===');
+      print('Total order: ${rawData.length}');
+      for (var o in rawData) {
+        print('---');
+        print('ID: ${o['id']}');
+        print('Customer: ${o['customer_name']}');
+        print('payment_method (orders table): ${o['payment_method']}');
+        print('payments array: ${o['payments']}');
+        print('payments length: ${(o['payments'] as List?)?.length ?? 0}');
+        if ((o['payments'] as List?)?.isNotEmpty == true) {
+          for (var p in o['payments']) {
+            print('  → payment method: ${p['method']}');
+          }
+        }
+      }
+      print('=== END DEBUG ===');
+
+        return rawData.map((json) => Order.fromJson(json)).toList();
       }
       return [];
     } catch (e) {
+      print('getPendingOrders error: $e');
       return [];
     }
   }

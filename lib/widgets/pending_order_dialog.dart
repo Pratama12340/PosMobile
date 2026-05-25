@@ -144,7 +144,7 @@ class PendingOrderPanel extends StatelessWidget {
                               ),
                             ),
                           ),
-      trailing: order.paymentMethod.toLowerCase() == 'cash'
+      trailing: (order.paymentMethod?.toLowerCase() ?? '') == 'cash'
     // CASH → tetap arrow, masuk cart checkout
     ? InkWell(
         onTap: () => onOrderSelected(order),

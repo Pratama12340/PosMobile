@@ -42,6 +42,7 @@ dependencies:
   qr_flutter: ^4.1.0
   webview_flutter: ^4.13.1
   pusher_client_fixed: ^0.0.5
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:

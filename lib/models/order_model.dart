@@ -1,6 +1,45 @@
 import 'dart:convert';
 import 'package:intl/intl.dart';
 
+// ============================================================
+// Payment Model — type-safe, tidak lagi raw dynamic
+// ============================================================
+class OrderPayment {
+  final int id;
+  final String method;
+  final double amountPaid;
+  final double changeAmount;
+  final String? referenceNo;
+  final String? paidAt;
+
+  OrderPayment({
+    required this.id,
+    required this.method,
+    required this.amountPaid,
+    required this.changeAmount,
+    this.referenceNo,
+    this.paidAt,
+  });
+
+  factory OrderPayment.fromJson(Map<String, dynamic> json) {
+    return OrderPayment(
+      id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      method: json['method']?.toString() ?? 'unknown',
+      amountPaid: double.tryParse(
+        (json['amount_paid'] ?? '0').toString(),
+      ) ?? 0.0,
+      changeAmount: double.tryParse(
+        (json['change_amount'] ?? '0').toString(),
+      ) ?? 0.0,
+      referenceNo: json['reference_no']?.toString(),
+      paidAt: json['paid_at']?.toString(),
+    );
+  }
+}
+
+// ============================================================
+// OrderLog
+// ============================================================
 class OrderLog {
   final String title, reason, date, actor;
 
@@ -12,35 +51,39 @@ class OrderLog {
   });
 
   factory OrderLog.fromJson(Map<String, dynamic> json) {
-    // 🔥 PERBAIKAN: Tangkap 'updated_at' atau 'date' dari database, bukan cuma 'created_at'
-    String rawDate =
+    String rawDate = json['date']?.toString() ??
         json['updated_at']?.toString() ??
-        json['date']?.toString() ??
         json['created_at']?.toString() ??
         "";
 
     String formattedLogDate = rawDate;
     if (rawDate.isNotEmpty) {
       try {
-        DateTime parsedDate = DateTime.parse(rawDate).toLocal();
-        formattedLogDate = DateFormat(
-          'dd MMM yyyy HH:mm',
-          'id_ID',
-        ).format(parsedDate);
+        // Backend kirim format "dd MMM yyyy HH:mm" langsung → tidak perlu parse ulang
+        // Tapi jika ISO 8601, parse dulu
+        if (rawDate.contains('T') || rawDate.contains('-')) {
+          DateTime parsedDate = DateTime.parse(rawDate).toLocal();
+          formattedLogDate = DateFormat('dd MMM yyyy HH:mm', 'id_ID').format(parsedDate);
+        } else {
+          formattedLogDate = rawDate; // sudah terformat dari backend
+        }
       } catch (e) {
         formattedLogDate = rawDate.replaceAll('T', ' ').split('.')[0];
       }
     }
 
     return OrderLog(
-      title: json['title'] ?? json['action'] ?? "Perubahan Pesanan",
-      reason: json['reason'] ?? json['notes'] ?? "-",
+      title: json['action'] ?? json['title'] ?? "Perubahan Pesanan",
+      reason: json['reason']?.toString() ?? "-",
       date: formattedLogDate,
-      actor: json['user']?['name'] ?? json['cashier_name'] ?? "Staff",
+      actor: json['by'] ?? json['user']?['name'] ?? json['cashier_name'] ?? "Staff",
     );
   }
 }
 
+// ============================================================
+// OrderItem
+// ============================================================
 class OrderItem {
   final int id, productId;
   int originalQty;
@@ -53,14 +96,13 @@ class OrderItem {
   final String stationId;
 
   int get quantity => activeQty;
-
   double get price => unitPrice;
+  double get subtotal =>
+      (isVoided || activeQty == 0) ? 0 : (activeQty * unitPrice);
 
   set quantity(int val) {
     activeQty = val;
-    if (activeQty > originalQty) {
-      originalQty = activeQty;
-    }
+    if (activeQty > originalQty) originalQty = activeQty;
   }
 
   OrderItem({
@@ -76,46 +118,45 @@ class OrderItem {
     required this.stationId,
   }) : originalPrice = originalPrice ?? unitPrice;
 
-  double get subtotal =>
-      (isVoided || activeQty == 0) ? 0 : (activeQty * unitPrice);
-
   factory OrderItem.fromJson(Map<String, dynamic> json) {
-    var product = json['product'] ?? {};
-
-    int orig =
-        int.tryParse((json['qty'] ?? json['quantity'])?.toString() ?? '1') ?? 1;
-    int canc = int.tryParse(json['cancelled_qty']?.toString() ?? '0') ?? 0;
+    final product = json['product'] ?? {};
+    final int orig = int.tryParse(
+      (json['qty'] ?? json['quantity'])?.toString() ?? '1',
+    ) ?? 1;
+    final int canc = int.tryParse(
+      json['cancelled_qty']?.toString() ?? '0',
+    ) ?? 0;
+    final int active = (orig - canc).clamp(0, orig); // ← clamp agar tidak negatif
 
     return OrderItem(
       id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       productId: int.tryParse(json['product_id']?.toString() ?? '0') ?? 0,
       originalQty: orig,
-      activeQty: orig - canc,
-      itemName:
-          product['name'] ??
+      activeQty: active,
+      itemName: product['name'] ??
           json['product_name'] ??
           json['item_name'] ??
           'Tanpa Nama',
-      unitPrice:
-          double.tryParse(
-            (json['price'] ?? json['unit_price'])?.toString() ?? '0',
-          ) ??
-          0.0,
-
-      isVoided:
-          json['is_void'] == 1 ||
+      unitPrice: double.tryParse(
+        (json['price'] ?? json['unit_price'])?.toString() ?? '0',
+      ) ?? 0.0,
+      isVoided: json['is_void'] == 1 ||
           json['status'] == 'void' ||
-          (orig - canc <= 0),
+          active <= 0,
       notes: json['notes'] ?? json['note'] ?? "",
       stationId: json['station_id']?.toString() ?? "",
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {'id': id, 'cancelled_qty': originalQty - activeQty};
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'cancelled_qty': originalQty - activeQty,
+  };
 }
 
+// ============================================================
+// Order
+// ============================================================
 class Order {
   final int id;
   final int orderId;
@@ -124,8 +165,10 @@ class Order {
       cashierName,
       customerName,
       tableNo,
-      paymentMethod,
       status;
+
+  // ✅ PERBAIKAN 1: Nullable — karena backend bisa kirim null
+  final String? paymentMethod;
 
   final int? tableId;
   final int? discountId;
@@ -137,9 +180,71 @@ class Order {
       totalPrice,
       paidAmount,
       changeAmount;
+
   final List<OrderItem> items;
   final List<OrderLog> logs;
   final List<dynamic>? taxBreakdown;
+
+  // ✅ PERBAIKAN 4: Type-safe payment list
+  final List<OrderPayment> payments;
+
+  // ============================================================
+  // ✅ PERBAIKAN 5: Getter yang benar untuk logika pending
+  // ============================================================
+
+  String get paymentMethodDisplay {
+    final m = paymentMethod?.trim() ?? '';
+    if (m.isEmpty) return 'Cash';
+    switch (m.toLowerCase()) {
+      case 'cash':
+      case 'tunai':
+        return 'Tunai';
+      case 'qris':
+      case 'midtrans':
+      case 'gopay':
+      case 'other_qris':
+        return 'QRIS';
+      case 'card':
+      case 'credit_card':
+        return 'Kartu';
+      default:
+        return m.toUpperCase();
+    }
+  }
+  
+  /// Payment method yang sudah dinormalisasi ke lowercase
+  String get normalizedMethod {
+    // Prioritas: dari kolom orders
+    final fromOrder = paymentMethod?.toLowerCase().trim() ?? '';
+    if (fromOrder.isNotEmpty) return fromOrder;
+
+    // Fallback: dari payment pertama (data lama)
+    return payments.isNotEmpty
+        ? payments.first.method.toLowerCase().trim()
+        : '';
+  }
+
+  /// true = cash / belum ada payment method → perlu checkout kasir
+  bool get isCashOrder {
+    final m = normalizedMethod;
+    if (m.isEmpty) return true; // null → anggap cash (data lama)
+    return m == 'cash' || m == 'tunai';
+  }
+
+  /// true = non-cash (QRIS/Card) → langsung accept
+  bool get isNonCashOrder {
+    final m = normalizedMethod;
+    return ['qris', 'midtrans', 'card', 'credit_card', 'gopay', 'other_qris']
+        .contains(m);
+  }
+
+  /// Pending non-cash = sudah bayar online, tinggal accept
+  bool get needsAcceptance => status == 'paid';
+
+  bool get waitingPayment => status == 'pending' && isNonCashOrder;
+
+  /// Pending cash dari QR = belum bayar, perlu ke kasir
+  bool get needsCashierCheckout => status == 'pending' && isCashOrder;
 
   String? get tableNumber => tableId?.toString();
 
@@ -154,7 +259,7 @@ class Order {
     this.tableId,
     this.discountId,
     this.latestAcceptance,
-    required this.paymentMethod,
+    this.paymentMethod, 
     required this.status,
     required this.subtotalPrice,
     required this.discountAmount,
@@ -165,76 +270,61 @@ class Order {
     required this.changeAmount,
     required this.items,
     required this.logs,
+    required this.payments,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
-    final Map<String, dynamic> d = (json['data'] != null && json['data'] is Map)
-        ? json['data']
-        : json;
+    final Map<String, dynamic> d =
+        (json['data'] != null && json['data'] is Map)
+            ? json['data'] as Map<String, dynamic>
+            : json;
 
-    final int actualOrderId =
-        int.tryParse(d['order_id']?.toString() ?? '0') ?? 0;
+    final Map<String, dynamic> orderRelasi =
+        d['order'] is Map ? d['order'] as Map<String, dynamic> : {};
 
-    final Map<String, dynamic> orderRelasi = d['order'] is Map
-        ? d['order']
-        : {};
+    // Items
+    final itemsRaw = (orderRelasi['order_items'] ??
+        orderRelasi['items'] ??
+        d['items'] ??
+        []) as List;
 
-    var itemsRaw =
-        (orderRelasi['order_items'] ?? orderRelasi['items'] ?? d['items'] ?? [])
-            as List;
-
-    // 🔥 PERBAIKAN: Antisipasi jika Backend mengirimkan Logs dalam bentuk String JSON
-    var logsRawData =
-        d['logs'] ??
+    // Logs — handle string JSON dari backend
+    final logsRawData = d['logs'] ??
         d['order_logs'] ??
         orderRelasi['logs'] ??
         orderRelasi['order_logs'];
-
-    final Map<String, dynamic>? latestAcceptanceData =
-        d['latest_acceptance'] is Map
-        ? Map<String, dynamic>.from(d['latest_acceptance'] as Map)
-        : d['latestAcceptance'] is Map
-        ? Map<String, dynamic>.from(d['latestAcceptance'] as Map)
-        : null;
 
     List logsRaw = [];
     if (logsRawData is String) {
       try {
         logsRaw = jsonDecode(logsRawData) as List;
-      } catch (e) {
+      } catch (_) {
         logsRaw = [];
       }
     } else if (logsRawData is List) {
       logsRaw = logsRawData;
     }
 
-    // 🔥 PERBAIKAN: Prioritaskan membaca 'updated_at' sesuai instruksi Anda
-    String rawDate =
-        d['updated_at']?.toString() ??
+    // Date
+    final rawDate = d['updated_at']?.toString() ??
         d['paid_at']?.toString() ??
         d['created_at']?.toString() ??
-        orderRelasi['updated_at']?.toString() ??
-        orderRelasi['created_at']?.toString() ??
         "";
 
     String formattedDate = "-";
     if (rawDate.isNotEmpty) {
       try {
-        DateTime parsedDate = DateTime.parse(rawDate).toLocal();
-        formattedDate = DateFormat(
-          'dd MMM yyyy, HH:mm',
-          'id_ID',
-        ).format(parsedDate);
-      } catch (e) {
+        formattedDate = DateFormat('dd MMM yyyy, HH:mm', 'id_ID')
+            .format(DateTime.parse(rawDate).toLocal());
+      } catch (_) {
         formattedDate = rawDate.replaceAll('T', ' ').split('.')[0];
       }
     }
 
+    // Table
     String tNo = "Takeaway";
     int? tId;
-
-    var tableData = orderRelasi['table'] ?? d['table'];
-
+    final tableData = orderRelasi['table'] ?? d['table'];
     if (tableData != null) {
       tNo = "Meja ${tableData['name'] ?? tableData['id']}";
       tId = int.tryParse(tableData['id']?.toString() ?? '');
@@ -243,13 +333,25 @@ class Order {
       tId = int.tryParse(d['table_id']?.toString() ?? '');
     }
 
+    // ✅ PERBAIKAN 3: taxBreakdown selalu baca dari d
+    List<dynamic>? taxBreakdown;
+    final tbRaw = d['tax_breakdown'];
+    if (tbRaw is String) {
+      try {
+        taxBreakdown = jsonDecode(tbRaw) as List<dynamic>?;
+      } catch (_) {
+        taxBreakdown = null;
+      }
+    } else if (tbRaw is List) {
+      taxBreakdown = tbRaw;
+    }
+
     return Order(
       id: int.tryParse(d['id']?.toString() ?? '0') ?? 0,
-      orderId: actualOrderId,
+      orderId: int.tryParse(d['order_id']?.toString() ?? '0') ?? 0,
       invoiceNo: d['invoice_number']?.toString() ?? d['invoice_no'] ?? "-",
       date: formattedDate,
-      cashierName:
-          d['cashier_name'] ??
+      cashierName: d['cashier_name'] ??
           d['cashier']?['name'] ??
           d['user']?['name'] ??
           "Staff",
@@ -257,29 +359,40 @@ class Order {
       tableNo: tNo,
       tableId: tId,
       discountId: int.tryParse(d['discount_id']?.toString() ?? ''),
-      latestAcceptance: latestAcceptanceData,
-      paymentMethod: d['payment_method']?.toString().toUpperCase() ?? "",
-      status: d['status'] ?? "paid",
-      subtotalPrice:
-          double.tryParse((d['subtotal_price'] ?? '0').toString()) ?? 0.0,
-      discountAmount:
-          double.tryParse((d['discount_amount'] ?? '0').toString()) ?? 0.0,
-      taxAmount:
-          double.tryParse(
-            (d['taxAmount'] ?? d['tax_amount'] ?? '0').toString(),
-          ) ??
-          0.0,
-      taxBreakdown: json['tax_breakdown'] ?? d['tax_breakdown'],
-      totalPrice: double.tryParse((d['total_price'] ?? '0').toString()) ?? 0.0,
-      paidAmount:
-          double.tryParse(
-            (d['paid_amount'] ?? d['amount_paid'] ?? '0').toString(),
-          ) ??
-          0.0,
-      changeAmount:
-          double.tryParse((d['change_amount'] ?? '0').toString()) ?? 0.0,
+
+      // ✅ PERBAIKAN 1: nullable, tidak crash jika null
+      paymentMethod: d['payment_method']?.toString(),
+
+      status: d['status']?.toString() ?? 'unknown',
+      subtotalPrice: double.tryParse(
+        (d['subtotal_price'] ?? '0').toString(),
+      ) ?? 0.0,
+      discountAmount: double.tryParse(
+        (d['discount_amount'] ?? '0').toString(),
+      ) ?? 0.0,
+
+      // ✅ PERBAIKAN 2: hapus 'taxAmount' camelCase yang tidak pernah match
+      taxAmount: double.tryParse(
+        (d['tax_amount'] ?? '0').toString(),
+      ) ?? 0.0,
+
+      taxBreakdown: taxBreakdown,
+      totalPrice: double.tryParse(
+        (d['total_price'] ?? '0').toString(),
+      ) ?? 0.0,
+      paidAmount: double.tryParse(
+        (d['paid_amount'] ?? d['amount_paid'] ?? '0').toString(),
+      ) ?? 0.0,
+      changeAmount: double.tryParse(
+        (d['change_amount'] ?? '0').toString(),
+      ) ?? 0.0,
       items: itemsRaw.map((i) => OrderItem.fromJson(i)).toList(),
       logs: logsRaw.map((l) => OrderLog.fromJson(l)).toList(),
+
+      // ✅ PERBAIKAN 4: parse ke OrderPayment, type-safe
+      payments: (d['payments'] as List? ?? [])
+          .map((p) => OrderPayment.fromJson(p))
+          .toList(),
     );
   }
 

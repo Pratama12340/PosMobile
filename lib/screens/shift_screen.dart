@@ -258,7 +258,7 @@ void refreshShift() {
                   int orderTotal = order.totalPrice.round();
                   bersih += orderTotal;
                   count++;
-                  String method = order.paymentMethod.toUpperCase();
+                  String method = order.paymentMethod?.toUpperCase() ?? '-';
                   if (paymentAmount.containsKey(method)) {
                     paymentAmount[method] =
                         (paymentAmount[method] ?? 0) + orderTotal;

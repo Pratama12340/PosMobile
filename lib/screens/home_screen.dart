@@ -128,7 +128,6 @@ class HomeScreenState extends State<HomeScreen> {
         ApiService.getReports().catchError((e) => []),
         ApiService.fetchHistory().catchError((e) => <Order>[]),
         ApiService.getPendingOrders().catchError((e) => <Order>[]),
-        ApiService.getPaidOrders().catchError((e) => <Order>[]), // ✅ TAMBAH
       ]);
 
       if (mounted) {
@@ -138,7 +137,7 @@ class HomeScreenState extends State<HomeScreen> {
         final List reportsData = results[3];
         final List<Order> historyData = results[4] as List<Order>;
         final List<Order> pendingData = results[5] as List<Order>;
-        final List<Order> paidData = results[6] as List<Order>; // ✅ TAMBAH
+       
 
         List<Order> loadedPendingOrders = pendingData;
         Map<int, int> productSales = {};
@@ -229,8 +228,7 @@ class HomeScreenState extends State<HomeScreen> {
           _categories = categoriesData;
           _allProducts = productsData;
           _bestsellerProductIds = calculatedBestsellers;
-          _pendingOrders = loadedPendingOrders.where(_shouldKeepOrder).toList();
-          _paidOrders = paidData.where(_shouldKeepOrder).toList(); // ✅ TAMBAH
+          _pendingOrders = loadedPendingOrders;
           _isLoading = false;
         });
         _applyFilters();
@@ -375,7 +373,7 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _acceptOrder(Order order) async {
+ Future<void> _acceptOrder(Order order) async {
     print("Menghubungi API accept untuk Order ID: ${order.id}");
     final success = await ApiService.acceptOrder(order.id);
     if (success && mounted) {
@@ -420,7 +418,7 @@ class HomeScreenState extends State<HomeScreen> {
       );
     }
   }
-
+  
   Future<void> _connectReverb() async {
     final int? outletId = await StorageService.getOutletId();
 
@@ -461,31 +459,58 @@ class HomeScreenState extends State<HomeScreen> {
           final customerName = data['order']?['customer_name'] ?? 'Pelanggan';
           final isPaid = status == 'paid';
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  Icon(
-                    isPaid ? Icons.payment : Icons.notifications_active,
+        ScaffoldMessenger.of(context)
+  ..hideCurrentSnackBar() // ← hapus notif sebelumnya dulu
+  ..showSnackBar(
+    SnackBar(
+      content: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isPaid ? Icons.payment : Icons.notifications_active,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isPaid ? 'Pembayaran Berhasil!' : 'Pesanan Baru!',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                     color: Colors.white,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      isPaid
-                          ? 'Pembayaran dari $customerName berhasil! Siap cetak struk.'
-                          : 'Pesanan baru dari $customerName masuk!',
-                    ),
+                ),
+                Text(
+                  isPaid
+                      ? '$customerName - siap diproses'
+                      : 'Dari $customerName masuk',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
                   ),
-                ],
-              ),
-              backgroundColor: isPaid ? Colors.blue : Colors.green,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 4),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
+      backgroundColor: isPaid ? Colors.blue.shade700 : Colors.green.shade700,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 5), // ← 5 detik
+      margin: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
           );
         }
       },
@@ -781,6 +806,18 @@ class HomeScreenState extends State<HomeScreen> {
                       },
                       onSaveDraft: (name, table, id) =>
                           _saveToDraft(name, table, id),
+                          onCancelPendingMode: () {   // ← ini yang kemungkinan belum ada
+    setState(() {
+      _cart.clear();
+      _currentCustomerName = null;
+      _currentTableNumber = null;
+      _currentTableId = null;
+      _isPendingOrderLoaded = false;
+      _currentPendingOrderId = null;
+      _currentPendingDiscountId = null;
+      widget.onCartToggled?.call(false);
+    });
+  },
                     ),
                 ],
               ),
@@ -1021,134 +1058,98 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildOrderTile(Order order, bool isPaid) {
-    final String tableNo = order.tableId?.toString() ?? '-';
+ Widget _buildOrderTile(Order order, bool isPaid) {
+  final String tableNo = order.tableId?.toString() ?? '-';
+  final bool isCash = order.isCashOrder;
 
-    // Cek apakah cash — null/kosong dianggap non-cash
-    final bool isCash = order.paymentMethod.toLowerCase() == 'cash';
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      leading: CircleAvatar(
-        backgroundColor: isPaid
-            ? Colors.blue.withValues(alpha: 0.1)
-            : isCash
-            ? Colors.orange.withValues(alpha: 0.1)
-            : Colors.green.withValues(alpha: 0.1),
-        child: Text(
-          tableNo,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isPaid
-                ? Colors.blue
-                : isCash
-                ? Colors.orange
-                : Colors.green,
-            fontSize: 14,
+  return ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+    leading: CircleAvatar(
+      backgroundColor: isCash
+          ? Colors.orange.withValues(alpha: 0.1)
+          : Colors.green.withValues(alpha: 0.1),
+      child: Text(
+        tableNo,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: isCash ? Colors.orange : Colors.green,
+          fontSize: 14,
+        ),
+      ),
+    ),
+    title: Text(
+      order.customerName,
+      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+    ),
+    subtitle: Padding(
+      padding: const EdgeInsets.only(top: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Total: ${formatHarga(order.totalPrice)}",
+            style: const TextStyle(color: Colors.black54, fontSize: 13),
           ),
-        ),
+          Text(
+            order.paymentMethodDisplay,
+            style: TextStyle(
+              fontSize: 11,
+              color: isCash ? Colors.orange : Colors.green,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
-      title: Text(
-        order.customerName,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4.0),
-        child: Text(
-          "Total: ${formatHarga(order.totalPrice)}",
-          style: const TextStyle(color: Colors.black54, fontSize: 13),
-        ),
-      ),
-      trailing: isPaid
-          // ✅ PAID → tombol Cetak
-          ? InkWell(
-              onTap: () => _acceptOrder(order),
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.print, size: 14, color: Colors.blue),
-                    SizedBox(width: 4),
-                    Text(
-                      "Cetak",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                  ],
-                ),
+    ),
+    trailing: isCash
+        // ✅ PENDING + CASH → arrow ke checkout kasir
+        ? InkWell(
+            onTap: () => _loadPendingOrderToCart(order),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
               ),
-            )
-          : isCash
-          // ✅ PENDING + CASH → arrow kuning → ke checkout
-          ? InkWell(
-              onTap: () => _loadPendingOrderToCart(order),
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 12,
-                  color: Colors.orange,
-                ),
-              ),
-            )
-          // ✅ PENDING + NON-CASH → tombol Accept hijau
-          : InkWell(
-              onTap: () => _acceptOrder(order),
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 14,
-                      color: Colors.green,
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      "Terima",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                  ],
-                ),
+              child: const Icon(
+                Icons.arrow_forward_ios,
+                size: 12,
+                color: Colors.orange,
               ),
             ),
-      // onTap hanya aktif untuk cash pending
-      onTap: (!isPaid && isCash) ? () => _loadPendingOrderToCart(order) : null,
-    );
-  }
-
+          )
+        // ✅ PENDING + NON-CASH → langsung accept
+        : InkWell(
+            onTap: () => _acceptOrder(order),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
+                  SizedBox(width: 4),
+                  Text(
+                    "Terima",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.green,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    onTap: isCash ? () => _loadPendingOrderToCart(order) : null,
+  );
+}
   Widget _buildCategoryChips() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,

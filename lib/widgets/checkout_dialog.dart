@@ -1414,19 +1414,21 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
       var mappedItems = [...existingItems, ...newItems];
 
-      Map<String, dynamic> payload = {
-        'outlet_id': savedOutletId,
-        'customer_name': widget.customerName,
-        'table_id': widget.tableId,
-        'tax_amount': taxAmountFinal.toInt(),
-        'tax_breakdown': simplifiedTaxBreakdown,
-        'payment_method': _paymentMethod.toLowerCase(),
-        'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
-        'items': mappedItems,
-        // Kirim semua ID diskon yang dipilih
-        if (_selectedDiscounts.isNotEmpty)
-          'discount_ids': _selectedDiscounts.map((d) => d.id).toList(),
-      };
+Map<String, dynamic> payload = {
+  'outlet_id': savedOutletId,
+  'customer_name': widget.customerName,
+  'table_id': widget.tableId,
+  'subtotal_price': subTotal.toInt(),
+  'discount_amount': discountAmount.toInt(),  
+  'total_price': grandTotal.toInt(),
+  'tax_amount': taxAmountFinal.toInt(),
+  'tax_breakdown': simplifiedTaxBreakdown,
+  'payment_method': _paymentMethod.toLowerCase(),
+  'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
+  'items': mappedItems,
+  if (_selectedDiscounts.length == 1)
+    'discount_id': _selectedDiscounts.first.id,
+};
 
       debugPrint("=== DEBUG CHECKOUT ===");
       debugPrint("isUpdatingOrder: ${widget.isUpdatingOrder}");

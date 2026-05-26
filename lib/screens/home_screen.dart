@@ -9,8 +9,8 @@ import '../widgets/cart_panel.dart';
 import '../services/reverb_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/draft_panel.dart';
-import '../services/printer_service.dart';
-import '../models/print_model.dart';
+// import '../services/printer_service.dart';
+// import '../models/print_model.dart';
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -30,7 +30,7 @@ class HomeScreenState extends State<HomeScreen> {
   final Map<int, OrderItem> _cart = {};
   final List<Map<String, dynamic>> _drafts = [];
   final ReverbService _reverbService = ReverbService();
-  final TerminalPrinterService _printerService = TerminalPrinterService();
+  // final TerminalPrinterService _printerService = TerminalPrinterService();
 
   String? _currentCustomerName;
   String? _currentTableNumber;
@@ -374,7 +374,7 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
  Future<void> _acceptOrder(Order order) async {
-    print("Menghubungi API accept untuk Order ID: ${order.id}");
+    debugPrint("Menghubungi API accept untuk Order ID: ${order.id}");
     final success = await ApiService.acceptOrder(order.id);
     if (success && mounted) {
       setState(() {
@@ -388,6 +388,7 @@ class HomeScreenState extends State<HomeScreen> {
         _refreshPaidOrdersSilently(),
       ]);
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(
@@ -418,7 +419,7 @@ class HomeScreenState extends State<HomeScreen> {
       );
     }
   }
-  
+
   Future<void> _connectReverb() async {
     final int? outletId = await StorageService.getOutletId();
 

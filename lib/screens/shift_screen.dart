@@ -107,7 +107,7 @@ void refreshShift() {
           children: [
             const Icon(
               Icons.warning_amber_rounded,
-              color: Colors.orange,
+              color: Colors.redAccent,
               size: 60,
             ),
             const SizedBox(height: 16),
@@ -159,7 +159,7 @@ void refreshShift() {
                     height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
+                        backgroundColor: Colors.redAccent,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),

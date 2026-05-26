@@ -55,14 +55,53 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   double? _selectedQuickAmount;
 
   bool _showDiscountList = false;
-  Discount? _selectedDiscount;
+
+  // ─── MULTI-DISCOUNT: list pengganti single _selectedDiscount ──────────────
+  List<Discount> _selectedDiscounts = [];
   List<Discount> _availableDiscounts = [];
+
+  // ─── Helper getters ────────────────────────────────────────────────────────
+  bool _isDiscountSelected(Discount d) =>
+      _selectedDiscounts.any((s) => s.id == d.id);
+
+  bool get _hasGlobalDiscount =>
+      _selectedDiscounts.any((d) => d.scope == 'global');
+
+  bool get _hasProductDiscount =>
+      _selectedDiscounts.any((d) => d.scope == 'products');
+
+  /// Toggle diskon dengan aturan:
+  /// - Diskon PRODUK: bisa 2 sekaligus, otomatis hapus diskon global
+  /// - Diskon TRANSAKSI (global): hapus semua diskon produk, hanya 1 aktif
+  void _toggleDiscount(Discount d) {
+  setState(() {
+    // Reset exact change saat diskon berubah agar user konfirmasi ulang
+    if (_isExactChange) {
+      _isExactChange = false;
+      _selectedQuickAmount = null;
+      _amountTendered = 0;
+      _manualTenderController.clear();
+    }
+
+    if (_isDiscountSelected(d)) {
+      _selectedDiscounts.removeWhere((s) => s.id == d.id);
+    } else {
+      if (d.scope == 'global') {
+        _selectedDiscounts = [d];
+      } else {
+        _selectedDiscounts.removeWhere((s) => s.scope == 'global');
+        if (_selectedDiscounts.length < 2) {
+          _selectedDiscounts.add(d);
+        }
+      }
+    }
+  });
+}
 
   List<dynamic> _availableTaxes = [];
 
   WebViewController? _webViewController;
 
-  // Animation controller for smooth left-panel transition
   late AnimationController _slideController;
   late Animation<Offset> _slideOutAnimation;
   late Animation<Offset> _slideInAnimation;
@@ -119,10 +158,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       _availableDiscounts = discounts;
 
       if (widget.pendingDiscountId != null) {
-        _selectedDiscount = discounts.firstWhere(
+        final found = discounts.firstWhere(
           (d) => d.id == widget.pendingDiscountId,
           orElse: () => discounts.first,
         );
+        _selectedDiscounts = [found];
         return;
       }
 
@@ -132,7 +172,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         for (var d in discounts) {
           if (d.scope == 'products' &&
               d.productIds.any((id) => cartProductIds.contains(id))) {
-            _selectedDiscount = d;
+            _selectedDiscounts = [d];
             break;
           }
         }
@@ -148,17 +188,24 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     });
   }
 
+  // ─── Hitung total diskon dari semua diskon yang dipilih ───────────────────
   double _calculateDiscountValue(double subtotal) {
-    if (_selectedDiscount == null) return 0;
+    if (_selectedDiscounts.isEmpty) return 0;
 
-    double baseForDiscount =
-        (widget.hasDiscountedItem && widget.originalTotalAmount > 0)
-            ? widget.originalTotalAmount
-            : subtotal;
+    double total = 0;
+    for (var discount in _selectedDiscounts) {
+      double baseForDiscount =
+          (widget.hasDiscountedItem &&
+                  discount.scope == 'products' &&
+                  widget.originalTotalAmount > 0)
+              ? widget.originalTotalAmount
+              : subtotal;
 
-    return _selectedDiscount!.type == 'percentage'
-        ? (baseForDiscount * _selectedDiscount!.value) / 100
-        : _selectedDiscount!.value.toDouble();
+      total += discount.type == 'percentage'
+          ? (baseForDiscount * discount.value) / 100
+          : discount.value.toDouble();
+    }
+    return total;
   }
 
   Map<String, dynamic> _calculateTaxesAndGrandTotal(double baseAmount) {
@@ -219,12 +266,16 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     List<int> cartProductIds =
         widget.cart.values.map((item) => item.productId).toList();
 
+    // Jumlah diskon produk yang sudah dipilih
+    int selectedProductCount =
+        _selectedDiscounts.where((d) => d.scope == 'products').length;
+
     return Container(
       color: _panelBg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header — same bg as panel, no divider gap, seamless
+          // Header
           Container(
             padding: const EdgeInsets.fromLTRB(16, 28, 20, 18),
             color: _panelBg,
@@ -241,11 +292,58 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                     letterSpacing: -0.3,
                   ),
                 ),
+                const Spacer(),
+                // Badge info multi-diskon produk
+                if (selectedProductCount > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _primaryBlue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      "$selectedProductCount/2 Produk",
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _primaryBlue,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
 
-          // Subtle separator
+          // Info banner: aturan multi-diskon
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8E1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFFE082)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    size: 14, color: Color(0xFFF59E0B)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Maks. 2 diskon per-produk. Diskon transaksi menggantikan semua diskon produk.",
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF92400E),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
           Container(height: 1, color: const Color(0xFFDDE3ED)),
 
           // Discount list
@@ -281,12 +379,37 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                         );
                       }
 
-                      bool eligible = isMinPurchaseMet && isProductEligible;
-                      bool isSelected = _selectedDiscount?.id == d.id;
+                      // Diskon produk max 2: disabled jika sudah 2 dan ini belum dipilih
+                      bool isMaxProductReached = d.scope == 'products' &&
+                          selectedProductCount >= 2 &&
+                          !_isDiscountSelected(d);
+
+                      // Diskon produk disabled jika ada global aktif, dan sebaliknya
+                      bool isBlockedByGlobal =
+                          d.scope == 'products' && _hasGlobalDiscount;
+                      bool isBlockedByProduct =
+                          d.scope == 'global' && _hasProductDiscount;
+
+                      bool eligible = isMinPurchaseMet &&
+                          isProductEligible &&
+                          !isMaxProductReached &&
+                          !isBlockedByGlobal &&
+                          !isBlockedByProduct;
+
+                      // Jika sudah terpilih, tetap bisa di-tap untuk deselect
+                      bool canTap = _isDiscountSelected(d) ||
+                          (isMinPurchaseMet &&
+                              isProductEligible &&
+                              !isMaxProductReached);
 
                       return Opacity(
-                        opacity: eligible ? 1.0 : 0.45,
-                        child: _buildVoucherCard(d, eligible, isSelected),
+                        opacity: canTap ? 1.0 : 0.45,
+                        child: _buildVoucherCard(
+                          d,
+                          eligible: eligible,
+                          canTap: canTap,
+                          selectedProductCount: selectedProductCount,
+                        ),
                       );
                     },
                   ),
@@ -296,18 +419,33 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     );
   }
 
-  Widget _buildVoucherCard(Discount d, bool eligible, bool isSelected) {
+  Widget _buildVoucherCard(
+    Discount d, {
+    required bool eligible,
+    required bool canTap,
+    required int selectedProductCount,
+  }) {
     final bool isProduct = d.scope == 'products';
+    final bool isSelected = _isDiscountSelected(d);
+
+    // Label khusus untuk kondisi terblokir
+    String? blockedReason;
+    if (!isSelected) {
+      if (isProduct && _hasGlobalDiscount) {
+        blockedReason = "Hapus diskon transaksi dulu";
+      } else if (!isProduct && _hasProductDiscount) {
+        blockedReason = "Akan menghapus diskon produk";
+      } else if (isProduct && selectedProductCount >= 2) {
+        blockedReason = "Maks. 2 diskon produk";
+      }
+    }
 
     return GestureDetector(
-      onTap: eligible
-          ? () => setState(() => _selectedDiscount =
-              isSelected ? null : d) // toggle: tap again to deselect
-          : null,
+      onTap: (canTap || isSelected) ? () => _toggleDiscount(d) : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 14),
-        height: 108,
+        height: blockedReason != null ? 118 : 108,
         decoration: BoxDecoration(
           color: isSelected ? _softBlue : Colors.white,
           borderRadius: BorderRadius.circular(14),
@@ -353,13 +491,16 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                 child: isSelected
                     ? const Icon(Icons.check_circle_rounded,
                         key: ValueKey('check'),
-                        color: _primaryBlue, size: 26)
+                        color: _primaryBlue,
+                        size: 26)
                     : Icon(
                         isProduct
                             ? Icons.shopping_bag_outlined
                             : Icons.receipt_long_outlined,
                         key: const ValueKey('offer'),
-                        color: eligible ? const Color(0xFF8FAEE0) : Colors.grey[400],
+                        color: eligible
+                            ? const Color(0xFF8FAEE0)
+                            : Colors.grey[400],
                         size: 24,
                       ),
               ),
@@ -396,7 +537,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Scope pill
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 7, vertical: 3),
@@ -453,7 +593,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
                     const SizedBox(height: 6),
 
-                    // Discount value — bold & large
                     Text(
                       d.type == 'percentage'
                           ? "${d.value.toInt()}% OFF"
@@ -472,14 +611,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
                     const SizedBox(height: 5),
 
-                    // Footer row: min purchase + eligibility
+                    // Footer row
                     Row(
                       children: [
-                        const Icon(
-                          Icons.payments_outlined,
-                          size: 10,
-                          color: Colors.black38,
-                        ),
+                        const Icon(Icons.payments_outlined,
+                            size: 10, color: Colors.black38),
                         const SizedBox(width: 4),
                         Text(
                           "Min. ${widget.formatCurrency(d.minPurchase.toDouble())}",
@@ -489,7 +625,29 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        if (!eligible) ...[
+                        if (blockedReason != null) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber[50],
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                blockedReason,
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  color: Colors.orange[800],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ] else if (!eligible && !isSelected) ...[
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -542,21 +700,23 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   // ─── DISCOUNT BUTTON (on right panel summary) ──────────────────────────────
   Widget _buildDiscountButton(double discAmount) {
     bool isProductDiscountActive = widget.hasDiscountedItem;
-    bool hasGlobalDiscount =
-        _selectedDiscount != null && !isProductDiscountActive;
+    bool hasAnyDiscount = _selectedDiscounts.isNotEmpty;
 
-    String btnText = "Pilih Diskon Tambahan";
-    if (isProductDiscountActive) {
-      if (_selectedDiscount != null) {
-        btnText = _selectedDiscount!.name;
-      } else {
-        btnText = "Promo Produk Aktif (Tap untuk ubah)";
-      }
-    } else if (hasGlobalDiscount) {
-      btnText = _selectedDiscount!.name;
+    // Label dinamis berdasarkan jumlah diskon terpilih
+    String btnText;
+    if (_selectedDiscounts.isEmpty) {
+      btnText = isProductDiscountActive
+          ? "Promo Produk Aktif (Tap untuk ubah)"
+          : "Pilih Diskon Tambahan";
+    } else if (_selectedDiscounts.length == 1) {
+      btnText = _selectedDiscounts.first.name;
+    } else {
+      // Multiple product discounts
+      btnText =
+          "${_selectedDiscounts.length} Diskon: ${_selectedDiscounts.map((d) => d.name).join(', ')}";
     }
 
-    bool isHighlighted = isProductDiscountActive || hasGlobalDiscount;
+    bool isHighlighted = isProductDiscountActive || hasAnyDiscount;
 
     return InkWell(
       onTap: _openDiscountList,
@@ -578,32 +738,41 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Icon(
-                  isProductDiscountActive
-                      ? Icons.verified_rounded
-                      : (hasGlobalDiscount
-                          ? Icons.confirmation_number_rounded
-                          : Icons.local_offer_outlined),
-                  size: 18,
-                  color: isHighlighted ? Colors.orange : Colors.black45,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  btnText,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color:
-                        isHighlighted ? Colors.orange[900] : Colors.black54,
+            // Left: icon + label
+            Expanded(
+              child: Row(
+                children: [
+                  Icon(
+                    isProductDiscountActive
+                        ? Icons.verified_rounded
+                        : (hasAnyDiscount
+                            ? Icons.confirmation_number_rounded
+                            : Icons.local_offer_outlined),
+                    size: 18,
+                    color: isHighlighted ? Colors.orange : Colors.black45,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      btnText,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color:
+                            isHighlighted ? Colors.orange[900] : Colors.black54,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
+            // Right: amount / status
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (isProductDiscountActive && _selectedDiscount == null) ...[
+                if (isProductDiscountActive && _selectedDiscounts.isEmpty) ...[
                   const Text(
                     "Aktif",
                     style: TextStyle(
@@ -615,27 +784,30 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                   const SizedBox(width: 6),
                   const Icon(Icons.swap_horiz_rounded,
                       size: 16, color: Colors.orange),
+                ] else if (hasAnyDiscount) ...[
+                  Text(
+                    "- ${widget.formatCurrency(discAmount)}",
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Tombol hapus semua diskon
+                  GestureDetector(
+                    onTap: () => setState(() => _selectedDiscounts.clear()),
+                    child: const Icon(Icons.cancel, size: 18, color: Colors.red),
+                  ),
                 ] else ...[
                   Text(
-                    hasGlobalDiscount
-                        ? "- ${widget.formatCurrency(discAmount)}"
-                        : "Tambah",
+                    "Tambah",
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: hasGlobalDiscount
-                          ? Colors.red
-                          : AppStyle.primaryBlue,
+                      color: AppStyle.primaryBlue,
                     ),
                   ),
-                  if (hasGlobalDiscount) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => setState(() => _selectedDiscount = null),
-                      child: const Icon(Icons.cancel,
-                          size: 18, color: Colors.red),
-                    ),
-                  ],
                 ],
               ],
             ),
@@ -657,6 +829,50 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         _rowInf("Sub Total", sub),
         const SizedBox(height: 10),
         _buildDiscountButton(disc),
+
+        // Detail per diskon jika lebih dari 1
+        if (_selectedDiscounts.length > 1) ...[
+          const SizedBox(height: 6),
+          ...(_selectedDiscounts.map((d) {
+            double baseForDiscount =
+                (widget.hasDiscountedItem &&
+                        d.scope == 'products' &&
+                        widget.originalTotalAmount > 0)
+                    ? widget.originalTotalAmount
+                    : sub;
+            double dAmt = d.type == 'percentage'
+                ? (baseForDiscount * d.value) / 100
+                : d.value.toDouble();
+            return Padding(
+              padding: const EdgeInsets.only(left: 12, bottom: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.subdirectory_arrow_right_rounded,
+                          size: 12, color: Colors.black26),
+                      const SizedBox(width: 4),
+                      Text(
+                        d.name,
+                        style: const TextStyle(
+                            fontSize: 10, color: Colors.black45),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    "- ${widget.formatCurrency(dAmt)}",
+                    style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            );
+          })),
+        ],
+
         const SizedBox(height: 10),
         const Divider(color: Color(0xFFEEEEEE), height: 1),
         const SizedBox(height: 10),
@@ -756,13 +972,13 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                   setState(() => _errorMessage = null);
                 }
                 setState(() {
-    _isExactChange = false; 
-    _selectedQuickAmount = null;
-    _amountTendered = v.isEmpty
-        ? 0
-        : double.tryParse(v.replaceAll('.', '')) ?? 0;
-  });
-},
+                  _isExactChange = false;
+                  _selectedQuickAmount = null;
+                  _amountTendered = v.isEmpty
+                      ? 0
+                      : double.tryParse(v.replaceAll('.', '')) ?? 0;
+                });
+              },
             ),
             const SizedBox(height: 25),
             Wrap(
@@ -770,7 +986,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
               runSpacing: 12,
               alignment: WrapAlignment.center,
               children: [
-               _quickBtn(grandTotal, label: "Bayar Pas", isExact: true),
+                _quickBtn(grandTotal, label: "Bayar Pas", isExact: true),
                 ...[
                   20000.0,
                   50000.0,
@@ -791,8 +1007,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(15),
                         border: Border.all(
-                          color:
-                              AppStyle.primaryBlue.withValues(alpha: 0.3),
+                          color: AppStyle.primaryBlue.withValues(alpha: 0.3),
                           width: 2,
                         ),
                       ),
@@ -813,12 +1028,14 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
   @override
   Widget build(BuildContext context) {
+    // subTotal: pakai originalTotalAmount jika ada diskon produk aktif
     double subTotal =
         (widget.hasDiscountedItem &&
-                _selectedDiscount != null &&
+                _selectedDiscounts.any((d) => d.scope == 'products') &&
                 widget.originalTotalAmount > 0)
             ? widget.originalTotalAmount
             : widget.totalAmount;
+
     double discountAmount = _calculateDiscountValue(subTotal);
     double baseAmount = subTotal - discountAmount;
 
@@ -827,15 +1044,16 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     double grandTotal = taxData['grand_total'];
     if (grandTotal < 0) grandTotal = 0;
 
-    if (_isExactChange && _amountTendered != grandTotal) {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!mounted) return;
-    setState(() {
+    if (_isExactChange) {
+  final formatted = NumberFormat.decimalPattern('id').format(grandTotal.toInt());
+  if (_manualTenderController.text != formatted) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _manualTenderController.text = formatted;
+      // Update _amountTendered tanpa setState agar tidak rebuild loop
       _amountTendered = grandTotal;
-      _manualTenderController.text =
-          NumberFormat.decimalPattern('id').format(grandTotal.toInt());
     });
-  });
+  }
 }
 
     int tagihanInt = grandTotal.toInt();
@@ -846,16 +1064,16 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     String currentDate = DateFormat('dd MMM yyyy').format(DateTime.now());
 
     return Dialog(
-  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-  insetPadding: EdgeInsets.only(
-    left: 20,
-    right: 20,
-    top: 24,
-    bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-  ),
-  child: Container(
-    width: 1000,
-    height: 680,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      insetPadding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Container(
+        width: 1000,
+        height: 680,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -865,7 +1083,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
           children: [
             Row(
               children: [
-                // ─── LEFT PANEL (Payment Method ↔ Discount List) ───────────
+                // ─── LEFT PANEL ────────────────────────────────────────────
                 Expanded(
                   flex: 5,
                   child: ClipRect(
@@ -874,14 +1092,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                       builder: (context, child) {
                         return Stack(
                           children: [
-                            // Payment method panel — slides OUT to the left
                             SlideTransition(
                               position: _slideOutAnimation,
                               child: _buildPaymentMethodPanel(
                                   grandTotal, tagihanInt, uangMasukInt, change),
                             ),
-
-                            // Discount panel — slides IN from the right
                             if (_showDiscountList)
                               SlideTransition(
                                 position: _slideInAnimation,
@@ -902,8 +1117,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                     decoration:
                         const BoxDecoration(color: Color(0xFFFBFBFB)),
                     child: Padding(
-                      padding:
-                          const EdgeInsets.fromLTRB(30, 25, 30, 25),
+                      padding: const EdgeInsets.fromLTRB(30, 25, 30, 25),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1152,7 +1366,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
       double subTotal =
           (widget.hasDiscountedItem &&
-                  _selectedDiscount != null &&
+                  _selectedDiscounts.any((d) => d.scope == 'products') &&
                   widget.originalTotalAmount > 0)
               ? widget.originalTotalAmount
               : widget.totalAmount;
@@ -1174,7 +1388,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       }).toList();
 
       int tagihanInt = grandTotal.toInt();
-      int uangMasukInt = _amountTendered.toInt();
+      int uangMasukInt = _isExactChange ? tagihanInt : _amountTendered.toInt();
       int change = uangMasukInt - tagihanInt;
 
       var existingItems = widget.cart.values
@@ -1209,13 +1423,15 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         'payment_method': _paymentMethod.toLowerCase(),
         'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
         'items': mappedItems,
-        if (_selectedDiscount != null) 'discount_ids': [_selectedDiscount!.id],
+        // Kirim semua ID diskon yang dipilih
+        if (_selectedDiscounts.isNotEmpty)
+          'discount_ids': _selectedDiscounts.map((d) => d.id).toList(),
       };
 
       debugPrint("=== DEBUG CHECKOUT ===");
       debugPrint("isUpdatingOrder: ${widget.isUpdatingOrder}");
       debugPrint("pendingDiscountId: ${widget.pendingDiscountId}");
-      debugPrint("selectedDiscount: ${_selectedDiscount?.name}");
+      debugPrint("selectedDiscounts: ${_selectedDiscounts.map((d) => '${d.name}(${d.scope})').join(', ')}");
       debugPrint("subTotal: $subTotal");
       debugPrint("discountAmount: $discountAmount");
       debugPrint("grandTotal: $grandTotal");
@@ -1325,12 +1541,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(l,
-                style:
-                    const TextStyle(color: Colors.black45, fontSize: 11)),
+                style: const TextStyle(color: Colors.black45, fontSize: 11)),
             Text(
               widget.formatCurrency(v),
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 11),
+              style:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
             ),
           ],
         ),
@@ -1358,9 +1573,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
               color: s ? AppStyle.primaryBlue : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: s
-                    ? AppStyle.primaryBlue
-                    : const Color(0xFFEEEEEE),
+                color:
+                    s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE),
               ),
             ),
             child: Column(
@@ -1396,56 +1610,58 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   }
 
   Widget _quickBtn(double v, {String? label, bool isExact = false}) {
-  bool isSelected = _selectedQuickAmount == v && 
-      (label == null || _isExactChange == isExact);
-  
-  // Khusus "Bayar Pas": selected kalau _isExactChange true
-  if (label == "Bayar Pas") {
-    isSelected = _isExactChange;
+    bool isSelected = _selectedQuickAmount == v &&
+        (label == null || _isExactChange == isExact);
+
+    if (label == "Bayar Pas") {
+      isSelected = _isExactChange;
+    }
+
+    return GestureDetector(
+      onTap: () => setState(() {
+        if (_errorMessage != null) _errorMessage = null;
+        _isExactChange = isExact;
+        _selectedQuickAmount = v;
+        _amountTendered = v;
+        _manualTenderController.text =
+            NumberFormat.decimalPattern('id').format(v.toInt());
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppStyle.primaryBlue : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? AppStyle.primaryBlue
+                : const Color(0xFFEEEEEE),
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppStyle.primaryBlue.withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : [],
+        ),
+        child: Text(
+          label ?? widget.formatCurrency(v),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : AppStyle.textMain,
+          ),
+        ),
+      ),
+    );
   }
 
-  return GestureDetector(
-    onTap: () => setState(() {
-      if (_errorMessage != null) _errorMessage = null;
-      _isExactChange = isExact;
-      _selectedQuickAmount = v;
-      _amountTendered = v;
-      _manualTenderController.text =
-          NumberFormat.decimalPattern('id').format(v.toInt());
-    }),
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color: isSelected ? AppStyle.primaryBlue : Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isSelected ? AppStyle.primaryBlue : const Color(0xFFEEEEEE),
-        ),
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: AppStyle.primaryBlue.withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ]
-            : [],
-      ),
-      child: Text(
-        label ?? widget.formatCurrency(v),
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.bold,
-          color: isSelected ? Colors.white : AppStyle.textMain,
-        ),
-      ),
-    ),
-  );
-}
-
   Widget _buildChangeDisplay(double c) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
         decoration: BoxDecoration(
           color: Colors.green.shade50,
           borderRadius: BorderRadius.circular(15),

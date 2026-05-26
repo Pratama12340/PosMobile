@@ -42,6 +42,7 @@ class ApiService {
       );
 
       debugPrint("[API RESPONSE] <-- STATUS: ${response.statusCode}");
+      
 
       // ✅ FIX 2: Token tidak dicetak ke log (keamanan)
       if (kDebugMode) {
@@ -300,6 +301,8 @@ class ApiService {
         body: jsonEncode(orderData),
       );
       debugPrint("[API RESPONSE] <-- STATUS: ${response.statusCode}");
+      debugPrint("[API RESPONSE BODY] >>>>> ${response.body} <<<<<");
+      debugPrint("[API RESPONSE BODY LENGTH] ${response.body.length}");
       final result = jsonDecode(response.body);
       if (response.statusCode == 201 || response.statusCode == 200) {
         return {'success': true, 'data': result['data'] ?? result};

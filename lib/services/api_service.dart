@@ -6,6 +6,8 @@ import '../models/product_model.dart';
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../models/rekap_model.dart';
+import 'printer_service.dart';
+import '../models/print_model.dart';
 
 class ApiService {
   static const String baseUrl = 'https://api.etres.my.id/api/v1';
@@ -303,9 +305,58 @@ class ApiService {
       debugPrint("[API RESPONSE] <-- STATUS: ${response.statusCode}");
       debugPrint("[API RESPONSE BODY] >>>>> ${response.body} <<<<<");
       debugPrint("[API RESPONSE BODY LENGTH] ${response.body.length}");
+      
       final result = jsonDecode(response.body);
+      
       if (response.statusCode == 201 || response.statusCode == 200) {
-        return {'success': true, 'data': result['data'] ?? result};
+        final resData = result['data'] ?? result;
+
+        // =========================================================================
+        // Pemicu Otomatis Printer Fisik (Direct Socket LAN/Wi-Fi)
+        // =========================================================================
+        try {
+          // 1. Ambil nama kasir dan data IP Printer dari lokal storage
+          final cashierName = await StorageService.getCashierName() ?? "Kasir";
+          final printerIp = "192.168.1.87"; 
+
+          // 2. Map data ke TransactionModel (Mematuhi aturan notes backend & nama customer kosong)
+          final printTransaction = TransactionModel(
+            orderId: resData['id']?.toString() ?? resData['order_id']?.toString() ?? "TRX",
+            outletName: "ARANUS POS",
+            outletAddress: "Lokasi Outlet", 
+            cashierName: cashierName,
+            customerName: "", // Dikosongkan sesuai regulasi internal Aranus POS
+            tableNumber: resData['table_id']?.toString() ?? orderData['table_id']?.toString() ?? "-",
+            items: (orderData['items'] as List).map((item) {
+              return CartItem(
+                itemName: item['product_name'] ?? item['name'] ?? "Item",
+                quantity: int.tryParse(item['qty'].toString()) ?? 1,
+                unitPrice: double.tryParse(item['price'].toString()) ?? 0.0,
+                notes: item['notes'] ?? "", // Key 'notes' sesuai database audit backend
+                stationId: item['station_id']?.toString() ?? "STN-KASIR",
+              );
+            }).toList(),
+            discountAmount: double.tryParse(orderData['discount_amount']?.toString() ?? '0') ?? 0.0,
+            taxBreakdown: List<Map<String, dynamic>>.from(orderData['tax_breakdown'] ?? []),
+            totalDariHalaman: double.tryParse(orderData['total_price']?.toString() ?? '0') ?? 0.0,
+          );
+
+          // 3. Eksekusi cetak fisik secara asynchronous (Tanpa await agar UI kasir tidak nge-lag saat printer loading)
+          final printerService = NetworkPrinterService();
+          
+          // Cetak Struk Utama Kasir
+          printerService.printReceipt(ipAddress: printerIp, transaction: printTransaction);
+          
+          // Jika Anda ingin otomatis cetak ke dapur juga, hilangkan komentar di bawah ini:
+          // printerService.printKitchenReceipt(ipAddress: printerIp, transaction: printTransaction);
+
+        } catch (printError) {
+          // Jika printer mati/gagal koneksi, aplikasi kasir tidak akan ikut crash atau tertahan
+          debugPrint("⚠️ [PRINTER WARNING] Server sukses, tapi gagal cetak fisik: $printError");
+        }
+        // =========================================================================
+
+        return {'success': true, 'data': resData};
       } else {
         return {
           'success': false,

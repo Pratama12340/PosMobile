@@ -1,116 +1,182 @@
+import 'dart:io';
 import 'package:intl/intl.dart';
-import '../models/print_model.dart';
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter/foundation.dart';
+import '../models/print_model.dart'; // Pastikan path model Anda sudah benar
 
-class TerminalPrinterService {
+class NetworkPrinterService {
+  
+  // Helper format mata uang tanpa simbol Rp
   String _fMoney(double val) {
     return NumberFormat.decimalPattern('id').format(val.toInt());
   }
 
-  void printToTerminal(TransactionModel transaction) {
-    final now = DateTime.now();
-    final fullDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(now);
-    StringBuffer receipt = StringBuffer();
+  // =========================================================================
+  // 1. STRUK BELANJA UTAMA (KASIR / CUSTOMER)
+  // =========================================================================
+  Future<void> printReceipt({
+    required String ipAddress,
+    required TransactionModel transaction,
+    int port = 9100,
+  }) async {
+    try {
+      final profile = await CapabilityProfile.load();
+      final generator = Generator(PaperSize.mm80, profile);
+      List<int> bytes = [];
 
-    receipt.writeln(
-      "\n${_centerText(transaction.outletName.toUpperCase(), 32)}",
-    );
-    receipt.writeln(_centerText(transaction.outletAddress, 32));
-    receipt.writeln(_centerText("INV: ${transaction.orderId}", 32));
-    receipt.writeln("-" * 32);
+      final now = DateTime.now();
+      final fullDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(now);
 
-    receipt.writeln("tgl      : $fullDate");
-    receipt.writeln(
-      "table    : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}",
-    );
-    receipt.writeln("kasir    : ${transaction.cashierName}");
-    receipt.writeln(
-      "customer : ${transaction.customerName.isEmpty ? "-" : transaction.customerName}",
-    );
-    receipt.writeln("-" * 32);
-
-    for (var item in transaction.items) {
-      receipt.writeln(item.itemName);
-
-      String qtyPrice = "${item.quantity} x ${_fMoney(item.unitPrice)}";
-      String totalItem = "Rp ${_fMoney(item.quantity * item.unitPrice)}";
-      receipt.writeln(_formatRow(qtyPrice, totalItem));
-
-      if (item.notes.trim().isNotEmpty) {
-        receipt.writeln("  *${item.notes}");
-      }
-    }
-    receipt.writeln("-" * 32);
-
-    receipt.writeln(
-      _formatRow("Sub Total", "Rp ${_fMoney(transaction.subtotal)}"),
-    );
-    if (transaction.discountAmount > 0) {
-      receipt.writeln(
-        _formatRow("Diskon", "-Rp ${_fMoney(transaction.discountAmount)}"),
+      // --- HEADER ---
+      bytes += generator.text(
+        transaction.outletName.toUpperCase(),
+        styles: const PosStyles(
+          align: PosAlign.center, 
+          bold: true, 
+          height: PosTextSize.size2, // FIX: Menggunakan height & width
+          width: PosTextSize.size2
+        ),
       );
+      bytes += generator.text(transaction.outletAddress, styles: const PosStyles(align: PosAlign.center));
+      bytes += generator.text("INV: ${transaction.orderId}", styles: const PosStyles(align: PosAlign.center));
+      bytes += generator.hr();
+
+      // --- INFO TRANSAKSI ---
+      bytes += generator.text("Tgl   : $fullDate");
+      bytes += generator.text("Meja  : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}");
+      bytes += generator.text("Kasir : ${transaction.cashierName}");
+      bytes += generator.hr();
+
+      // --- DAFTAR ITEM BELANJA ---
+      for (var item in transaction.items) {
+        bytes += generator.text(item.itemName, styles: const PosStyles(bold: true));
+        
+        String qtyPrice = "  ${item.quantity} x ${_fMoney(item.unitPrice)}";
+        String totalItem = _fMoney(item.quantity * item.unitPrice);
+        
+        bytes += generator.row([
+          PosColumn(text: qtyPrice, width: 7),
+          PosColumn(text: totalItem, width: 5, styles: const PosStyles(align: PosAlign.right)),
+        ]);
+
+        // Catatan item ('notes')
+        if (item.notes.trim().isNotEmpty) {
+          // FIX: Mengganti italic dengan fontType B agar teks catatan terlihat beda
+          bytes += generator.text("  * ${item.notes}", styles: const PosStyles(fontType: PosFontType.fontB));
+        }
+      }
+      bytes += generator.hr();
+
+      // --- PERHITUNGAN FINANSIAL ---
+      bytes += generator.row([
+        PosColumn(text: "Sub Total", width: 6),
+        PosColumn(text: _fMoney(transaction.items.fold(0, (sum, item) => sum + (item.quantity * item.unitPrice.toInt()))), width: 6, styles: const PosStyles(align: PosAlign.right)),
+      ]);
+
+      if (transaction.discountAmount > 0) {
+        bytes += generator.row([
+          PosColumn(text: "Diskon", width: 6),
+          PosColumn(text: "-${_fMoney(transaction.discountAmount)}", width: 6, styles: const PosStyles(align: PosAlign.right)),
+        ]);
+      }
+
+      // Loop Pajak secara dinamis
+      for (var tax in transaction.taxBreakdown) {
+        String taxName = tax['name'] ?? "Pajak";
+        double taxAmt = double.tryParse(tax['calculated_amount']?.toString() ?? 
+                        tax['amount']?.toString() ?? '0') ?? 0;
+        
+        if (taxAmt > 0) {
+          bytes += generator.row([
+            PosColumn(text: taxName, width: 6),
+            PosColumn(text: _fMoney(taxAmt), width: 6, styles: const PosStyles(align: PosAlign.right)),
+          ]);
+        }
+      }
+      bytes += generator.hr();
+
+      // --- GRAND TOTAL ---
+      bytes += generator.row([
+        PosColumn(text: "TOTAL", width: 6, styles: const PosStyles(bold: true, height: PosTextSize.size2, width: PosTextSize.size2)),
+        PosColumn(text: _fMoney(transaction.totalDariHalaman), width: 6, styles: const PosStyles(align: PosAlign.right, bold: true, height: PosTextSize.size2, width: PosTextSize.size2)),
+      ]);
+      bytes += generator.hr();
+
+      // --- FOOTER ---
+      bytes += generator.text("Terima Kasih", styles: const PosStyles(align: PosAlign.center, fontType: PosFontType.fontB));
+      bytes += generator.feed(3);
+      bytes += generator.cut();
+
+      // --- PROSES KIRIM KE PRINTER VIA TCP SOCKET ---
+      await _sendToPrinter(ipAddress, port, bytes);
+
+    } catch (e) {
+      debugPrint("💥 [PRINTER ERROR] Gagal cetak struk utama: $e");
+      rethrow;
     }
-    for (var tax in transaction.taxBreakdown) {
-      String taxName = tax['name'] ?? "Pajak";
-      double taxAmt =
-          double.tryParse(tax['calculated_amount']?.toString() ?? '0') ?? 0;
-      if (taxAmt > 0) {
-        receipt.writeln(_formatRow(taxName, "Rp ${_fMoney(taxAmt)}"));
+  }
+
+  // =========================================================================
+  // 2. STRUK KHUSUS DAPUR (KITCHEN BILL)
+  // =========================================================================
+  Future<void> printKitchenReceipt({
+    required String ipAddress,
+    required TransactionModel transaction,
+    int port = 9100,
+  }) async {
+    try {
+      final profile = await CapabilityProfile.load();
+      final generator = Generator(PaperSize.mm80, profile);
+      List<int> bytes = [];
+
+      final now = DateTime.now();
+      final fullDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(now);
+
+      bytes += generator.text("======= PESANAN DAPUR =======", styles: const PosStyles(align: PosAlign.center, bold: true));
+      bytes += generator.text("INV   : ${transaction.orderId}");
+      bytes += generator.text("Tgl   : $fullDate");
+      bytes += generator.text("Meja  : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}");
+      bytes += generator.hr();
+
+      for (var item in transaction.items) {
+        // Cetak item dengan ukuran teks besar (Size 2)
+        bytes += generator.row([
+          PosColumn(text: item.itemName.toUpperCase(), width: 9, styles: const PosStyles(bold: true, height: PosTextSize.size2, width: PosTextSize.size2)),
+          PosColumn(text: "x${item.quantity}", width: 3, styles: const PosStyles(align: PosAlign.right, bold: true, height: PosTextSize.size2, width: PosTextSize.size2)),
+        ]);
+
+        if (item.notes.trim().isNotEmpty) {
+          bytes += generator.text("  * Catatan: ${item.notes}", styles: const PosStyles(bold: true, fontType: PosFontType.fontB));
+        }
+        bytes += generator.feed(1);
+      }
+      bytes += generator.hr();
+      bytes += generator.text("ARANUS POS - KITCHEN", styles: const PosStyles(align: PosAlign.center));
+      
+      bytes += generator.feed(3);
+      bytes += generator.cut();
+
+      await _sendToPrinter(ipAddress, port, bytes);
+
+    } catch (e) {
+      debugPrint("💥 [PRINTER ERROR] Gagal cetak ke Dapur: $e");
+      rethrow;
+    }
+  }
+
+  // =========================================================================
+  // BRIDGE UTAMA: PENGIRIM BYTE DATA KE SOCKET PRINTER
+  // =========================================================================
+  Future<void> _sendToPrinter(String ipAddress, int port, List<int> bytes) async {
+    Socket? socket;
+    try {
+      socket = await Socket.connect(ipAddress, port, timeout: const Duration(seconds: 4));
+      socket.add(bytes);
+      await socket.flush();
+    } finally {
+      if (socket != null) {
+        await socket.close();
       }
     }
-    receipt.writeln("-" * 32);
-    receipt.writeln(
-      _formatRow("TOTAL", "Rp ${_fMoney(transaction.totalDariHalaman)}"),
-    );
-    receipt.writeln("-" * 32);
-    receipt.writeln('${_centerText("Terima Kasih", 32)}\n');
-
-    debugPrint(receipt.toString());
-  }
-
-  void printKitchenToTerminal(TransactionModel transaction) {
-    final now = DateTime.now();
-    final fullDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(now);
-    StringBuffer kitchen = StringBuffer();
-
-    kitchen.writeln("\n======= PESANAN DAPUR =======");
-    kitchen.writeln("INV   : ${transaction.orderId}");
-    kitchen.writeln("Tgl   : $fullDate");
-    kitchen.writeln(
-      "Meja  : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}",
-    );
-    kitchen.writeln(
-      "Cust  : ${transaction.customerName.isEmpty ? "-" : transaction.customerName}",
-    );
-    kitchen.writeln("-" * 30);
-
-    for (var item in transaction.items) {
-      kitchen.writeln(
-        _formatRow(item.itemName.toUpperCase(), "x${item.quantity}", width: 30),
-      );
-
-      if (item.notes.trim().isNotEmpty) {
-        kitchen.writeln("*${item.notes}");
-      }
-      kitchen.writeln("");
-    }
-
-    kitchen.writeln("-" * 30);
-    kitchen.writeln(_centerText("ARANUS POS - KITCHEN", 30));
-    kitchen.writeln("==============================\n");
-
-    debugPrint(kitchen.toString());
-  }
-
-  String _centerText(String text, int width) {
-    if (text.length >= width) return text;
-    int sideSpace = (width - text.length) ~/ 2;
-    return " " * sideSpace + text;
-  }
-
-  String _formatRow(String left, String right, {int width = 32}) {
-    int totalWidth = width;
-    int spaces = totalWidth - left.length - right.length;
-    return "$left${" " * (spaces > 0 ? spaces : 1)}$right";
   }
 }

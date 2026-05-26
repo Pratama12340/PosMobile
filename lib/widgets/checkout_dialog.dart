@@ -1415,18 +1415,22 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       var mappedItems = [...existingItems, ...newItems];
 
       Map<String, dynamic> payload = {
-        'outlet_id': savedOutletId,
-        'customer_name': widget.customerName,
-        'table_id': widget.tableId,
-        'tax_amount': taxAmountFinal.toInt(),
-        'tax_breakdown': simplifiedTaxBreakdown,
-        'payment_method': _paymentMethod.toLowerCase(),
-        'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
-        'items': mappedItems,
-        // Kirim semua ID diskon yang dipilih
-        if (_selectedDiscounts.isNotEmpty)
-          'discount_ids': _selectedDiscounts.map((d) => d.id).toList(),
-      };
+  'outlet_id': savedOutletId,
+  'customer_name': widget.customerName,
+  'table_id': widget.tableId,
+  'subtotal_price': subTotal.toInt(),
+  'discount_amount': discountAmount.toInt(),  // ← server pakai ini sebagai override
+  'total_price': grandTotal.toInt(),
+  'tax_amount': taxAmountFinal.toInt(),
+  'tax_breakdown': simplifiedTaxBreakdown,
+  'payment_method': _paymentMethod.toLowerCase(),
+  'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
+  'items': mappedItems,
+  // Kirim discount_id tunggal hanya jika 1 diskon, untuk tracking di DB
+  if (_selectedDiscounts.length == 1)
+    'discount_id': _selectedDiscounts.first.id,
+  // Hapus discount_ids — server tidak support array
+};
 
       debugPrint("=== DEBUG CHECKOUT ===");
       debugPrint("isUpdatingOrder: ${widget.isUpdatingOrder}");

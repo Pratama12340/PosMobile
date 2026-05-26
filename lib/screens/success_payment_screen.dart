@@ -198,7 +198,7 @@ class SuccessPaymentPage extends StatelessWidget {
         onPressed: isBack
             ? () => Navigator.of(context).popUntil((route) => route.isFirst)
             : () {
-                final printerService = TerminalPrinterService();
+                //final printerService = TerminalPrinterService();
 
                 // 1. Mapping Item dari Cart
                 final List<CartItem> itemsForPrinting = cart.values.map((item) {
@@ -226,7 +226,7 @@ class SuccessPaymentPage extends StatelessWidget {
                 );
 
                 // Cetak Struk Utuh untuk Kasir / Pelanggan
-                printerService.printToTerminal(mainTransaction);
+                //printerService.printToTerminal(mainTransaction);
 
                 // 3. Kelompokkan item berdasarkan stationId
                 Map<String, List<CartItem>> groupedItems = {};
@@ -257,7 +257,7 @@ class SuccessPaymentPage extends StatelessWidget {
                   // tahu IP/Koneksi mana yang harus ditembak berdasarkan ID-nya.
                   
                   // Sementara menggunakan method lama:
-                  printerService.printKitchenToTerminal(stationTransaction);
+                  //printerService.printKitchenToTerminal(stationTransaction);
                 });
 
                 ScaffoldMessenger.of(context).showSnackBar(

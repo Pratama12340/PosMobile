@@ -488,15 +488,15 @@ class ApiService {
 
       if (response.statusCode == 200) {
         
-        print('=== RAW JSON ORDER 43 ===');
+        debugPrint('=== RAW JSON ORDER 43 ===');
   final decoded = jsonDecode(response.body);
   final rawList = decoded['data'] is Map 
       ? decoded['data']['data'] 
       : decoded['data'];
   for (var o in rawList) {
     if (o['id'] == 43 || o['id'] == 42) {
-      print('ID ${o['id']} raw payment_method: ${o['payment_method']}');
-      print('Semua field: ${o.keys.toList()}');
+      debugPrint('ID ${o['id']} raw payment_method: ${o['payment_method']}');
+      debugPrint('Semua field: ${o.keys.toList()}');
     }
   }
 
@@ -510,28 +510,28 @@ class ApiService {
           }
         }
 
-        print('=== PENDING ORDERS DEBUG ===');
-      print('Total order: ${rawData.length}');
+        debugPrint('=== PENDING ORDERS DEBUG ===');
+      debugPrint('Total order: ${rawData.length}');
       for (var o in rawData) {
-        print('---');
-        print('ID: ${o['id']}');
-        print('Customer: ${o['customer_name']}');
-        print('payment_method (orders table): ${o['payment_method']}');
-        print('payments array: ${o['payments']}');
-        print('payments length: ${(o['payments'] as List?)?.length ?? 0}');
+        debugPrint('---');
+        debugPrint('ID: ${o['id']}');
+        debugPrint('Customer: ${o['customer_name']}');
+        debugPrint('payment_method (orders table): ${o['payment_method']}');
+        debugPrint('payments array: ${o['payments']}');
+        debugPrint('payments length: ${(o['payments'] as List?)?.length ?? 0}');
         if ((o['payments'] as List?)?.isNotEmpty == true) {
           for (var p in o['payments']) {
-            print('  → payment method: ${p['method']}');
+            debugPrint('  → payment method: ${p['method']}');
           }
         }
       }
-      print('=== END DEBUG ===');
+      debugPrint('=== END DEBUG ===');
 
         return rawData.map((json) => Order.fromJson(json)).toList();
       }
       return [];
     } catch (e) {
-      print('getPendingOrders error: $e');
+      debugPrint('getPendingOrders error: $e');
       return [];
     }
   }

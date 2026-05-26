@@ -89,6 +89,12 @@ class _CartPanelState extends State<CartPanel> {
   void didUpdateWidget(covariant CartPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (widget.cart.isEmpty && oldWidget.cart.isNotEmpty) {
+      _customerController.clear(); // Bersihkan nama
+      _tableController.clear();    // Bersihkan nomor meja
+      _selectedTableId = null;     // Hapus ID meja
+    }
+
     if (widget.initialCustomerName != oldWidget.initialCustomerName) {
       _customerController.text = widget.initialCustomerName ?? "";
     }
@@ -121,12 +127,12 @@ void _syncNoteControllers() {
       _noteFocusNodes[id] = node;
       node.addListener(() {
   if (node.hasFocus) {
-    final screenHeight = MediaQuery.sizeOf(context).height; 
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (!mounted) return;
-      final ctx = _itemKeys[id]?.currentContext;
-      if (ctx != null) {
-        final box = ctx.findRenderObject() as RenderBox?;
+  Future.delayed(const Duration(milliseconds: 350), () {
+    if (!mounted) return;
+    final screenHeight = MediaQuery.sizeOf(context).height; // ← pindah ke sini
+    final ctx = _itemKeys[id]?.currentContext;
+    if (ctx != null) {
+      final box = ctx.findRenderObject() as RenderBox?;
         if (box == null) return;
         final itemOffset = box.localToGlobal(Offset.zero).dy;
         final keyboardHeight = 320.0; 

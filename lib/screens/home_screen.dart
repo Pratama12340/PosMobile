@@ -6,11 +6,9 @@ import '../models/product_model.dart';
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../widgets/cart_panel.dart';
-import '../services/reverb_service.dart';
-import '../services/storage_service.dart';
 import '../widgets/draft_panel.dart';
-// import '../services/printer_service.dart';
-// import '../models/print_model.dart';
+//import '../services/printer_service.dart';
+//import '../models/print_model.dart';
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -29,7 +27,6 @@ class HomeScreen extends StatefulWidget {
 class HomeScreenState extends State<HomeScreen> {
   final Map<int, OrderItem> _cart = {};
   final List<Map<String, dynamic>> _drafts = [];
-  final ReverbService _reverbService = ReverbService();
   // final TerminalPrinterService _printerService = TerminalPrinterService();
 
   String? _currentCustomerName;
@@ -109,13 +106,11 @@ class HomeScreenState extends State<HomeScreen> {
     super.initState();
     widget.searchController.addListener(_applyFilters);
     _loadInitialData();
-    _connectReverb();
   }
 
   @override
   void dispose() {
     widget.searchController.removeListener(_applyFilters);
-    _reverbService.disconnect();
     super.dispose();
   }
 
@@ -137,7 +132,6 @@ class HomeScreenState extends State<HomeScreen> {
         final List reportsData = results[3];
         final List<Order> historyData = results[4] as List<Order>;
         final List<Order> pendingData = results[5] as List<Order>;
-       
 
         List<Order> loadedPendingOrders = pendingData;
         Map<int, int> productSales = {};
@@ -373,7 +367,7 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
- Future<void> _acceptOrder(Order order) async {
+Future<void> _acceptOrder(Order order) async {
     debugPrint("Menghubungi API accept untuk Order ID: ${order.id}");
     final success = await ApiService.acceptOrder(order.id);
     if (success && mounted) {
@@ -419,105 +413,7 @@ class HomeScreenState extends State<HomeScreen> {
       );
     }
   }
-
-  Future<void> _connectReverb() async {
-    final int? outletId = await StorageService.getOutletId();
-
-    if (outletId == null) {
-      debugPrint('🔴 [REVERB HOME] outlet_id tidak ditemukan');
-      return;
-    }
-
-    await _reverbService.initConnection(
-      channelName: 'private-orders.outlet.$outletId',
-      eventName: '.order.created',
-      onEventReceived: (data) {
-        debugPrint('⚡ [HOME] Event Reverb diterima: $data');
-
-        // ✅ Cek status order dari event
-        final String status =
-            data['order']?['status']?.toString() ??
-            data['status']?.toString() ??
-            '';
-
-        if (status == 'paid') {
-          // Order sudah dibayar → masuk ke list paid untuk di-accept & cetak
-          try {
-            final Order newOrder = Order.fromJson(data['order'] ?? data);
-            if (mounted && _shouldKeepOrder(newOrder)) {
-              setState(() => _paidOrders.add(newOrder));
-            }
-          } catch (e) {
-            // Jika parse gagal, refresh saja dari API
-            _refreshPaidOrdersSilently();
-          }
-        } else {
-          // Order baru pending → refresh pending list
-          _refreshPendingOrdersSilently();
-        }
-
-        if (mounted) {
-          final customerName = data['order']?['customer_name'] ?? 'Pelanggan';
-          final isPaid = status == 'paid';
-
-        ScaffoldMessenger.of(context)
-  ..hideCurrentSnackBar() // ← hapus notif sebelumnya dulu
-  ..showSnackBar(
-    SnackBar(
-      content: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              isPaid ? Icons.payment : Icons.notifications_active,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isPaid ? 'Pembayaran Berhasil!' : 'Pesanan Baru!',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Colors.white,
-                  ),
-                ),
-                Text(
-                  isPaid
-                      ? '$customerName - siap diproses'
-                      : 'Dari $customerName masuk',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      backgroundColor: isPaid ? Colors.blue.shade700 : Colors.green.shade700,
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 5), // ← 5 detik
-      margin: const EdgeInsets.all(16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ),
-          );
-        }
-      },
-    );
-  }
-
+  
   Future<void> refreshPendingOrdersSilently() async {
     try {
       final freshOrders = await ApiService.getPendingOrders();
@@ -1023,7 +919,7 @@ class HomeScreenState extends State<HomeScreen> {
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       itemCount: allItems.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const Divider(height: 1, color: Color(0xFFF5F5F5)),
                       itemBuilder: (context, index) {
                         final item = allItems[index];

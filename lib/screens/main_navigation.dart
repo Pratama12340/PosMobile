@@ -69,22 +69,21 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   }
 
 void _connectReverb() async {
+  debugPrint("🚨 [DEBUG] _connectReverb dipanggil ke-${DateTime.now()}");
   final int? outletId = await StorageService.getOutletId();
-
   if (outletId == null) {
     debugPrint('🔴 [REVERB] outlet_id tidak ditemukan');
     return;
   }
 
-  // ✅ Event: Order Created → update Home + History
-  _reverbService.initConnection(
+  await _reverbService.initConnection(          // ← tambah await
     channelName: 'private-orders.outlet.$outletId',
     eventName: '.order.created',
     onEventReceived: (data) {
       debugPrint('⚡ [ORDER CREATED]: $data');
       _homeKey.currentState?.refreshPendingOrdersSilently();
-      _historyKey.currentState?.loadHistory();       // ✅ History update
-      _shiftKey.currentState?.refreshShift();        // ✅ Shift update
+      _historyKey.currentState?.loadHistory();
+      _shiftKey.currentState?.refreshShift();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -112,15 +111,15 @@ void _connectReverb() async {
     },
   );
 
-  // ✅ Event: Order Updated → update Home + History + Shift
-  _reverbService.initConnection(
-    channelName: 'private-orders.outlet.$outletId',
-    eventName: '.order.updated',
-    onEventReceived: (data) {
+  // ✅ GANTI komentar lama dengan implementasi nyata
+  _reverbService.bindEvent(
+    'private-orders.outlet.$outletId',
+    '.order.updated',
+    (data) {
       debugPrint('⚡ [ORDER UPDATED]: $data');
       _homeKey.currentState?.refreshPendingOrdersSilently();
-      _historyKey.currentState?.loadHistory();       // ✅ History update
-      _shiftKey.currentState?.refreshShift();        // ✅ Shift update
+      _historyKey.currentState?.loadHistory();
+      _shiftKey.currentState?.refreshShift();
     },
   );
 }

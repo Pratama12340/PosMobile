@@ -12,12 +12,12 @@ class ReverbService {
   PusherClient? _pusher;
   final Map<String, Channel> _channels = {};
   bool _isConnected = false;
-  bool _isInitializing = false; // ✅ Mencegah pemanggilan ganda
+  bool _isInitializing = false;
   Completer<void>? _connectionCompleter;
 
   final String reverbAppKey = "r3gcjhwwanzthldyihry";
-  final String reverbHost   = "pos.etres.my.id"; 
-  final int reverbPort      = 8443;
+  final String reverbHost   = "ws.etres.my.id";
+  final int reverbPort      = 443;
   final String authUrl      = "https://api.etres.my.id/api/v1/broadcasting/auth";
 
   Future<void> initConnection({
@@ -32,21 +32,17 @@ class ReverbService {
         return;
       }
 
-      // ✅ Mencegah proses koneksi berjalan dua kali bersamaan
       if (_isInitializing) {
         debugPrint("⏳ [REVERB] Sedang proses inisialisasi, tunggu sebentar...");
         if (_connectionCompleter != null) {
           await _connectionCompleter!.future;
         }
-      } 
-      // ✅ Inisialisasi Pusher hanya sekali
-      else if (_pusher == null) {
+      } else if (_pusher == null) {
         _isInitializing = true;
         await _initPusher(token);
         _isInitializing = false;
       }
 
-      // ✅ Tunggu koneksi benar-benar siap sebelum subscribe
       if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
         await _connectionCompleter!.future.timeout(
           const Duration(seconds: 10),
@@ -61,30 +57,28 @@ class ReverbService {
         return;
       }
 
-      // ✅ Cek channel sudah di-subscribe atau belum
       if (_channels.containsKey(channelName)) {
         debugPrint("⚠️ [REVERB] Sudah subscribe ke: $channelName, skip.");
         return;
       }
 
-      // ✅ Subscribe channel
       _subscribeChannel(channelName, eventName, onEventReceived);
 
     } catch (e) {
-      _isInitializing = false; // Buka kunci jika terjadi error
+      _isInitializing = false;
       debugPrint("💥 [REVERB ERROR]: $e");
     }
   }
 
   Future<void> _initPusher(String token) async {
-    _connectionCompleter = Completer<void>(); 
+    _connectionCompleter = Completer<void>();
 
     PusherOptions options = PusherOptions(
       host: reverbHost,
-      wsPort: reverbPort, // 8443
-      wssPort: reverbPort, // ✅ TAMBAHKAN INI (8443)
-      encrypted: true, // ✅ WAJIB TRUE karena REVERB_SCHEME=https
-      cluster: 'mt1',
+      wsPort: reverbPort,
+      wssPort: reverbPort,
+      encrypted: true,
+      //cluster: 'mt1',
       auth: PusherAuth(
         authUrl,
         headers: {
@@ -117,11 +111,15 @@ class ReverbService {
 
     _pusher!.onConnectionError((error) {
       debugPrint("🔴 [REVERB ERROR] ${error?.message}");
+      debugPrint("🔴 [REVERB ERROR] code: ${error?.code}");
+      debugPrint("🔴 [REVERB ERROR] exception: ${error?.exception}");
       if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
         _connectionCompleter!.completeError(error?.message ?? 'Connection error');
       }
     });
 
+    // Taruh tepat sebelum await _pusher!.connect();
+    debugPrint("🔌 [REVERB] Konek ke: $reverbHost:$reverbPort encrypted:${options.encrypted}");
     await _pusher!.connect();
   }
 
@@ -148,6 +146,33 @@ class ReverbService {
     debugPrint("✅ [REVERB] Terhubung ke: $channelName");
   }
 
+  // ✅ BARU — bind event tambahan ke channel yang sudah ada
+  void bindEvent(
+    String channelName,
+    String eventName,
+    Function(dynamic) onEventReceived,
+  ) {
+    final channel = _channels[channelName];
+    if (channel == null) {
+      debugPrint('⚠️ [REVERB] Channel $channelName belum ada, tidak bisa bind.');
+      return;
+    }
+
+    channel.bind(eventName, (PusherEvent? event) {
+      debugPrint("⚡ [REVERB EVENT]: ${event?.eventName}");
+      if (event?.data != null) {
+        try {
+          final data = jsonDecode(event!.data.toString());
+          onEventReceived(data);
+        } catch (e) {
+          debugPrint("💥 [REVERB] Gagal parse data: $e");
+        }
+      }
+    });
+
+    debugPrint("✅ [REVERB] Event $eventName terikat ke channel $channelName");
+  }
+
   Future<void> disconnect() async {
     try {
       for (var channel in _channels.values) {
@@ -155,16 +180,14 @@ class ReverbService {
       }
       _channels.clear();
       _isConnected = false;
-      
-      // ✅ Memutus koneksi terlebih dahulu
+
       if (_pusher != null) {
         await _pusher!.disconnect();
       }
-      
-      // ✅ Variabel dikosongkan setelah bersih
-      _pusher = null; 
+
+      _pusher = null;
       _connectionCompleter = null;
-      
+
       debugPrint("⏹️ [REVERB] Koneksi ditutup bersih.");
     } catch (e) {
       debugPrint("💥 [REVERB] Gagal disconnect: $e");

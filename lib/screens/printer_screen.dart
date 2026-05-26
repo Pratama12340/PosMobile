@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../constants/style.dart';
 import '../widgets/printer_config_modal.dart';
+import '../services/storage_service.dart';
+import '../services/printer_service.dart';
+import '../models/print_model.dart';
 
 class PrinterScreen extends StatefulWidget {
   const PrinterScreen({super.key});
@@ -10,37 +13,113 @@ class PrinterScreen extends StatefulWidget {
 }
 
 class _PrinterScreenState extends State<PrinterScreen> {
-  final List<Map<String, dynamic>> printers = [
-    {
-      'name': 'Kasir Utama',
-      'status': 'Online',
-      'type': 'Thermal',
-      'conn': 'LAN',
-      'ip': '192.168.1.100',
-      'color': Colors.green,
-      'station_name': 'Kasir (Semua Item)', 
-    },
-    {
-      'name': 'Printer Dapur',
-      'status': 'Offline',
-      'type': 'Thermal',
-      'conn': 'Bluetooth',
-      'ip': 'BT:00:11:22',
-      'color': Colors.red,
-      'station_name': 'Dapur',
-    },
-  ];
+  // Variabel penampung IP dinamis
+  String currentPrinterIp = "192.168.1.87";
 
-  void _showConfigModal() {
-    showDialog(
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentPrinterIp();
+  }
+
+  // Mengambil IP terbaru dari SharedPreferences lokal
+  Future<void> _loadCurrentPrinterIp() async {
+    final savedIp = await StorageService.getPrinterIp();
+    if (savedIp != null && savedIp.isNotEmpty) {
+      setState(() {
+        currentPrinterIp = savedIp;
+      });
+    }
+  }
+
+  // Mengatur modal agar meng-update halaman utama ketika tombol simpan ditekan
+  void _showConfigModal() async {
+    final result = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
       builder: (context) => const PrinterConfigModal(),
     );
+
+    if (result == true) {
+      _loadCurrentPrinterIp(); // Refresh IP di UI card
+    }
+  }
+
+  // Fungsi memicu tes cetak fisik ke printer
+  Future<void> _executeTestPrint() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(" Mengirim data tes cetak ke $currentPrinterIp...")),
+    );
+
+    try {
+      final printerService = NetworkPrinterService();
+
+      // Struktur dummy data transaksi audit untuk melakukan test print out
+      final testData = TransactionModel(
+        orderId: "TEST-PRINT-ARANUS",
+        outletName: "ARANUS POS",
+        outletAddress: "Testing Jaringan Printer OK",
+        cashierName: "Developer Mode",
+        customerName: "", 
+        tableNumber: "99",
+        items: [
+          CartItem(itemName: "Es Kelapa Segar", quantity: 2, unitPrice: 15000, notes: "Es dikit", stationId: "1"),
+          CartItem(itemName: "Teh Manis Hangat", quantity: 1, unitPrice: 10000, notes: "", stationId: "1")
+        ],
+        discountAmount: 5000,
+        taxBreakdown: [
+          {"name": "PPN 11%", "calculated_amount": 3850}
+        ],
+        totalDariHalaman: 38850
+      );
+
+      await printerService.printReceipt(
+        ipAddress: currentPrinterIp, 
+        transaction: testData
+      );
+
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("Koneksi Printer Gagal"),
+            content: Text("Gagal mengirim data ke printer fisik ($currentPrinterIp).\n\nDetail Error: $e"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx), 
+                child: const Text("OK")
+              )
+            ],
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final List<Map<String, dynamic>> printers = [
+      {
+        'name': 'Kasir Utama',
+        'status': 'Online',
+        'type': 'Thermal',
+        'conn': 'LAN',
+        'ip': currentPrinterIp, // Data IP berubah secara reaktif mengikuti storage lokal
+        'color': Colors.green,
+        'station_name': 'Kasir (Semua Item)', 
+      },
+      {
+        'name': 'Printer Dapur',
+        'status': 'Offline',
+        'type': 'Thermal',
+        'conn': 'Bluetooth',
+        'ip': 'BT:00:11:22',
+        'color': Colors.red,
+        'station_name': 'Dapur',
+      },
+    ];
+
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
       appBar: AppBar(
@@ -54,7 +133,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
         backgroundColor: AppStyle.primaryBlue,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
-        actions: [],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
@@ -76,7 +154,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
                   icon: Icons.print_outlined,
                   bgColor: Colors.orange.shade50,
                   textColor: Colors.orange.shade800,
-                  onTap: () {},
+                  onTap: _executeTestPrint, // Terhubung ke fungsi tes cetak fisik
                 ),
               ],
             ),
@@ -207,7 +285,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  // Mengubah label "Jenis" menjadi "Station" agar lebih relevan dengan alur baru
                   _buildInfoRow("Station", data['station_name'] ?? "Semua Item"),
                   const SizedBox(height: 8),
                   _buildInfoRow("Koneksi", data['conn']),

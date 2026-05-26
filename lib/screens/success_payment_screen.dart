@@ -198,7 +198,7 @@ class SuccessPaymentPage extends StatelessWidget {
         onPressed: isBack
             ? () => Navigator.of(context).popUntil((route) => route.isFirst)
             : () {
-                final printerService = TerminalPrinterService();
+                //final printerService = TerminalPrinterService();
 
                 // 1. Mapping Item dari Cart
                 final List<CartItem> itemsForPrinting = cart.values.map((item) {
@@ -226,7 +226,7 @@ class SuccessPaymentPage extends StatelessWidget {
                 );
 
                 // Cetak Struk Utuh untuk Kasir / Pelanggan
-                printerService.printToTerminal(mainTransaction);
+                //printerService.printToTerminal(mainTransaction);
 
                 // 3. Kelompokkan item berdasarkan stationId
                 Map<String, List<CartItem>> groupedItems = {};
@@ -252,7 +252,16 @@ class SuccessPaymentPage extends StatelessWidget {
                     totalDariHalaman: grandTotal,
                   );
 
+<<<<<<< HEAD
                   printerService.printKitchenToTerminal(stationTransaction);
+=======
+                  // TODO: Di file printer_service.dart, Anda sebaiknya membuat method baru 
+                  // seperti `printToStation(stationId, stationTransaction)` agar service
+                  // tahu IP/Koneksi mana yang harus ditembak berdasarkan ID-nya.
+                  
+                  // Sementara menggunakan method lama:
+                  //printerService.printKitchenToTerminal(stationTransaction);
+>>>>>>> 7b23d828d39b33e7f61141b4a2020ebed975ef21
                 });
 
                 ScaffoldMessenger.of(context).showSnackBar(

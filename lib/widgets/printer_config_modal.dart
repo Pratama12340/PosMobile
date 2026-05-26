@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/style.dart';
+import '../services/storage_service.dart';
 
 class PrinterConfigModal extends StatefulWidget {
   const PrinterConfigModal({super.key});
@@ -9,7 +10,12 @@ class PrinterConfigModal extends StatefulWidget {
 }
 
 class _PrinterConfigModalState extends State<PrinterConfigModal> {
-  // States
+  // Controllers untuk mengambil data input teks form
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _ipController = TextEditingController();
+  final TextEditingController _portController = TextEditingController();
+  final TextEditingController _charsController = TextEditingController();
+
   String selectedType = "Thermal Printer";
   String selectedMode = "Standard Printing";
   String selectedConn = "Network Printer";
@@ -17,12 +23,62 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
   bool isActive = true;
 
   @override
+  void initState() {
+    super.initState();
+    // Inisialisasi nilai bawaan form
+    _nameController.text = "Kasir Utama";
+    _ipController.text = "192.168.1.87"; 
+    _portController.text = "9100";
+    _charsController.text = "32";
+    _loadSavedPrinterData();
+  }
+
+  // Memuat data IP printer yang tersimpan di lokal device (jika ada)
+  Future<void> _loadSavedPrinterData() async {
+    final savedIp = await StorageService.getPrinterIp();
+    if (savedIp != null && savedIp.isNotEmpty) {
+      setState(() {
+        _ipController.text = savedIp;
+      });
+    }
+  }
+
+  // Menyimpan pengaturan IP ke StorageService lokal
+  Future<void> _savePrinterSettings() async {
+    final inputIp = _ipController.text.trim();
+    if (inputIp.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("IP Address tidak boleh kosong!")),
+      );
+      return;
+    }
+
+    await StorageService.savePrinterIp(inputIp);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Berhasil menyimpan perangkat dengan IP: $inputIp")),
+      );
+      Navigator.pop(context, true); // Mengembalikan nilai true untuk me-refresh layar utama
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _ipController.dispose();
+    _portController.dispose();
+    _charsController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Center(
         child: Container(
-          width: 550, // Optimal untuk tablet
+          width: 550, // Ukuran optimal tablet kesukaan Anda
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(28),
@@ -79,7 +135,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                         onChanged: (v) => setState(() => selectedConn = v!),
                       ),
 
-                      // Dinamis berdasarkan koneksi
+                      // Dinamis berdasarkan jenis koneksi
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
                         child: selectedConn == "Network Printer"
@@ -88,23 +144,26 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                       ),
 
                       _buildModernTextField(
-                        "Nama Printer",
-                        "Contoh: Kasir Lantai 1",
+                        label: "Nama Printer",
+                        hint: "Contoh: Kasir Lantai 1",
+                        controller: _nameController,
                       ),
 
                       Row(
                         children: [
                           Expanded(
                             child: _buildModernTextField(
-                              "Chars. per line",
-                              "32",
+                              label: "Chars. per line",
+                              hint: "32",
+                              controller: _charsController,
                             ),
                           ),
                           const SizedBox(width: 20),
                           Expanded(
                             child: _buildModernTextField(
-                              "Port Printer",
-                              "9100",
+                              label: "Port Printer",
+                              hint: "9100",
+                              controller: _portController,
                             ),
                           ),
                         ],
@@ -232,9 +291,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
-                onChanged: isActive
-                    ? onChanged
-                    : null, // Disable dropdown jika printer nonaktif
+                onChanged: isActive ? onChanged : null,
                 items: items.map((String item) {
                   return DropdownMenuItem<String>(
                     value: item,
@@ -249,7 +306,11 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
     );
   }
 
-  Widget _buildModernTextField(String label, String hint) {
+  Widget _buildModernTextField({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Column(
@@ -265,14 +326,15 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
           ),
           const SizedBox(height: 10),
           TextField(
-            enabled: isActive, // Disable input jika printer nonaktif
+            controller: controller,
+            enabled: isActive,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
               filled: true,
               fillColor: isActive
                   ? Colors.grey.shade50
-                  : Colors.grey.shade200, // Warna berubah jika disable
+                  : Colors.grey.shade200,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 16,
@@ -302,7 +364,13 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
   Widget _buildNetworkFields() {
     return Column(
       key: const ValueKey('network'),
-      children: [_buildModernTextField("IP Address Printer", "192.168.1.100")],
+      children: [
+        _buildModernTextField(
+          label: "IP Address Printer",
+          hint: "192.168.1.100",
+          controller: _ipController,
+        )
+      ],
     );
   }
 
@@ -396,7 +464,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
           const SizedBox(width: 20),
           Expanded(
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: _savePrinterSettings, // Mengarah ke fungsi lokal penyimpanan
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange.shade800,
                 padding: const EdgeInsets.symmetric(vertical: 18),

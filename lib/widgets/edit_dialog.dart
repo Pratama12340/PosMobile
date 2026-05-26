@@ -779,7 +779,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         const SizedBox(width: 12),
         ElevatedButton.icon(
           onPressed: () async {
-            final printerService = TerminalPrinterService();
+            //final printerService = TerminalPrinterService();
             final outletInfo = await ApiService.fetchOutletInfoLive();
 
             if (!mounted) return;
@@ -815,7 +815,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                   isEditMode ? currentTotalPrice : localOrder!.totalPrice,
             );
 
-            printerService.printToTerminal(transaction);
+            // printerService.printToTerminal(transaction);
 
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(

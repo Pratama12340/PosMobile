@@ -14,6 +14,7 @@ class StorageService {
   static const String _keyShiftName = 'shift_name';
   static const String _keyShiftSchedule = 'shift_schedule';
   static const String _keyLastShiftUserId = 'last_shift_user_id';
+  static const String _keyPrinterIp = 'printer_ip';
 
   // --- 1. FUNGSI TOKEN ---
   static Future<void> saveToken(String token) async {
@@ -199,4 +200,16 @@ class StorageService {
     await prefs.remove(_keyShiftSchedule);
     await prefs.remove(_keyLastShiftUserId);
   }
+
+  // --- 7. FUNGSI PRINTER ---
+  static Future<void> savePrinterIp(String ip) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPrinterIp, ip);
+  }
+
+  static Future<String?> getPrinterIp() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyPrinterIp);
+  }
+  
 }

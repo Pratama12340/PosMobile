@@ -12,13 +12,16 @@ class ReverbService {
   PusherClient? _pusher;
   final Map<String, Channel> _channels = {};
   bool _isConnected = false;
-  bool _isInitializing = false;
-  Completer<void>? _connectionCompleter;
+  Timer? _connectionCheckTimer;  // ← TAMBAH
+
+  final List<Map<String, dynamic>> _pendingSubscriptions = [];
 
   final String reverbAppKey = "r3gcjhwwanzthldyihry";
   final String reverbHost   = "ws.etres.my.id";
   final int reverbPort      = 443;
   final String authUrl      = "https://api.etres.my.id/api/v1/broadcasting/auth";
+
+  List<String> get activeChannels => _channels.keys.toList();
 
   Future<void> initConnection({
     required String channelName,
@@ -32,53 +35,72 @@ class ReverbService {
         return;
       }
 
-      if (_isInitializing) {
-        debugPrint("⏳ [REVERB] Sedang proses inisialisasi, tunggu sebentar...");
-        if (_connectionCompleter != null) {
-          await _connectionCompleter!.future;
-        }
-      } else if (_pusher == null) {
-        _isInitializing = true;
-        await _initPusher(token);
-        _isInitializing = false;
-      }
+      _pendingSubscriptions.add({
+        'channelName': channelName,
+        'eventName': eventName,
+        'onEventReceived': onEventReceived,
+      });
 
-      if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
-        await _connectionCompleter!.future.timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            debugPrint("⏰ [REVERB] Timeout menunggu koneksi.");
-          },
-        );
-      }
-
-      if (!_isConnected) {
-        debugPrint("🔴 [REVERB] Tidak bisa subscribe, koneksi gagal.");
+      if (_isConnected) {
+        _processPendingSubscriptions();
         return;
       }
 
-      if (_channels.containsKey(channelName)) {
-        debugPrint("⚠️ [REVERB] Sudah subscribe ke: $channelName, skip.");
-        return;
+      // Reset dulu jika pusher sudah ada tapi tidak connected
+      if (_pusher != null) {
+        debugPrint("🔄 [REVERB] Reset pusher lama...");
+        try { await _pusher!.disconnect(); } catch (_) {}
+        _pusher = null;
+        _channels.clear();
       }
 
-      _subscribeChannel(channelName, eventName, onEventReceived);
+      await _initPusher(token);
+
+      // ← TAMBAH: timer fallback jika callback tidak firing
+      _startConnectionCheckTimer(token);
 
     } catch (e) {
-      _isInitializing = false;
       debugPrint("💥 [REVERB ERROR]: $e");
     }
   }
 
-  Future<void> _initPusher(String token) async {
-    _connectionCompleter = Completer<void>();
+  // ← TAMBAH method ini
+  void _startConnectionCheckTimer(String token) {
+    _connectionCheckTimer?.cancel();
+    _connectionCheckTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (timer) async {
+        if (_isConnected) {
+          debugPrint("✅ [REVERB] Sudah connected, stop timer.");
+          timer.cancel();
+          return;
+        }
 
+        debugPrint("🔄 [REVERB] Belum connected setelah ${timer.tick * 5}s, coba reconnect...");
+
+        if (timer.tick >= 6) {
+          // Sudah 30 detik, stop
+          debugPrint("🔴 [REVERB] Menyerah setelah 30 detik.");
+          timer.cancel();
+          return;
+        }
+
+        // Reset dan coba lagi
+        try { await _pusher!.disconnect(); } catch (_) {}
+        _pusher = null;
+        _channels.clear();
+
+        await _initPusher(token);
+      },
+    );
+  }
+
+  Future<void> _initPusher(String token) async {
     PusherOptions options = PusherOptions(
       host: reverbHost,
       wsPort: reverbPort,
       wssPort: reverbPort,
       encrypted: true,
-      //cluster: 'mt1',
       auth: PusherAuth(
         authUrl,
         headers: {
@@ -101,9 +123,8 @@ class ReverbService {
 
       if (current == 'CONNECTED') {
         _isConnected = true;
-        if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
-          _connectionCompleter!.complete();
-        }
+        _connectionCheckTimer?.cancel(); // ← stop timer jika berhasil
+        _processPendingSubscriptions();
       } else if (current == 'DISCONNECTED') {
         _isConnected = false;
       }
@@ -111,52 +132,41 @@ class ReverbService {
 
     _pusher!.onConnectionError((error) {
       debugPrint("🔴 [REVERB ERROR] ${error?.message}");
-      debugPrint("🔴 [REVERB ERROR] code: ${error?.code}");
-      debugPrint("🔴 [REVERB ERROR] exception: ${error?.exception}");
-      if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
-        _connectionCompleter!.completeError(error?.message ?? 'Connection error');
-      }
+      _isConnected = false;
     });
 
-    // Taruh tepat sebelum await _pusher!.connect();
-    debugPrint("🔌 [REVERB] Konek ke: $reverbHost:$reverbPort encrypted:${options.encrypted}");
+    debugPrint("🔌 [REVERB] Konek ke: $reverbHost:$reverbPort");
     await _pusher!.connect();
   }
 
-  void _subscribeChannel(
-    String channelName,
-    String eventName,
-    Function(dynamic) onEventReceived,
-  ) {
-    final channel = _pusher!.subscribe(channelName);
-    _channels[channelName] = channel;
+  void _processPendingSubscriptions() {
+    if (_pendingSubscriptions.isEmpty) return;
+    final toProcess = List<Map<String, dynamic>>.from(_pendingSubscriptions);
+    _pendingSubscriptions.clear();
 
-    channel.bind(eventName, (PusherEvent? event) {
-      debugPrint("⚡ [REVERB EVENT]: ${event?.eventName}");
-      if (event?.data != null) {
-        try {
-          final data = jsonDecode(event!.data.toString());
-          onEventReceived(data);
-        } catch (e) {
-          debugPrint("💥 [REVERB] Gagal parse data: $e");
-        }
+    for (final sub in toProcess) {
+      final channelName = sub['channelName'] as String;
+      final eventName = sub['eventName'] as String;
+      final onEventReceived = sub['onEventReceived'] as Function(dynamic);
+
+      if (!_channels.containsKey(channelName)) {
+        _subscribeChannel(channelName, eventName, onEventReceived);
+      } else {
+        _bindToChannel(channelName, eventName, onEventReceived);
       }
-    });
-
-    debugPrint("✅ [REVERB] Terhubung ke: $channelName");
+    }
   }
 
-  // ✅ BARU — bind event tambahan ke channel yang sudah ada
-  void bindEvent(
-    String channelName,
-    String eventName,
-    Function(dynamic) onEventReceived,
-  ) {
+  void _subscribeChannel(String channelName, String eventName, Function(dynamic) onEventReceived) {
+    final channel = _pusher!.subscribe(channelName);
+    _channels[channelName] = channel;
+    _bindToChannel(channelName, eventName, onEventReceived);
+    debugPrint("✅ [REVERB] Subscribe ke: $channelName");
+  }
+
+  void _bindToChannel(String channelName, String eventName, Function(dynamic) onEventReceived) {
     final channel = _channels[channelName];
-    if (channel == null) {
-      debugPrint('⚠️ [REVERB] Channel $channelName belum ada, tidak bisa bind.');
-      return;
-    }
+    if (channel == null) return;
 
     channel.bind(eventName, (PusherEvent? event) {
       debugPrint("⚡ [REVERB EVENT]: ${event?.eventName}");
@@ -169,28 +179,41 @@ class ReverbService {
         }
       }
     });
+    debugPrint("✅ [REVERB] Bind event $eventName di $channelName");
+  }
 
-    debugPrint("✅ [REVERB] Event $eventName terikat ke channel $channelName");
+  void bindEvent(String channelName, String eventName, Function(dynamic) onEventReceived) {
+    if (_isConnected && _channels.containsKey(channelName)) {
+      _bindToChannel(channelName, eventName, onEventReceived);
+    } else {
+      _pendingSubscriptions.add({
+        'channelName': channelName,
+        'eventName': eventName,
+        'onEventReceived': onEventReceived,
+      });
+      debugPrint("🕐 [REVERB] bindEvent ditunda sampai connected: $eventName");
+    }
   }
 
   Future<void> disconnect() async {
+    _connectionCheckTimer?.cancel(); // ← TAMBAH
+    _connectionCheckTimer = null;
     try {
       for (var channel in _channels.values) {
         await _pusher?.unsubscribe(channel.name);
       }
       _channels.clear();
+      _pendingSubscriptions.clear();
       _isConnected = false;
-
-      if (_pusher != null) {
-        await _pusher!.disconnect();
-      }
-
+      if (_pusher != null) await _pusher!.disconnect();
       _pusher = null;
-      _connectionCompleter = null;
-
       debugPrint("⏹️ [REVERB] Koneksi ditutup bersih.");
     } catch (e) {
       debugPrint("💥 [REVERB] Gagal disconnect: $e");
+      _pusher = null;
+      _channels.clear();
+      _pendingSubscriptions.clear();
+      _isConnected = false;
     }
   }
 }

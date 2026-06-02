@@ -252,16 +252,12 @@ class SuccessPaymentPage extends StatelessWidget {
                     totalDariHalaman: grandTotal,
                   );
 
-<<<<<<< HEAD
-                  printerService.printKitchenToTerminal(stationTransaction);
-=======
                   // TODO: Di file printer_service.dart, Anda sebaiknya membuat method baru 
                   // seperti `printToStation(stationId, stationTransaction)` agar service
                   // tahu IP/Koneksi mana yang harus ditembak berdasarkan ID-nya.
                   
                   // Sementara menggunakan method lama:
                   //printerService.printKitchenToTerminal(stationTransaction);
->>>>>>> 7b23d828d39b33e7f61141b4a2020ebed975ef21
                 });
 
                 ScaffoldMessenger.of(context).showSnackBar(

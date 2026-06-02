@@ -21,6 +21,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   bool _isSidebarVisible = false;
 
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
   final GlobalKey<HistoryScreenState> _historyKey = GlobalKey<HistoryScreenState>();
   final GlobalKey<ShiftScreenState> _shiftKey = GlobalKey<ShiftScreenState>(); 
@@ -132,10 +133,8 @@ void _connectReverb() async {
   }
 
   void _closeSidebar() {
-    if (_isSidebarVisible) {
-      setState(() {
-        _isSidebarVisible = false;
-      });
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      _scaffoldKey.currentState?.closeDrawer();
     }
   }
 
@@ -184,40 +183,42 @@ void _connectReverb() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey, // ✅ TAMBAHKAN KEY DI SINI
       resizeToAvoidBottomInset: false,
       backgroundColor: AppStyle.bgLightBlue,
+      
+      // ✅ TAMBAHKAN DRAWER DI SINI
+      drawer: Drawer(
+        backgroundColor: AppStyle.white,
+        child: _buildSidebar(),
+      ),
+
       body: SafeArea(
         child: Column(
           children: [
             _buildTopBar(),
             Expanded(
-              child: Row(
+              // ✅ ROW SEKARANG HANYA BERISI KONTEN UTAMA, TIDAK ADA SIDEBAR LAGI
+              child: IndexedStack(
+                index: _currentIndex,
                 children: [
-                  if (_isSidebarVisible) _buildSidebar(),
-                  Expanded(
-                    child: IndexedStack(
-                      index: _currentIndex,
-                      children: [
-    HomeScreen(
-      key: _homeKey,                              // ✅ sudah ada
-      searchController: _globalSearchController,
-      onCartToggled: (isOpen) {
-        if (isOpen) _closeSidebar();
-      },
-    ),
-    ShiftScreen(
-      key: _shiftKey,                             // ✅ TAMBAHKAN
-      searchController: _globalSearchController,
-    ),
-    HistoryScreen(
-      key: _historyKey,                           // ✅ TAMBAHKAN (ini bug utamanya!)
-      searchController: _globalSearchController,
-    ),
-    SettingScreen(
-      searchController: _globalSearchController,
-    ),
-  ],
-),
+                  HomeScreen(
+                    key: _homeKey,
+                    searchController: _globalSearchController,
+                    onCartToggled: (isOpen) {
+                      if (isOpen) _closeSidebar();
+                    },
+                  ),
+                  ShiftScreen(
+                    key: _shiftKey,
+                    searchController: _globalSearchController,
+                  ),
+                  HistoryScreen(
+                    key: _historyKey,
+                    searchController: _globalSearchController,
+                  ),
+                  SettingScreen(
+                    searchController: _globalSearchController,
                   ),
                 ],
               ),
@@ -241,6 +242,7 @@ void _connectReverb() async {
           IconButton(
             icon: const Icon(Icons.menu, color: AppStyle.textMain, size: 30),
             onPressed: () {
+              _scaffoldKey.currentState?.openDrawer();
               setState(() {
                 _isSidebarVisible = !_isSidebarVisible;
               });
@@ -328,7 +330,7 @@ void _connectReverb() async {
       ),
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: 100),
           _buildMenuItem(Icons.home_rounded, "Home", 0),
           _buildMenuItem(Icons.access_time_filled_rounded, "Shift", 1),
           _buildMenuItem(Icons.history_rounded, "History", 2),
@@ -361,6 +363,7 @@ void _connectReverb() async {
               _globalSearchController.clear();
               _isSidebarVisible = false;
             });
+            _scaffoldKey.currentState?.closeDrawer();
           }
         },
         dense: true,

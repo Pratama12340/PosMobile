@@ -85,19 +85,32 @@ class _CartPanelState extends State<CartPanel> {
     _syncNoteControllers();
   }
 
+  // 1. Tambahkan fungsi ini untuk mereset form
+  void _clearForm() {
+    setState(() {
+      _customerController.clear();
+      _tableController.clear();
+      _selectedTableId = null;
+    });
+  }
+
   @override
   void didUpdateWidget(covariant CartPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (widget.cart.isEmpty && oldWidget.cart.isNotEmpty) {
-      _customerController.clear(); // Bersihkan nama
-      _tableController.clear();    // Bersihkan nomor meja
-      _selectedTableId = null;     // Hapus ID meja
+      // 2. Bungkus dengan setState agar UI langsung merespon
+      setState(() {
+        _customerController.clear(); 
+        _tableController.clear();    
+        _selectedTableId = null;     
+      });
     }
 
     if (widget.initialCustomerName != oldWidget.initialCustomerName) {
       _customerController.text = widget.initialCustomerName ?? "";
     }
+    // ...
     if (widget.initialTableNumber != oldWidget.initialTableNumber) {
       _tableController.text = widget.initialTableNumber ?? "";
     }
@@ -262,11 +275,14 @@ void dispose() {
   )
 else
   TextButton.icon(
-    onPressed: () => widget.onSaveDraft(
-      _customerController.text,
-      _tableController.text,
-      _selectedTableId,
-    ),
+    onPressed: () {
+      widget.onSaveDraft(
+        _customerController.text,
+        _tableController.text,
+        _selectedTableId,
+      );
+      _clearForm(); // <-- Tambahkan ini untuk reset form setelah masuk draft
+    },
     style: TextButton.styleFrom(
       padding: const EdgeInsets.symmetric(
         horizontal: 10,
@@ -341,6 +357,7 @@ const SizedBox(height: 15),
   focusNode: _noteFocusNodes[id],
   key: ValueKey("cart_$id"),
 );
+
                     },
                   ),
                 ),
@@ -729,7 +746,12 @@ const SizedBox(height: 15),
                           pendingDiscountId: widget.pendingDiscountId,
                         ),
                       );
-                      if (result != null) widget.onCheckoutSuccess(result);
+                      
+                      // ✅ KOSONGKAN HANYA SETELAH PEMBAYARAN SUKSES SELESAI
+                      if (result != null) {
+                        widget.onCheckoutSuccess(result);
+                        _clearForm(); 
+                      }
                     },
               child: Text(
                 widget.isPendingMode ? "Update & Bayar" : "Checkout",

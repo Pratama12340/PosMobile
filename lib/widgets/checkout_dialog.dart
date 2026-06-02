@@ -76,12 +76,12 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   void _toggleDiscount(Discount d) {
   setState(() {
     // Reset exact change saat diskon berubah agar user konfirmasi ulang
-    if (_isExactChange) {
-      _isExactChange = false;
-      _selectedQuickAmount = null;
-      _amountTendered = 0;
-      _manualTenderController.clear();
-    }
+    //if (_isExactChange) {
+      //_isExactChange = false;
+      //_selectedQuickAmount = null;
+      //_amountTendered = 0;
+      //_manualTenderController.clear();
+    //}
 
     if (_isDiscountSelected(d)) {
       _selectedDiscounts.removeWhere((s) => s.id == d.id);
@@ -152,33 +152,42 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   }
 
   void _loadDiscounts() async {
-    final discounts = await ApiService.getDiscounts();
-    if (!mounted) return;
-    setState(() {
-      _availableDiscounts = discounts;
+  final discounts = await ApiService.getDiscounts();
+  if (!mounted) return;
+  setState(() {
+    _availableDiscounts = discounts;
+ 
+    // Kasus 1: pending order — restore discount lama
+    if (widget.pendingDiscountId != null) {
+      final found = discounts.firstWhere(
+        (d) => d.id == widget.pendingDiscountId,
+        orElse: () => discounts.isEmpty ? Discount(
+          id: 0, name: '', scope: 'global', type: 'percentage',
+          value: 0, minPurchase: 0,
+        ) : discounts.first,
+      );
+      if (found.id != 0) _selectedDiscounts = [found];
+      return;
+    }
+ 
+    // Kasus 2: ada diskon per-item/kategori di keranjang → auto-select
+    if (widget.hasDiscountedItem) {
+      // Kumpulkan semua discountId unik dari item di keranjang
+      final Set<int> cartDiscountIds = widget.cart.values
+          .where((item) => item.discountId != null)
+          .map((item) => item.discountId!)
+          .toSet();
 
-      if (widget.pendingDiscountId != null) {
-        final found = discounts.firstWhere(
-          (d) => d.id == widget.pendingDiscountId,
-          orElse: () => discounts.first,
-        );
-        _selectedDiscounts = [found];
-        return;
-      }
+      // Cari objek Discount yang match, ambil maks 2 (untuk scope products/categories)
+      final List<Discount> autoSelected = discounts
+          .where((d) => cartDiscountIds.contains(d.id))
+          .take(2)
+          .toList();
 
-      if (widget.hasDiscountedItem) {
-        List<int> cartProductIds =
-            widget.cart.values.map((item) => item.productId).toList();
-        for (var d in discounts) {
-          if (d.scope == 'products' &&
-              d.productIds.any((id) => cartProductIds.contains(id))) {
-            _selectedDiscounts = [d];
-            break;
-          }
-        }
-      }
-    });
-  }
+      _selectedDiscounts = autoSelected;
+    }
+  });
+}
 
   void _loadTaxes() async {
     final taxes = await ApiService.getTaxes();
@@ -189,24 +198,38 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   }
 
   // ─── Hitung total diskon dari semua diskon yang dipilih ───────────────────
-  double _calculateDiscountValue(double subtotal) {
-    if (_selectedDiscounts.isEmpty) return 0;
+double _calculateDiscountValue(double subTotal) {
+  // subTotal yang masuk ke sini SELALU originalTotalAmount
+  
+  final bool hasGlobal = _selectedDiscounts.any((d) => d.scope == 'global');
 
+  if (hasGlobal) {
+    // Diskon transaksi/global: hitung dari harga asli (originalTotal),
+    // diskon per-item DIABAIKAN (hangus).
     double total = 0;
-    for (var discount in _selectedDiscounts) {
-      double baseForDiscount =
-          (widget.hasDiscountedItem &&
-                  discount.scope == 'products' &&
-                  widget.originalTotalAmount > 0)
-              ? widget.originalTotalAmount
-              : subtotal;
-
-      total += discount.type == 'percentage'
-          ? (baseForDiscount * discount.value) / 100
-          : discount.value.toDouble();
+    for (var d in _selectedDiscounts.where((d) => d.scope == 'global')) {
+      total += d.type == 'percentage'
+          ? (subTotal * d.value / 100)
+          : d.value;
+      if (d.maxDiscount != null && total > d.maxDiscount!) {
+        total = d.maxDiscount!;
+      }
     }
     return total;
   }
+
+  // Diskon produk/kategori: sudah ter-embed di unitPrice item.
+  // Diskon = selisih harga asli vs harga diskon di keranjang.
+  if (widget.hasDiscountedItem && widget.originalTotalAmount > 0) {
+    final double discountedCartTotal = widget.cart.values
+        .fold(0.0, (s, i) => s + (i.unitPrice * i.activeQty));
+    final double embedded = widget.originalTotalAmount - discountedCartTotal;
+    if (embedded > 0) return embedded;
+  }
+
+  // Fallback: tidak ada diskon
+  return 0;
+}
 
   Map<String, dynamic> _calculateTaxesAndGrandTotal(double baseAmount) {
     double serviceAmount = 0;
@@ -704,17 +727,16 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
     // Label dinamis berdasarkan jumlah diskon terpilih
     String btnText;
-    if (_selectedDiscounts.isEmpty) {
-      btnText = isProductDiscountActive
-          ? "Promo Produk Aktif (Tap untuk ubah)"
-          : "Pilih Diskon Tambahan";
-    } else if (_selectedDiscounts.length == 1) {
-      btnText = _selectedDiscounts.first.name;
-    } else {
-      // Multiple product discounts
-      btnText =
-          "${_selectedDiscounts.length} Diskon: ${_selectedDiscounts.map((d) => d.name).join(', ')}";
-    }
+if (_selectedDiscounts.isEmpty) {
+  btnText = widget.hasDiscountedItem
+      ? "Diskon item aktif (tap untuk ubah)"
+      : "Pilih diskon tambahan";
+} else if (_selectedDiscounts.length == 1) {
+  btnText = _selectedDiscounts.first.name;
+} else {
+  btnText = "${_selectedDiscounts.length} Diskon: "
+      "${_selectedDiscounts.map((d) => d.name).join(', ')}";
+}
 
     bool isHighlighted = isProductDiscountActive || hasAnyDiscount;
 
@@ -1029,15 +1051,14 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   @override
   Widget build(BuildContext context) {
     // subTotal: pakai originalTotalAmount jika ada diskon produk aktif
-    double subTotal =
-        (widget.hasDiscountedItem &&
-                _selectedDiscounts.any((d) => d.scope == 'products') &&
-                widget.originalTotalAmount > 0)
-            ? widget.originalTotalAmount
-            : widget.totalAmount;
+    double subTotal = (widget.hasDiscountedItem || _selectedDiscounts.isNotEmpty) &&
+        widget.originalTotalAmount > 0
+    ? widget.originalTotalAmount
+    : widget.totalAmount;
 
-    double discountAmount = _calculateDiscountValue(subTotal);
-    double baseAmount = subTotal - discountAmount;
+double discountAmount = _calculateDiscountValue(subTotal);
+double baseAmount = subTotal - discountAmount;
+if (baseAmount < 0) baseAmount = 0;
 
     var taxData = _calculateTaxesAndGrandTotal(baseAmount);
     List<Map<String, dynamic>> taxBreakdown = taxData['tax_breakdown'];
@@ -1392,44 +1413,43 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       int change = uangMasukInt - tagihanInt;
 
       var existingItems = widget.cart.values
-          .where((item) => item.id > 0)
-          .map((item) => {
-                'product_id': item.productId,
-                'qty': item.quantity,
-                'price': item.unitPrice.toInt(),
-                'notes': item.notes,
-                'id': item.id,
-              })
-          .toList();
+    .where((item) => item.id > 0)
+    .map((item) => {
+          'product_id': item.productId,
+          'qty': item.quantity,
+          'price': item.originalPrice.toInt(),  // ← harga asli
+          'notes': item.notes,
+          'id': item.id,
+        })
+    .toList();
+ 
+var newItems = widget.cart.values
+    .where((item) => item.id == 0)
+    .map((item) => {
+          'product_id': item.productId,
+          'qty': item.quantity,
+          'price': item.originalPrice.toInt(),  // ← harga asli
+          'notes': item.notes,
+        })
+    .toList();
 
-      var newItems = widget.cart.values
-          .where((item) => item.id == 0)
-          .map((item) => {
-                'product_id': item.productId,
-                'qty': item.quantity,
-                'price': item.unitPrice.toInt(),
-                'notes': item.notes,
-              })
-          .toList();
+var mappedItems = [...existingItems, ...newItems];
 
-      var mappedItems = [...existingItems, ...newItems];
-
-      Map<String, dynamic> payload = {
+// payload tetap sama, hanya harga item yang berubah ke originalPrice
+Map<String, dynamic> payload = {
   'outlet_id': savedOutletId,
   'customer_name': widget.customerName,
   'table_id': widget.tableId,
-  'subtotal_price': subTotal.toInt(),
-  'discount_amount': discountAmount.toInt(),  // ← server pakai ini sebagai override
+  'subtotal_price': subTotal.toInt(),          // ← originalTotalAmount
+  'discount_amount': discountAmount.toInt(),
   'total_price': grandTotal.toInt(),
   'tax_amount': taxAmountFinal.toInt(),
   'tax_breakdown': simplifiedTaxBreakdown,
   'payment_method': _paymentMethod.toLowerCase(),
   'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
   'items': mappedItems,
-  // Kirim discount_id tunggal hanya jika 1 diskon, untuk tracking di DB
   if (_selectedDiscounts.length == 1)
     'discount_id': _selectedDiscounts.first.id,
-  // Hapus discount_ids — server tidak support array
 };
 
       debugPrint("=== DEBUG CHECKOUT ===");

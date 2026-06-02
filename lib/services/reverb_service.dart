@@ -98,8 +98,8 @@ class ReverbService {
   Future<void> _initPusher(String token) async {
     PusherOptions options = PusherOptions(
       host: reverbHost,
-      wsPort: reverbPort,
-      wssPort: reverbPort,
+      wsPort: 443,
+      wssPort: 443,
       encrypted: true,
       auth: PusherAuth(
         authUrl,
@@ -131,7 +131,9 @@ class ReverbService {
     });
 
     _pusher!.onConnectionError((error) {
-      debugPrint("🔴 [REVERB ERROR] ${error?.message}");
+      debugPrint("🔴 [REVERB ERROR] message  : ${error?.message}");
+      debugPrint("🔴 [REVERB ERROR] exception: ${error?.exception}");
+      debugPrint("🔴 [REVERB ERROR] toString : $error");
       _isConnected = false;
     });
 

@@ -190,17 +190,23 @@ class HomeScreenState extends State<HomeScreen> {
         Set<int> calculatedBestsellers = {};
 
         for (var product in productsData) {
-          final specificDiscount = discountsData
-              .where(
-                (d) =>
-                    d.scope == 'products' && d.productIds.contains(product.id),
-              )
-              .toList();
+          final productDiscount = discountsData
+      .where((d) => d.scope == 'products' && d.productIds.contains(product.id))
+      .toList();
 
-          product.discount = specificDiscount.isNotEmpty
-              ? specificDiscount.first
-              : null;
-        }
+  // Cek diskon per-kategori (BARU)
+  final categoryDiscount = discountsData
+      .where((d) =>
+          d.scope == 'categories' &&
+          product.categoryId != null &&
+          d.categoryIds.contains(product.categoryId))
+      .toList();
+
+  // Prioritas: diskon produk > diskon kategori
+  product.discount = productDiscount.isNotEmpty
+      ? productDiscount.first
+      : (categoryDiscount.isNotEmpty ? categoryDiscount.first : null);
+}
 
         final sortedBySales = List<Product>.from(productsData)
           ..sort((a, b) {
@@ -459,19 +465,15 @@ Future<void> _acceptOrder(Order order) async {
     final mediaQuery = MediaQuery.of(context);
 
     bool hasDiscountedItem = _isPendingOrderLoaded
-        ? false
-        : _cart.values.any((cartItem) {
-            int index = _allProducts.indexWhere(
-              (p) => p.id == cartItem.productId,
-            );
-            return index != -1 && _allProducts[index].discount != null;
-          });
+    ? false
+    : _cart.values.any((item) => item.discountId != null);
 
-    double originalTotalAmount = _isPendingOrderLoaded
-        ? 0.0
-        : _cart.values.fold(0.0, (sum, cartItem) {
-            return sum + (cartItem.unitPrice * cartItem.quantity);
-          });
+// originalTotalAmount = jumlah harga ASLI (sebelum diskon) × qty
+double originalTotalAmount = _isPendingOrderLoaded
+    ? 0.0
+    : _cart.values.fold(0.0, (sum, item) {
+        return sum + (item.originalPrice * item.quantity);
+      });
 
     // ✅ Total badge = pending + paid
     final int totalOrderBadge = _pendingOrders.length + _paidOrders.length;
@@ -808,6 +810,15 @@ Future<void> _acceptOrder(Order order) async {
       ),
     );
   }
+
+  // Hitung harga diskon (sudah ada di kode asli untuk display, tinggal reuse)
+  double _discountedPrice(Product p) {
+  if (p.discount == null) return p.price.toDouble();
+  if (p.discount!.type == 'percentage') {
+    return p.price * (1 - (p.discount!.value / 100));
+  }
+  return (p.price - p.discount!.value).toDouble();
+}
 
   // ✅ Panel gabungan: pending (orange) + paid/siap cetak (blue)
   Widget _buildPendingOrderPanel() {
@@ -1286,7 +1297,9 @@ Future<void> _acceptOrder(Order order) async {
                                 itemName: p.name,
                                 originalQty: 1,
                                 activeQty: 1,
-                                unitPrice: p.price.toDouble(),
+                                unitPrice: _discountedPrice(p),         // ← harga setelah diskon
+                                originalPrice: p.price.toDouble(),      // ← harga asli selalu disimpan
+                                discountId: p.discount?.id, 
                                 stationId: p.stationId,
                               );
                             }

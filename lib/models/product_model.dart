@@ -2,6 +2,7 @@ import 'discount_model.dart';
 
 class Product {
   final int id;
+  final int? categoryId;
   final String name;
   final String? description;
   final int price;
@@ -14,6 +15,7 @@ class Product {
 
   Product({
     required this.id,
+    this.categoryId, 
     required this.name,
     this.description,
     required this.price,
@@ -28,6 +30,9 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
+      categoryId: json['category_id'] != null
+          ? int.tryParse(json['category_id'].toString())
+          : null,              // ← BARU
       name: json['name'] ?? 'No Name',
       description: json['description'] ?? '',
       price: double.parse(json['price'].toString()).toInt(),

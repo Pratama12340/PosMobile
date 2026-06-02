@@ -89,8 +89,9 @@ class OrderItem {
   int originalQty;
   int activeQty;
   final String itemName;
-  final double unitPrice;
-  final double originalPrice;
+  final double unitPrice;       // harga setelah diskon (untuk display/kalkulasi)
+  final double originalPrice;   // harga sebelum diskon (selalu harga asli)
+  final int? discountId; 
   final bool isVoided;
   String notes;
   final String stationId;
@@ -113,12 +114,13 @@ class OrderItem {
     required this.itemName,
     required this.unitPrice,
     double? originalPrice,
+    this.discountId,  
     this.isVoided = false,
     this.notes = "",
     required this.stationId,
   }) : originalPrice = originalPrice ?? unitPrice;
 
-  factory OrderItem.fromJson(Map<String, dynamic> json) {
+   factory OrderItem.fromJson(Map<String, dynamic> json) {
     final product = json['product'] ?? {};
     final int orig = int.tryParse(
       (json['qty'] ?? json['quantity'])?.toString() ?? '1',
@@ -126,8 +128,8 @@ class OrderItem {
     final int canc = int.tryParse(
       json['cancelled_qty']?.toString() ?? '0',
     ) ?? 0;
-    final int active = (orig - canc).clamp(0, orig); // ← clamp agar tidak negatif
-
+    final int active = (orig - canc).clamp(0, orig);
+ 
     return OrderItem(
       id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       productId: int.tryParse(json['product_id']?.toString() ?? '0') ?? 0,
@@ -140,6 +142,11 @@ class OrderItem {
       unitPrice: double.tryParse(
         (json['price'] ?? json['unit_price'])?.toString() ?? '0',
       ) ?? 0.0,
+      // Saat parse dari JSON (pending order, history), originalPrice = unitPrice
+      // karena backend sudah menyimpan harga yang benar.
+      discountId: json['discount_id'] != null
+          ? int.tryParse(json['discount_id'].toString())
+          : null,
       isVoided: json['is_void'] == 1 ||
           json['status'] == 'void' ||
           active <= 0,

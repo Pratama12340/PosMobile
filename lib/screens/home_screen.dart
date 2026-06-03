@@ -122,16 +122,21 @@ class HomeScreenState extends State<HomeScreen> {
         ApiService.getDiscounts().catchError((e) => <Discount>[]),
         ApiService.getReports().catchError((e) => []),
         ApiService.fetchHistory().catchError((e) => <Order>[]),
-        ApiService.getPendingOrders().catchError((e) => <Order>[]),
       ]);
 
+      List<Order> pendingData = [];
+      try {
+        pendingData = await ApiService.getPendingOrders();
+      } catch (e) {
+        debugPrint('Gagal load pending orders: $e');
+      }
+      
       if (mounted) {
         final List categoriesData = results[0];
         final List<Product> productsData = results[1] as List<Product>;
         final List<Discount> discountsData = results[2] as List<Discount>;
         final List reportsData = results[3];
         final List<Order> historyData = results[4] as List<Order>;
-        final List<Order> pendingData = results[5] as List<Order>;
 
         List<Order> loadedPendingOrders = pendingData;
         Map<int, int> productSales = {};
@@ -228,7 +233,9 @@ class HomeScreenState extends State<HomeScreen> {
           _categories = categoriesData;
           _allProducts = productsData;
           _bestsellerProductIds = calculatedBestsellers;
-          _pendingOrders = loadedPendingOrders;
+          _pendingOrders = loadedPendingOrders
+            .where((o) => !_dismissedOrderIds.contains(o.id))
+            .toList();
           _isLoading = false;
         });
         _applyFilters();
@@ -361,7 +368,9 @@ class HomeScreenState extends State<HomeScreen> {
         final freshPending = await ApiService.getPendingOrders();
         if (mounted) {
           setState(() {
-            _pendingOrders = freshPending;
+            _pendingOrders = freshPending
+                .where((o) => !_dismissedOrderIds.contains(o.id))
+                .toList();
             _isLoadingPendingOrders = false;
           });
         }
@@ -420,32 +429,31 @@ Future<void> _acceptOrder(Order order) async {
     }
   }
   
-  Future<void> refreshPendingOrdersSilently() async {
-    try {
-      final freshOrders = await ApiService.getPendingOrders();
-      if (mounted) {
-        setState(
-          () => _pendingOrders = freshOrders.where(_shouldKeepOrder).toList(),
-        );
-      }
-    } catch (e) {
-      debugPrint('⚠️ Gagal refresh pending orders: $e');
+ Future<void> refreshPendingOrdersSilently() async {
+  try {
+    final freshOrders = await ApiService.getPendingOrders();
+    if (mounted) {
+      setState(() => _pendingOrders = freshOrders
+          .where((o) => !_dismissedOrderIds.contains(o.id))
+          .toList());
     }
+  } catch (e) {
+    debugPrint('⚠️ Gagal refresh pending orders: $e');
   }
+}
 
   Future<void> _refreshPendingOrdersSilently() async {
-    try {
-      final freshOrders = await ApiService.getPendingOrders();
-      if (mounted) {
-        setState(
-          () => _pendingOrders = freshOrders.where(_shouldKeepOrder).toList(),
-        );
-      }
-    } catch (e) {
-      debugPrint('⚠️ Gagal refresh pending orders: $e');
+  try {
+    final freshOrders = await ApiService.getPendingOrders();
+    if (mounted) {
+      setState(() => _pendingOrders = freshOrders
+          .where((o) => !_dismissedOrderIds.contains(o.id))
+          .toList());
     }
+  } catch (e) {
+    debugPrint('⚠️ Gagal refresh pending orders: $e');
   }
-
+}
   // ✅ Refresh paid orders dari API
   Future<void> _refreshPaidOrdersSilently() async {
     try {

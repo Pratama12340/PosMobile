@@ -13,23 +13,29 @@ class PrinterScreen extends StatefulWidget {
 }
 
 class _PrinterScreenState extends State<PrinterScreen> {
-  // Variabel penampung IP dinamis
+  // Variabel penampung IP dan Port dinamis
   String currentPrinterIp = "192.168.1.87";
+  int currentPrinterPort = 9100;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentPrinterIp();
+    _loadPrinterSettings();
   }
 
-  // Mengambil IP terbaru dari SharedPreferences lokal
-  Future<void> _loadCurrentPrinterIp() async {
+  // 🔥 PERBAIKAN: Mengambil IP dan Port terbaru dari SharedPreferences lokal
+  Future<void> _loadPrinterSettings() async {
     final savedIp = await StorageService.getPrinterIp();
-    if (savedIp != null && savedIp.isNotEmpty) {
-      setState(() {
+    final savedPort = await StorageService.getPrinterPort(); // Pastikan fungsi ini ada
+
+    setState(() {
+      if (savedIp != null && savedIp.isNotEmpty) {
         currentPrinterIp = savedIp;
-      });
-    }
+      }
+      if (savedPort != null && savedPort > 0) {
+        currentPrinterPort = savedPort;
+      }
+    });
   }
 
   // Mengatur modal agar meng-update halaman utama ketika tombol simpan ditekan
@@ -41,26 +47,56 @@ class _PrinterScreenState extends State<PrinterScreen> {
     );
 
     if (result == true) {
-      _loadCurrentPrinterIp(); // Refresh IP di UI card
+      _loadPrinterSettings(); // Refresh IP dan Port di UI card
     }
   }
 
   // Fungsi memicu tes cetak fisik ke printer
   Future<void> _executeTestPrint() async {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(" Mengirim data tes cetak ke $currentPrinterIp...")),
+      SnackBar(content: Text(" Mengirim data tes cetak ke $currentPrinterIp:$currentPrinterPort...")),
     );
 
     try {
       final printerService = NetworkPrinterService();
 
+      // =========================================================================
+      // PENGATURAN NO 3: CEK INTEGRITAS JARINGAN DI LEVEL UI SISTEM POS
+      // =========================================================================
+      // 🔥 PERBAIKAN: Menggunakan Port dinamis (currentPrinterPort)
+      bool isConnected = await printerService.checkPrinterConnection(currentPrinterIp, currentPrinterPort);
+      
+      if (!isConnected && mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("Printer Gagal Terhubung"),
+            content: Text(
+              "Sistem POS tidak dapat menjangkau printer di $currentPrinterIp:$currentPrinterPort.\n\n"
+              "Silakan periksa:\n"
+              "1. Apakah Tablet/iPad sudah terhubung ke Wi-Fi toko yang benar?\n"
+              "2. Apakah kabel LAN printer sudah tercolok ke Router?\n"
+              "3. Pastikan fitur AP Isolation pada router Anda sudah dimatikan."
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx), 
+                child: const Text("OK")
+              )
+            ],
+          ),
+        );
+        return; // Hentikan eksekusi cetak jika jaringan terbukti terisolasi/terputus
+      }
+
       // Struktur dummy data transaksi audit untuk melakukan test print out
+      // Catatan: Sesuai struktur data base, pajak (PPN) dihitung dari DPP setelah diskon
       final testData = TransactionModel(
         orderId: "TEST-PRINT-ARANUS",
         outletName: "ARANUS POS",
         outletAddress: "Testing Jaringan Printer OK",
         cashierName: "Developer Mode",
-        customerName: "", 
+        customerName: "", // Dikosongkan agar fokus pada nama kasir
         tableNumber: "99",
         items: [
           CartItem(itemName: "Es Kelapa Segar", quantity: 2, unitPrice: 15000, notes: "Es dikit", stationId: "1"),
@@ -68,7 +104,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
         ],
         discountAmount: 5000,
         taxBreakdown: [
-          {"name": "PPN 11%", "calculated_amount": 3850}
+          {"name": "PPN 11%", "calculated_amount": 3850} // ((15000*2 + 10000) - 5000) * 11%
         ],
         totalDariHalaman: 38850
       );
@@ -105,7 +141,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
         'status': 'Online',
         'type': 'Thermal',
         'conn': 'LAN',
-        'ip': currentPrinterIp, // Data IP berubah secara reaktif mengikuti storage lokal
+        'ip': '$currentPrinterIp:$currentPrinterPort', // Menampilkan IP dan Port di UI
         'color': Colors.green,
         'station_name': 'Kasir (Semua Item)', 
       },
@@ -294,7 +330,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(16.0),
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

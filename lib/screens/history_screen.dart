@@ -256,7 +256,6 @@ class HistoryScreenState extends State<HistoryScreen> {
                               builder: (context) =>
                                   ReceiptDialog(orderId: order.id),
                             );
-                            loadHistory();
                           },
                           child: Container(
                             height: double.infinity,

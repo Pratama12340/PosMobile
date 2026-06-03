@@ -92,6 +92,7 @@ class OrderItem {
   final double unitPrice;       // harga setelah diskon (untuk display/kalkulasi)
   final double originalPrice;   // harga sebelum diskon (selalu harga asli)
   final int? discountId; 
+  final int? categoryId;
   final bool isVoided;
   String notes;
   final String stationId;
@@ -114,7 +115,8 @@ class OrderItem {
     required this.itemName,
     required this.unitPrice,
     double? originalPrice,
-    this.discountId,  
+    this.discountId,
+    this.categoryId,  
     this.isVoided = false,
     this.notes = "",
     required this.stationId,
@@ -147,6 +149,11 @@ class OrderItem {
       discountId: json['discount_id'] != null
           ? int.tryParse(json['discount_id'].toString())
           : null,
+          categoryId: json['category_id'] != null
+    ? int.tryParse(json['category_id'].toString())
+    : json['product']?['category_id'] != null
+        ? int.tryParse(json['product']['category_id'].toString())
+        : null,
       isVoided: json['is_void'] == 1 ||
           json['status'] == 'void' ||
           active <= 0,

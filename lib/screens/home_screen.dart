@@ -299,15 +299,29 @@ class HomeScreenState extends State<HomeScreen> {
           itemName = product.name;
           unitPrice = (item.price > 0) ? item.price : product.price.toDouble();
         }
-        _cart[item.productId] = OrderItem(
-          id: item.id,
-          productId: item.productId,
-          itemName: itemName,
-          originalQty: item.quantity,
-          activeQty: item.quantity,
-          unitPrice: unitPrice,
-          stationId: item.stationId,
-        );
+        // Ambil data diskon dari produk jika ada
+final product = productIndex != -1 ? _allProducts[productIndex] : null;
+double discountedPrice = unitPrice;
+if (product?.discount != null) {
+  if (product!.discount!.type == 'percentage') {
+    discountedPrice = unitPrice * (1 - (product.discount!.value / 100));
+  } else {
+    discountedPrice = unitPrice - product.discount!.value;
+  }
+}
+
+_cart[item.productId] = OrderItem(
+  id: item.id,
+  productId: item.productId,
+  categoryId: product?.categoryId,
+  itemName: itemName,
+  originalQty: item.quantity,
+  activeQty: item.quantity,
+  unitPrice: discountedPrice,        // ← harga setelah diskon
+  originalPrice: unitPrice,          // ← harga asli
+  discountId: product?.discount?.id, // ← set discountId dari produk
+  stationId: item.stationId,
+);
       }
 
       _currentCustomerName = order.customerName;
@@ -464,16 +478,11 @@ Future<void> _acceptOrder(Order order) async {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
 
-    bool hasDiscountedItem = _isPendingOrderLoaded
-    ? false
-    : _cart.values.any((item) => item.discountId != null);
+    bool hasDiscountedItem = _cart.values.any((item) => item.discountId != null);
 
-// originalTotalAmount = jumlah harga ASLI (sebelum diskon) × qty
-double originalTotalAmount = _isPendingOrderLoaded
-    ? 0.0
-    : _cart.values.fold(0.0, (sum, item) {
-        return sum + (item.originalPrice * item.quantity);
-      });
+double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
+  return sum + (item.originalPrice * item.quantity);
+});
 
     // ✅ Total badge = pending + paid
     final int totalOrderBadge = _pendingOrders.length + _paidOrders.length;
@@ -1240,13 +1249,15 @@ double originalTotalAmount = _isPendingOrderLoaded
                         ),
                         if (isDiskon) ...[
                           Text(
-                            formatHarga(p.price.toDouble()),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
+  formatHarga(p.price.toDouble()),
+  style: const TextStyle(
+    color: Colors.white,
+    fontSize: 10,
+    decoration: TextDecoration.lineThrough,
+    decorationColor: Color.fromARGB(255, 245, 0, 0),
+    decorationThickness: 2.5,
+  ),
+),
                           Text(
                             formatHarga(priceAfterDiscount),
                             style: const TextStyle(
@@ -1294,6 +1305,7 @@ double originalTotalAmount = _isPendingOrderLoaded
                               _cart[p.id] = OrderItem(
                                 id: 0,
                                 productId: p.id,
+                                categoryId: p.categoryId,
                                 itemName: p.name,
                                 originalQty: 1,
                                 activeQty: 1,

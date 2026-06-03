@@ -56,11 +56,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
   bool _showDiscountList = false;
 
-  // ─── MULTI-DISCOUNT: list pengganti single _selectedDiscount ──────────────
+  // ??? MULTI-DISCOUNT: list pengganti single _selectedDiscount ??????????????
   List<Discount> _selectedDiscounts = [];
   List<Discount> _availableDiscounts = [];
 
-  // ─── Helper getters ────────────────────────────────────────────────────────
+  // ??? Helper getters ????????????????????????????????????????????????????????
   bool _isDiscountSelected(Discount d) =>
       _selectedDiscounts.any((s) => s.id == d.id);
 
@@ -89,11 +89,16 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       if (d.scope == 'global') {
         _selectedDiscounts = [d];
       } else {
-        _selectedDiscounts.removeWhere((s) => s.scope == 'global');
-        if (_selectedDiscounts.length < 2) {
-          _selectedDiscounts.add(d);
-        }
-      }
+  // Hapus semua diskon global
+  _selectedDiscounts.removeWhere((s) => s.scope == 'global');
+
+  // Pastikan tidak ada duplikat sebelum tambah
+  _selectedDiscounts.removeWhere((s) => s.id == d.id);
+
+  if (_selectedDiscounts.length < 2) {
+    _selectedDiscounts.add(d);
+  }
+}
     }
   });
 }
@@ -157,7 +162,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   setState(() {
     _availableDiscounts = discounts;
  
-    // Kasus 1: pending order — restore discount lama
+    // Kasus 1: pending order   restore discount lama
     if (widget.pendingDiscountId != null) {
       final found = discounts.firstWhere(
         (d) => d.id == widget.pendingDiscountId,
@@ -170,7 +175,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       return;
     }
  
-    // Kasus 2: ada diskon per-item/kategori di keranjang → auto-select
+    // Kasus 2: ada diskon per-item/kategori di keranjang ? auto-select
     if (widget.hasDiscountedItem) {
       // Kumpulkan semua discountId unik dari item di keranjang
       final Set<int> cartDiscountIds = widget.cart.values
@@ -180,10 +185,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
       // Cari objek Discount yang match, ambil maks 2 (untuk scope products/categories)
       final List<Discount> autoSelected = discounts
-          .where((d) => cartDiscountIds.contains(d.id))
-          .take(2)
-          .toList();
-
+    .where((d) =>
+        cartDiscountIds.contains(d.id) &&
+        widget.totalAmount >= d.minPurchase)
+    .take(2)
+    .toList();
       _selectedDiscounts = autoSelected;
     }
   });
@@ -197,38 +203,52 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     });
   }
 
-  // ─── Hitung total diskon dari semua diskon yang dipilih ───────────────────
+  // ??? Hitung total diskon dari semua diskon yang dipilih ???????????????????
 double _calculateDiscountValue(double subTotal) {
-  // subTotal yang masuk ke sini SELALU originalTotalAmount
-  
-  final bool hasGlobal = _selectedDiscounts.any((d) => d.scope == 'global');
+  if (_selectedDiscounts.isEmpty) return 0;
 
-  if (hasGlobal) {
-    // Diskon transaksi/global: hitung dari harga asli (originalTotal),
-    // diskon per-item DIABAIKAN (hangus).
-    double total = 0;
-    for (var d in _selectedDiscounts.where((d) => d.scope == 'global')) {
-      total += d.type == 'percentage'
+  double total = 0;
+
+  for (var d in _selectedDiscounts) {
+    double dAmt = 0;
+
+    // Jika punya productIds atau categoryIds ? hitung per item   qty
+    // (berlaku untuk scope apapun: global, products, categories)
+    if (d.productIds.isNotEmpty || d.categoryIds.isNotEmpty) {
+      for (var item in widget.cart.values) {
+        if (item.isVoided || item.activeQty == 0) continue;
+
+        bool matched = false;
+        if (d.productIds.isNotEmpty) {
+          matched = d.productIds.contains(item.productId);
+        } else if (d.categoryIds.isNotEmpty) {
+          matched = item.categoryId != null &&
+              d.categoryIds.contains(item.categoryId);
+        }
+
+        if (!matched) continue;
+
+        double discPerItem = d.type == 'percentage'
+            ? (item.originalPrice * d.value / 100)
+            : d.value;
+
+        dAmt += discPerItem * item.activeQty;
+      }
+    } else {
+      // Tidak ada filter produk/kategori ? berlaku seluruh transaksi
+      dAmt = d.type == 'percentage'
           ? (subTotal * d.value / 100)
           : d.value;
-      if (d.maxDiscount != null && total > d.maxDiscount!) {
-        total = d.maxDiscount!;
-      }
     }
-    return total;
+
+    if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
+      dAmt = d.maxDiscount!;
+    }
+
+    total += dAmt;
   }
 
-  // Diskon produk/kategori: sudah ter-embed di unitPrice item.
-  // Diskon = selisih harga asli vs harga diskon di keranjang.
-  if (widget.hasDiscountedItem && widget.originalTotalAmount > 0) {
-    final double discountedCartTotal = widget.cart.values
-        .fold(0.0, (s, i) => s + (i.unitPrice * i.activeQty));
-    final double embedded = widget.originalTotalAmount - discountedCartTotal;
-    if (embedded > 0) return embedded;
-  }
-
-  // Fallback: tidak ada diskon
-  return 0;
+  return total;
 }
 
   Map<String, dynamic> _calculateTaxesAndGrandTotal(double baseAmount) {
@@ -280,7 +300,7 @@ double _calculateDiscountValue(double subTotal) {
     };
   }
 
-  // ─── LEFT PANEL: DISCOUNT LIST ─────────────────────────────────────────────
+  // ??? LEFT PANEL: DISCOUNT LIST ?????????????????????????????????????????????
   static const Color _softBlue = Color(0xFFE8F0FE);
   static const Color _primaryBlue = Color(0xFF4285F4);
   static const Color _panelBg = Color(0xFFF4F7F9);
@@ -339,34 +359,6 @@ double _calculateDiscountValue(double subTotal) {
           ),
 
           // Info banner: aturan multi-diskon
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF8E1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFFFE082)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded,
-                    size: 14, color: Color(0xFFF59E0B)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Maks. 2 diskon per-produk. Diskon transaksi menggantikan semua diskon produk.",
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Color(0xFF92400E),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-
           Container(height: 1, color: const Color(0xFFDDE3ED)),
 
           // Discount list
@@ -414,16 +406,13 @@ double _calculateDiscountValue(double subTotal) {
                           d.scope == 'global' && _hasProductDiscount;
 
                       bool eligible = isMinPurchaseMet &&
-                          isProductEligible &&
-                          !isMaxProductReached &&
-                          !isBlockedByGlobal &&
-                          !isBlockedByProduct;
+    isProductEligible &&
+    !isMaxProductReached &&
+    !isBlockedByGlobal;
 
-                      // Jika sudah terpilih, tetap bisa di-tap untuk deselect
-                      bool canTap = _isDiscountSelected(d) ||
-                          (isMinPurchaseMet &&
-                              isProductEligible &&
-                              !isMaxProductReached);
+bool canTap = _isDiscountSelected(d) ||
+    (isMinPurchaseMet && isProductEligible && !isMaxProductReached) ||
+    d.scope == 'global'; // transaksi selalu bisa diklik
 
                       return Opacity(
                         opacity: canTap ? 1.0 : 0.45,
@@ -456,8 +445,6 @@ double _calculateDiscountValue(double subTotal) {
     if (!isSelected) {
       if (isProduct && _hasGlobalDiscount) {
         blockedReason = "Hapus diskon transaksi dulu";
-      } else if (!isProduct && _hasProductDiscount) {
-        blockedReason = "Akan menghapus diskon produk";
       } else if (isProduct && selectedProductCount >= 2) {
         blockedReason = "Maks. 2 diskon produk";
       }
@@ -699,7 +686,7 @@ double _calculateDiscountValue(double subTotal) {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: const Text(
-                              "Terpilih ✓",
+                              "Terpilih ?",
                               style: TextStyle(
                                 fontSize: 9,
                                 color: _primaryBlue,
@@ -720,7 +707,7 @@ double _calculateDiscountValue(double subTotal) {
     );
   }
 
-  // ─── DISCOUNT BUTTON (on right panel summary) ──────────────────────────────
+  // ??? DISCOUNT BUTTON (on right panel summary) ??????????????????????????????
   Widget _buildDiscountButton(double discAmount) {
     bool isProductDiscountActive = widget.hasDiscountedItem;
     bool hasAnyDiscount = _selectedDiscounts.isNotEmpty;
@@ -728,9 +715,7 @@ double _calculateDiscountValue(double subTotal) {
     // Label dinamis berdasarkan jumlah diskon terpilih
     String btnText;
 if (_selectedDiscounts.isEmpty) {
-  btnText = widget.hasDiscountedItem
-      ? "Diskon item aktif (tap untuk ubah)"
-      : "Pilih diskon tambahan";
+  btnText = "Pilih diskon tambahan";
 } else if (_selectedDiscounts.length == 1) {
   btnText = _selectedDiscounts.first.name;
 } else {
@@ -839,7 +824,7 @@ if (_selectedDiscounts.isEmpty) {
     );
   }
 
-  // ─── RECEIPT SUMMARY ───────────────────────────────────────────────────────
+  // ??? RECEIPT SUMMARY ???????????????????????????????????????????????????????
   Widget _buildReceiptSummary(
     double sub,
     double disc,
@@ -856,15 +841,32 @@ if (_selectedDiscounts.isEmpty) {
         if (_selectedDiscounts.length > 1) ...[
           const SizedBox(height: 6),
           ...(_selectedDiscounts.map((d) {
-            double baseForDiscount =
-                (widget.hasDiscountedItem &&
-                        d.scope == 'products' &&
-                        widget.originalTotalAmount > 0)
-                    ? widget.originalTotalAmount
-                    : sub;
-            double dAmt = d.type == 'percentage'
-                ? (baseForDiscount * d.value) / 100
-                : d.value.toDouble();
+          double dAmt = 0;
+if (d.productIds.isNotEmpty || d.categoryIds.isNotEmpty) {
+  for (var item in widget.cart.values) {
+    if (item.isVoided || item.activeQty == 0) continue;
+    bool matched = false;
+    if (d.productIds.isNotEmpty) {
+      matched = d.productIds.contains(item.productId);
+    } else if (d.categoryIds.isNotEmpty) {
+      matched = item.categoryId != null &&
+          d.categoryIds.contains(item.categoryId);
+    }
+    if (!matched) continue;
+    double discPerItem = d.type == 'percentage'
+        ? (item.originalPrice * d.value / 100)
+        : d.value;
+    dAmt += discPerItem * item.activeQty;
+  }
+} else {
+  dAmt = d.type == 'percentage'
+      ? (sub * d.value / 100)
+      : d.value.toDouble();
+}
+if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
+  dAmt = d.maxDiscount!;
+}
+
             return Padding(
               padding: const EdgeInsets.only(left: 12, bottom: 4),
               child: Row(
@@ -938,7 +940,7 @@ if (_selectedDiscounts.isEmpty) {
     );
   }
 
-  // ─── LEFT PANEL: PAYMENT METHOD ───────────────────────────────────────────
+  // ??? LEFT PANEL: PAYMENT METHOD ???????????????????????????????????????????
   Widget _buildPaymentMethodPanel(double grandTotal, int tagihanInt,
       int uangMasukInt, int change) {
     return Padding(
@@ -1051,8 +1053,7 @@ if (_selectedDiscounts.isEmpty) {
   @override
   Widget build(BuildContext context) {
     // subTotal: pakai originalTotalAmount jika ada diskon produk aktif
-    double subTotal = (widget.hasDiscountedItem || _selectedDiscounts.isNotEmpty) &&
-        widget.originalTotalAmount > 0
+    double subTotal = widget.originalTotalAmount > 0
     ? widget.originalTotalAmount
     : widget.totalAmount;
 
@@ -1104,7 +1105,7 @@ if (baseAmount < 0) baseAmount = 0;
           children: [
             Row(
               children: [
-                // ─── LEFT PANEL ────────────────────────────────────────────
+                // ??? LEFT PANEL ????????????????????????????????????????????
                 Expanded(
                   flex: 5,
                   child: ClipRect(
@@ -1219,12 +1220,12 @@ if (baseAmount < 0) baseAmount = 0;
                                               ),
                                             ),
                                             Text(
-                                              "${item.quantity} x ${widget.formatCurrency(item.unitPrice)}",
-                                              style: const TextStyle(
-                                                color: Colors.black45,
-                                                fontSize: 11,
-                                              ),
-                                            ),
+  "${item.quantity} x ${widget.formatCurrency(item.originalPrice)}",
+  style: const TextStyle(
+    color: Colors.black45,
+    fontSize: 11,
+  ),
+),
                                             if (item.notes
                                                 .trim()
                                                 .isNotEmpty)
@@ -1246,7 +1247,7 @@ if (baseAmount < 0) baseAmount = 0;
                                         ),
                                       ),
                                       Text(
-                                        widget.formatCurrency(item.subtotal),
+                                        widget.formatCurrency(item.originalPrice * item.activeQty),
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13,
@@ -1385,12 +1386,9 @@ if (baseAmount < 0) baseAmount = 0;
         throw Exception("ID Outlet tidak ditemukan.");
       }
 
-      double subTotal =
-          (widget.hasDiscountedItem &&
-                  _selectedDiscounts.any((d) => d.scope == 'products') &&
-                  widget.originalTotalAmount > 0)
-              ? widget.originalTotalAmount
-              : widget.totalAmount;
+      double subTotal = widget.originalTotalAmount > 0
+    ? widget.originalTotalAmount
+    : widget.totalAmount;
       double discountAmount = _calculateDiscountValue(subTotal);
       double baseAmount = subTotal - discountAmount;
 
@@ -1417,7 +1415,7 @@ if (baseAmount < 0) baseAmount = 0;
     .map((item) => {
           'product_id': item.productId,
           'qty': item.quantity,
-          'price': item.originalPrice.toInt(),  // ← harga asli
+          'price': item.originalPrice.toInt(),  // ? harga asli
           'notes': item.notes,
           'id': item.id,
         })
@@ -1428,7 +1426,7 @@ var newItems = widget.cart.values
     .map((item) => {
           'product_id': item.productId,
           'qty': item.quantity,
-          'price': item.originalPrice.toInt(),  // ← harga asli
+          'price': item.originalPrice.toInt(),  // ? harga asli
           'notes': item.notes,
         })
     .toList();
@@ -1440,7 +1438,7 @@ Map<String, dynamic> payload = {
   'outlet_id': savedOutletId,
   'customer_name': widget.customerName,
   'table_id': widget.tableId,
-  'subtotal_price': subTotal.toInt(),          // ← originalTotalAmount
+  'subtotal_price': subTotal.toInt(),          // ? originalTotalAmount
   'discount_amount': discountAmount.toInt(),
   'total_price': grandTotal.toInt(),
   'tax_amount': taxAmountFinal.toInt(),
@@ -1503,17 +1501,23 @@ Map<String, dynamic> payload = {
           if (redirectUrl != null && redirectUrl.isNotEmpty) {
             setState(() {
               _webViewController = WebViewController()
+                // 1. KUNCI UTAMA: Ubah User-Agent menjadi Desktop agar Midtrans langsung memunculkan Barcode QRIS
+                ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setBackgroundColor(const Color(0x00000000))
                 ..setNavigationDelegate(
                   NavigationDelegate(
                     onPageFinished: (_) => _webViewController
-                        ?.runJavaScript(
-                            "document.body.style.zoom = '0.75';"),
+                        // Sedikit memperkecil zoom jika QR code terpotong di layar POS Anda
+                        ?.runJavaScript("document.body.style.zoom = '0.85';"),
                     onNavigationRequest: (request) {
+                      // 2. Cegah error jika WebView mencoba membuka deeplink aplikasi (gojek://, shopeeid://, intent://)
+                      if (!request.url.startsWith('http')) {
+                        return NavigationDecision.prevent;
+                      }
+
                       if (request.url.contains('status_code=200') ||
-                          request.url.contains(
-                              'transaction_status=settlement')) {
+                          request.url.contains('transaction_status=settlement')) {
                         Navigator.pop(context, {'status': 'success'});
                         Navigator.push(
                           context,
@@ -1524,7 +1528,7 @@ Map<String, dynamic> payload = {
                               outletAddress: currentOutletAddress,
                               paymentMethod: _paymentMethod,
                               grandTotal: grandTotal,
-                              amountPaid: grandTotal,
+                              amountPaid: grandTotal, // Karena cashless, uang masuk = tagihan
                               change: 0,
                               cart: cartSnapshot,
                               tableNumber: widget.tableNumber,

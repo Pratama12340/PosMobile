@@ -1064,6 +1064,7 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       return [];
     }
   }
+  
 
   // --- 19. TABLES ---
   static Future<List<dynamic>> getTables() async {

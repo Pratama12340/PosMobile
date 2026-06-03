@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'screens/splash_screen.dart';
+import 'utils/app_keys.dart'; // Import file yang baru dibuat
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await initializeDateFormatting('id_ID', null);
-
   runApp(const MyApp());
 }
 
@@ -16,6 +15,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: snackbarKey, // <--- PASANG KEY DI SINI
       debugShowCheckedModeBanner: false,
       title: 'Aranus POS',
       theme: ThemeData(

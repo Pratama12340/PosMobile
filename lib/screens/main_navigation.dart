@@ -8,6 +8,8 @@ import '../constants/style.dart';
 import '../services/storage_service.dart';
 import '../widgets/opening_cash_dialog.dart';
 import '../services/reverb_service.dart';
+import '../main.dart';
+import '../utils/app_keys.dart'; // Pastikan file ini ada
 
 class MainNavigationScaffold extends StatefulWidget {
   final bool requireCashInput;
@@ -24,8 +26,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
   final GlobalKey<HistoryScreenState> _historyKey = GlobalKey<HistoryScreenState>();
-  final GlobalKey<ShiftScreenState> _shiftKey = GlobalKey<ShiftScreenState>(); 
-  final ReverbService _reverbService = ReverbService(); // 🔥 TAMBAHKAN
+  final GlobalKey<ShiftScreenState> _shiftKey = GlobalKey<ShiftScreenState>();
+  final ReverbService _reverbService = ReverbService();
 
   String _cashierName = "Loading...";
   String _outletName = "Loading...";
@@ -51,6 +53,27 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
+  // Fungsi helper untuk notifikasi
+  void _showNotification(String title, String body, Color bgColor) {
+    snackbarKey.currentState?.showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 4),
+            Text(body, style: const TextStyle(fontSize: 14)),
+          ],
+        ),
+        backgroundColor: bgColor,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
   Future<void> _loadInitialData() async {
     final results = await Future.wait([
       StorageService.getCashierName(),
@@ -69,61 +92,49 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
-void _connectReverb() async {
-  debugPrint("🚨 [DEBUG] _connectReverb dipanggil ke-${DateTime.now()}");
-  final int? outletId = await StorageService.getOutletId();
-  if (outletId == null) {
-    debugPrint('🔴 [REVERB] outlet_id tidak ditemukan');
-    return;
-  }
+  void _connectReverb() async {
+    debugPrint("🚨 [DEBUG] _connectReverb dipanggil");
+    final int? outletId = await StorageService.getOutletId();
+    if (outletId == null) return;
 
-  await _reverbService.initConnection(          // ← tambah await
-    channelName: 'private-orders.outlet.$outletId',
-    eventName: '.order.created',
-    onEventReceived: (data) {
-      debugPrint('⚡ [ORDER CREATED]: $data');
-      _homeKey.currentState?.refreshPendingOrdersSilently();
-      _historyKey.currentState?.loadHistory();
-      _shiftKey.currentState?.refreshShift();
+    await _reverbService.initConnection(
+      channelName: 'private-orders.outlet.$outletId',
+      eventName: '.order.created',
+      onEventReceived: (data) {
+        debugPrint('⚡ [ORDER DITERIMA]: $data');
+        
+        final order = data['order'];
+        final String paymentMethod = order?['payment_method']?.toString().toUpperCase() ?? 'CASH';
+        final String customerName = order?['customer_name'] ?? 'Pelanggan';
+        
+        // Refresh UI
+        _homeKey.currentState?.refreshPendingOrdersSilently();
+        _historyKey.currentState?.loadHistory();
+        _shiftKey.currentState?.refreshShift();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.add_shopping_cart, color: Colors.white),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Pesanan baru dari ${data['order']?['customer_name'] ?? 'Pelanggan'}!',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
+        // Panggil fungsi notifikasi
+        _showNotification(
+          paymentMethod == 'QRIS' ? "🔔 Pesanan QRIS Baru!" : "💰 Pesanan Tunai Baru!",
+          "Dari: $customerName",
+          paymentMethod == 'QRIS' ? Colors.redAccent : Colors.orange,
         );
-      }
-    },
-  );
+      },
+    );
 
-  // ✅ GANTI komentar lama dengan implementasi nyata
-  _reverbService.bindEvent(
-    'private-orders.outlet.$outletId',
-    '.order.updated',
-    (data) {
-      debugPrint('⚡ [ORDER UPDATED]: $data');
-      _homeKey.currentState?.refreshPendingOrdersSilently();
-      _historyKey.currentState?.loadHistory();
-      _shiftKey.currentState?.refreshShift();
-    },
-  );
-}
+    _reverbService.bindEvent(
+      'private-orders.outlet.$outletId',
+      '.order.updated',
+      (data) {
+        debugPrint('⚡ [ORDER UPDATED]: $data');
+        _homeKey.currentState?.refreshPendingOrdersSilently();
+        _historyKey.currentState?.loadHistory();
+        _shiftKey.currentState?.refreshShift();
+        
+        // Notifikasi update
+        _showNotification("🔄 Status Diupdate", "Pesanan telah diproses.", Colors.blueAccent);
+      },
+    );
+  }
 
   @override
   void dispose() {
@@ -143,23 +154,12 @@ void _connectReverb() async {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          "Konfirmasi Keluar",
-          style: AppStyle.titleText.copyWith(fontSize: 18),
-        ),
+        title: Text("Konfirmasi Keluar", style: AppStyle.titleText.copyWith(fontSize: 18)),
         content: const Text("Apakah Anda yakin ingin keluar dari sesi kasir?"),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Batal"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppStyle.errorRed,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppStyle.errorRed),
             onPressed: () async {
               await StorageService.logoutKasir();
               if (context.mounted) {
@@ -170,10 +170,7 @@ void _connectReverb() async {
                 );
               }
             },
-            child: const Text(
-              "Ya, Keluar",
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text("Ya, Keluar", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -183,22 +180,18 @@ void _connectReverb() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey, // ✅ TAMBAHKAN KEY DI SINI
+      key: _scaffoldKey,
       resizeToAvoidBottomInset: false,
       backgroundColor: AppStyle.bgLightBlue,
-      
-      // ✅ TAMBAHKAN DRAWER DI SINI
       drawer: Drawer(
         backgroundColor: AppStyle.white,
         child: _buildSidebar(),
       ),
-
       body: SafeArea(
         child: Column(
           children: [
             _buildTopBar(),
             Expanded(
-              // ✅ ROW SEKARANG HANYA BERISI KONTEN UTAMA, TIDAK ADA SIDEBAR LAGI
               child: IndexedStack(
                 index: _currentIndex,
                 children: [
@@ -209,17 +202,9 @@ void _connectReverb() async {
                       if (isOpen) _closeSidebar();
                     },
                   ),
-                  ShiftScreen(
-                    key: _shiftKey,
-                    searchController: _globalSearchController,
-                  ),
-                  HistoryScreen(
-                    key: _historyKey,
-                    searchController: _globalSearchController,
-                  ),
-                  SettingScreen(
-                    searchController: _globalSearchController,
-                  ),
+                  ShiftScreen(key: _shiftKey, searchController: _globalSearchController),
+                  HistoryScreen(key: _historyKey, searchController: _globalSearchController),
+                  SettingScreen(searchController: _globalSearchController),
                 ],
               ),
             ),
@@ -243,36 +228,22 @@ void _connectReverb() async {
             icon: const Icon(Icons.menu, color: AppStyle.textMain, size: 30),
             onPressed: () {
               _scaffoldKey.currentState?.openDrawer();
-              setState(() {
-                _isSidebarVisible = !_isSidebarVisible;
-              });
             },
           ),
           const SizedBox(width: 10),
-          Text(
-            _outletName.toUpperCase(),
-            style: AppStyle.titleText.copyWith(
-              fontSize: 20,
-              color: const Color.fromARGB(255, 14, 16, 19),
-              letterSpacing: 0.5,
-            ),
-          ),
+          Text(_outletName.toUpperCase(), style: AppStyle.titleText.copyWith(fontSize: 20)),
           const Spacer(flex: 1),
           Expanded(
             flex: 6,
             child: Container(
               height: 50,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F7FB),
-                borderRadius: BorderRadius.circular(15),
-              ),
+              decoration: BoxDecoration(color: const Color(0xFFF5F7FB), borderRadius: BorderRadius.circular(15)),
               child: TextField(
                 controller: _globalSearchController,
                 decoration: const InputDecoration(
                   hintText: "Cari menu, transaksi, atau laporan...",
                   prefixIcon: Icon(Icons.search, color: AppStyle.primaryBlue),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 15),
                 ),
               ),
             ),
@@ -282,36 +253,15 @@ void _connectReverb() async {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: AppStyle.primaryBlue.withValues(alpha: 0.1),
-                backgroundImage: _profilePhoto.isNotEmpty
-                    ? NetworkImage(
-                        "https://api.etres.my.id/storage/$_profilePhoto",
-                      )
-                    : null,
-                child: _profilePhoto.isEmpty
-                    ? const Icon(
-                        Icons.person,
-                        color: AppStyle.primaryBlue,
-                        size: 28,
-                      )
-                    : null,
+                backgroundImage: _profilePhoto.isNotEmpty ? NetworkImage("https://api.etres.my.id/storage/$_profilePhoto") : null,
               ),
               const SizedBox(width: 15),
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _cashierName,
-                    style: AppStyle.menuText.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  Text(
-                    _userRole,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
+                  Text(_cashierName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(_userRole, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ],
@@ -322,34 +272,22 @@ void _connectReverb() async {
   }
 
   Widget _buildSidebar() {
-    return Container(
-      width: 240,
-      decoration: BoxDecoration(
-        color: AppStyle.white,
-        border: Border(right: BorderSide(color: Colors.grey.shade100)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 100),
-          _buildMenuItem(Icons.home_rounded, "Home", 0),
-          _buildMenuItem(Icons.access_time_filled_rounded, "Shift", 1),
-          _buildMenuItem(Icons.history_rounded, "History", 2),
-          const Spacer(),
-          const Divider(indent: 20, endIndent: 20),
-          _buildMenuItem(Icons.settings_rounded, "Setting", 3),
-          _buildMenuItem(Icons.logout_rounded, "Logout", -1, isLogout: true),
-          const SizedBox(height: 20),
-        ],
-      ),
+    return Column(
+      children: [
+        const SizedBox(height: 100),
+        _buildMenuItem(Icons.home_rounded, "Home", 0),
+        _buildMenuItem(Icons.access_time_filled_rounded, "Shift", 1),
+        _buildMenuItem(Icons.history_rounded, "History", 2),
+        const Spacer(),
+        const Divider(indent: 20, endIndent: 20),
+        _buildMenuItem(Icons.settings_rounded, "Setting", 3),
+        _buildMenuItem(Icons.logout_rounded, "Logout", -1, isLogout: true),
+        const SizedBox(height: 20),
+      ],
     );
   }
 
-  Widget _buildMenuItem(
-    IconData icon,
-    String title,
-    int index, {
-    bool isLogout = false,
-  }) {
+  Widget _buildMenuItem(IconData icon, String title, int index, {bool isLogout = false}) {
     bool isActive = _currentIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
@@ -361,31 +299,13 @@ void _connectReverb() async {
             setState(() {
               _currentIndex = index;
               _globalSearchController.clear();
-              _isSidebarVisible = false;
             });
             _scaffoldKey.currentState?.closeDrawer();
           }
         },
-        dense: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        tileColor: isActive
-            ? AppStyle.primaryBlue.withValues(alpha: 0.1)
-            : Colors.transparent,
-        leading: Icon(
-          icon,
-          color: isActive
-              ? AppStyle.primaryBlue
-              : (isLogout ? AppStyle.errorRed : AppStyle.textGrey),
-        ),
-        title: Text(
-          title,
-          style: AppStyle.menuText.copyWith(
-            color: isActive
-                ? AppStyle.primaryBlue
-                : (isLogout ? AppStyle.errorRed : AppStyle.textMain),
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
+        tileColor: isActive ? AppStyle.primaryBlue.withValues(alpha: 0.1) : Colors.transparent,
+        leading: Icon(icon, color: isActive ? AppStyle.primaryBlue : AppStyle.textGrey),
+        title: Text(title, style: TextStyle(color: isActive ? AppStyle.primaryBlue : AppStyle.textMain)),
       ),
     );
   }

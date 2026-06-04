@@ -4,6 +4,7 @@ import '../widgets/printer_config_modal.dart';
 import '../services/storage_service.dart';
 import '../services/printer_service.dart';
 import '../models/print_model.dart';
+import '../models/printer_device.dart'; 
 
 class PrinterScreen extends StatefulWidget {
   const PrinterScreen({super.key});
@@ -13,148 +14,177 @@ class PrinterScreen extends StatefulWidget {
 }
 
 class _PrinterScreenState extends State<PrinterScreen> {
-  // Variabel penampung IP dan Port dinamis
-  String currentPrinterIp = "192.168.1.87";
-  int currentPrinterPort = 9100;
+  List<PrinterDevice> _printers = [];
+  bool _isLoadingPrinters = true;
 
   @override
   void initState() {
     super.initState();
-    _loadPrinterSettings();
+    _loadPrinterList(); // Bagian 4c — Ditambahkan ke initState
   }
 
-  // 🔥 PERBAIKAN: Mengambil IP dan Port terbaru dari SharedPreferences lokal
-  Future<void> _loadPrinterSettings() async {
-    final savedIp = await StorageService.getPrinterIp();
-    final savedPort = await StorageService.getPrinterPort(); // Pastikan fungsi ini ada
-
+  // Bagian 4c — Fungsi Baru _loadPrinterList setelah _loadPrinterSettings
+  Future<void> _loadPrinterList() async {
+    final list = await StorageService.getPrinterList();
     setState(() {
-      if (savedIp != null && savedIp.isNotEmpty) {
-        currentPrinterIp = savedIp;
-      }
-      if (savedPort != null && savedPort > 0) {
-        currentPrinterPort = savedPort;
-      }
+      _printers = list;
+      _isLoadingPrinters = false;
     });
   }
 
-  // Mengatur modal agar meng-update halaman utama ketika tombol simpan ditekan
-  void _showConfigModal() async {
-    final result = await showDialog<bool>(
+  // Bagian 4d — Modifikasi _showConfigModal untuk mendukung mode edit dan tambah
+  void _showConfigModal({PrinterDevice? existing, int? editIndex}) async {
+    final result = await showDialog<PrinterDevice>(
       context: context,
       barrierDismissible: true,
-      builder: (context) => const PrinterConfigModal(),
+      builder: (context) => PrinterConfigModal(existingPrinter: existing),
     );
 
-    if (result == true) {
-      _loadPrinterSettings(); // Refresh IP dan Port di UI card
+    if (result != null) {
+      final updatedList = await StorageService.getPrinterList();
+
+      if (editIndex != null) {
+        // Mode edit: replace data lama di index yang sama
+        updatedList[editIndex] = result;
+      } else {
+        // Mode tambah baru: append ke list
+        updatedList.add(result);
+      }
+
+      await StorageService.savePrinterList(updatedList);
+      _loadPrinterList();
     }
   }
 
-  // Fungsi memicu tes cetak fisik ke printer
-  Future<void> _executeTestPrint() async {
+  // Bagian 4h — Fungsi Baru _buildEmptyState ketika list printer kosong
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 60),
+        child: Column(
+          children: [
+            Icon(Icons.print_disabled_outlined, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              "Belum ada printer terdaftar",
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Tap tombol \"Printer Baru\" untuk menambahkan",
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+Future<void> _executeTestPrint() async {
+    // Ambil hanya printer yang aktif dari list
+    final activePrinters = _printers.where((p) => p.isActive).toList();
+
+    if (activePrinters.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Tidak ada printer aktif. Aktifkan printer terlebih dahulu.")),
+      );
+      return;
+    }
+
+    // Tampilkan info berapa printer yang akan menerima job
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(" Mengirim data tes cetak ke $currentPrinterIp:$currentPrinterPort...")),
+      SnackBar(content: Text("Mengirim tes cetak ke ${activePrinters.length} printer aktif...")),
     );
 
-    try {
-      final printerService = NetworkPrinterService();
+    // Data dummy untuk test print
+    final testData = TransactionModel(
+      orderId: "TEST-PRINT-ARANUS",
+      outletName: "ARANUS POS",
+      outletAddress: "Testing Jaringan Printer OK",
+      cashierName: "Developer Mode",
+      customerName: "",
+      tableNumber: "99",
+      items: [
+        CartItem(itemName: "Es Kelapa Segar", quantity: 2, unitPrice: 15000, notes: "Es dikit", stationId: "1"),
+        CartItem(itemName: "Teh Manis Hangat", quantity: 1, unitPrice: 10000, notes: "", stationId: "1"),
+      ],
+      discountAmount: 5000,
+      taxBreakdown: [
+        {"name": "PPN 11%", "calculated_amount": 3850}
+      ],
+      totalDariHalaman: 38850,
+    );
 
-      // =========================================================================
-      // PENGATURAN NO 3: CEK INTEGRITAS JARINGAN DI LEVEL UI SISTEM POS
-      // =========================================================================
-      // 🔥 PERBAIKAN: Menggunakan Port dinamis (currentPrinterPort)
-      bool isConnected = await printerService.checkPrinterConnection(currentPrinterIp, currentPrinterPort);
-      
-      if (!isConnected && mounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text("Printer Gagal Terhubung"),
-            content: Text(
-              "Sistem POS tidak dapat menjangkau printer di $currentPrinterIp:$currentPrinterPort.\n\n"
-              "Silakan periksa:\n"
-              "1. Apakah Tablet/iPad sudah terhubung ke Wi-Fi toko yang benar?\n"
-              "2. Apakah kabel LAN printer sudah tercolok ke Router?\n"
-              "3. Pastikan fitur AP Isolation pada router Anda sudah dimatikan."
+    final printerService = NetworkPrinterService();
+
+    // Loop setiap printer aktif — kirim job satu per satu
+    for (final printer in activePrinters) {
+      try {
+        // Skip printer Bluetooth untuk sementara (belum diimplementasi)
+        if (printer.conn != 'Network Printer') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("${printer.name}: Bluetooth belum didukung, dilewati.")),
+            );
+          }
+          continue;
+        }
+
+        bool isConnected = await printerService.checkPrinterConnection(printer.ip, printer.port);
+
+        if (!isConnected) {
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text("${printer.name} Gagal Terhubung"),
+                content: Text(
+                  "Tidak dapat menjangkau ${printer.name} di ${printer.ip}:${printer.port}.\n\n"
+                  "Silakan periksa:\n"
+                  "1. Apakah Tablet sudah terhubung ke Wi-Fi toko?\n"
+                  "2. Apakah kabel LAN printer sudah tercolok?\n"
+                  "3. Pastikan AP Isolation pada router dimatikan.",
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK"))
+                ],
+              ),
+            );
+          }
+          continue; // lanjut ke printer berikutnya meski 1 gagal
+        }
+
+        await printerService.printReceipt(
+          ipAddress: printer.ip,
+          transaction: testData,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("✓ ${printer.name} (${printer.ip}) berhasil mencetak.")),
+          );
+        }
+
+      } catch (e) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text("Error: ${printer.name}"),
+              content: Text("Gagal mengirim data ke ${printer.name} (${printer.ip}).\n\nDetail: $e"),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK"))
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx), 
-                child: const Text("OK")
-              )
-            ],
-          ),
-        );
-        return; // Hentikan eksekusi cetak jika jaringan terbukti terisolasi/terputus
-      }
-
-      // Struktur dummy data transaksi audit untuk melakukan test print out
-      // Catatan: Sesuai struktur data base, pajak (PPN) dihitung dari DPP setelah diskon
-      final testData = TransactionModel(
-        orderId: "TEST-PRINT-ARANUS",
-        outletName: "ARANUS POS",
-        outletAddress: "Testing Jaringan Printer OK",
-        cashierName: "Developer Mode",
-        customerName: "", // Dikosongkan agar fokus pada nama kasir
-        tableNumber: "99",
-        items: [
-          CartItem(itemName: "Es Kelapa Segar", quantity: 2, unitPrice: 15000, notes: "Es dikit", stationId: "1"),
-          CartItem(itemName: "Teh Manis Hangat", quantity: 1, unitPrice: 10000, notes: "", stationId: "1")
-        ],
-        discountAmount: 5000,
-        taxBreakdown: [
-          {"name": "PPN 11%", "calculated_amount": 3850} // ((15000*2 + 10000) - 5000) * 11%
-        ],
-        totalDariHalaman: 38850
-      );
-
-      await printerService.printReceipt(
-        ipAddress: currentPrinterIp, 
-        transaction: testData
-      );
-
-    } catch (e) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text("Koneksi Printer Gagal"),
-            content: Text("Gagal mengirim data ke printer fisik ($currentPrinterIp).\n\nDetail Error: $e"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx), 
-                child: const Text("OK")
-              )
-            ],
-          ),
-        );
+          );
+        }
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> printers = [
-      {
-        'name': 'Kasir Utama',
-        'status': 'Online',
-        'type': 'Thermal',
-        'conn': 'LAN',
-        'ip': '$currentPrinterIp:$currentPrinterPort', // Menampilkan IP dan Port di UI
-        'color': Colors.green,
-        'station_name': 'Kasir (Semua Item)', 
-      },
-      {
-        'name': 'Printer Dapur',
-        'status': 'Offline',
-        'type': 'Thermal',
-        'conn': 'Bluetooth',
-        'ip': 'BT:00:11:22',
-        'color': Colors.red,
-        'station_name': 'Dapur',
-      },
-    ];
+    // Bagian 4g — List hardcode 'printers' SUDAH DIHAPUS TOTAL dari sini.
 
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
@@ -190,7 +220,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
                   icon: Icons.print_outlined,
                   bgColor: Colors.orange.shade50,
                   textColor: Colors.orange.shade800,
-                  onTap: _executeTestPrint, // Terhubung ke fungsi tes cetak fisik
+                  onTap: _executeTestPrint,
                 ),
               ],
             ),
@@ -205,16 +235,25 @@ class _PrinterScreenState extends State<PrinterScreen> {
             ),
             const SizedBox(height: 20),
 
-            Wrap(
-              spacing: 20,
-              runSpacing: 20,
-              children: printers.map((p) => _buildPrinterCard(p)).toList(),
-            ),
+            // Bagian 4e — Validasi state loading, empty list, dan mapping list dinamis via Wrap
+            _isLoadingPrinters
+                ? const Center(child: CircularProgressIndicator())
+                : _printers.isEmpty
+                    ? _buildEmptyState()
+                    : Wrap(
+                        spacing: 20,
+                        runSpacing: 20,
+                        children: List.generate(
+                          _printers.length,
+                          (i) => _buildPrinterCard(_printers[i], index: i),
+                        ),
+                      ),
           ],
         ),
       ),
+      // Bagian 4f — Penyesuaian FAB ke mode tambah baru tanpa parameter existing
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showConfigModal,
+        onPressed: () => _showConfigModal(), 
         backgroundColor: AppStyle.primaryBlue,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(
@@ -222,6 +261,131 @@ class _PrinterScreenState extends State<PrinterScreen> {
           style: TextStyle(color: Colors.white),
         ),
       ),
+    );
+  }
+
+  // Bagian 4i — Modifikasi _buildPrinterCard menggunakan model PrinterDevice & passing data index untuk Edit Mode
+  Widget _buildPrinterCard(PrinterDevice data, {required int index}) {
+    bool isOnline = data.status == 'Online';
+    Color statusColor = isOnline ? Colors.green : Colors.red;
+
+    return Container(
+      width: 320,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    data.name, 
+                    style: AppStyle.menuText.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isOnline ? Colors.green.shade50 : Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isOnline ? Colors.green.shade200 : Colors.red.shade200,
+                      ),
+                    ),
+                    child: Text(
+                      data.status,
+                      style: TextStyle(
+                        color: isOnline ? Colors.green.shade700 : Colors.red.shade700,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  _buildInfoRow("Station", data.stationName),
+                  const SizedBox(height: 8),
+                  _buildInfoRow("Koneksi", data.conn),
+                  const SizedBox(height: 8),
+                  _buildInfoRow("Address", "${data.ip}:${data.port}"),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => _showConfigModal(existing: data, editIndex: index),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade50,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "PENGATURAN",
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                        color: Colors.blue.shade700,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Container(height: 6, color: statusColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+        ),
+      ],
     );
   }
 
@@ -252,135 +416,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildPrinterCard(Map<String, dynamic> data) {
-    bool isOnline = data['status'] == 'Online';
-
-    return Container(
-      width: 320,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    data['name'],
-                    style: AppStyle.menuText.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isOnline
-                          ? Colors.green.shade50
-                          : Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isOnline
-                            ? Colors.green.shade200
-                            : Colors.red.shade200,
-                      ),
-                    ),
-                    child: Text(
-                      data['status'],
-                      style: TextStyle(
-                        color: isOnline
-                            ? Colors.green.shade700
-                            : Colors.red.shade700,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  _buildInfoRow("Station", data['station_name'] ?? "Semua Item"),
-                  const SizedBox(height: 8),
-                  _buildInfoRow("Koneksi", data['conn']),
-                  const SizedBox(height: 8),
-                  _buildInfoRow("Address", data['ip']),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _showConfigModal,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade50,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "PENGATURAN",
-                        style: TextStyle(
-                          color: Colors.blue.shade700,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 16,
-                        color: Colors.blue.shade700,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Container(height: 6, color: data['color']),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-        ),
-      ],
     );
   }
 }

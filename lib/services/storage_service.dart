@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/printer_device.dart';
 
 class StorageService {
   static const String _keyToken = 'token';
@@ -246,5 +247,20 @@ class StorageService {
   static Future<double> getCardWidth() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getDouble(_keyCardWidth) ?? 320.0; // default 320.0 jika kosong
+  }
+
+  // ---  FUNGSI PRINTER LIST ---
+  static const String _keyPrinterList = 'printer_list';
+
+  static Future<void> savePrinterList(List<PrinterDevice> printers) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPrinterList, PrinterDevice.encodeList(printers));
+  }
+
+  static Future<List<PrinterDevice>> getPrinterList() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_keyPrinterList);
+    if (jsonStr == null || jsonStr.isEmpty) return [];
+    return PrinterDevice.decodeList(jsonStr);
   }
 }

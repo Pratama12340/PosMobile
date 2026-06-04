@@ -34,12 +34,6 @@ class NetworkPrinterService {
     int port = 9100,
   }) async {
     try {
-      // Validasi koneksi jaringan lokal sebelum melakukan build bytes struk
-      bool isPrinterReady = await checkPrinterConnection(ipAddress, port);
-      if (!isPrinterReady) {
-        throw Exception("Printer offline atau tidak berada di jaringan Wi-Fi yang sama.");
-      }
-
       final profile = await CapabilityProfile.load();
       final generator = Generator(PaperSize.mm80, profile);
       List<int> bytes = [];
@@ -144,12 +138,6 @@ class NetworkPrinterService {
     int port = 9100,
   }) async {
     try {
-      // Validasi koneksi jaringan lokal sebelum memproses menu dapur
-      bool isPrinterReady = await checkPrinterConnection(ipAddress, port);
-      if (!isPrinterReady) {
-        throw Exception("Printer dapur offline atau tidak berada di jaringan Wi-Fi yang sama.");
-      }
-
       final profile = await CapabilityProfile.load();
       final generator = Generator(PaperSize.mm80, profile);
       List<int> bytes = [];

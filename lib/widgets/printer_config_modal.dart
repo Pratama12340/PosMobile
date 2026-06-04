@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../constants/style.dart';
 import '../services/storage_service.dart';
+import '../models/printer_device.dart';
+
 
 class PrinterConfigModal extends StatefulWidget {
-  const PrinterConfigModal({super.key});
+  final PrinterDevice? existingPrinter;
+
+   const PrinterConfigModal({super.key, this.existingPrinter = null});
 
   @override
   State<PrinterConfigModal> createState() => _PrinterConfigModalState();
@@ -25,14 +29,25 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
   @override
   void initState() {
     super.initState();
-    // Inisialisasi nilai bawaan form sebagai fallback
-    _nameController.text = "Kasir Utama";
-    _ipController.text = "192.168.1.87"; 
-    _portController.text = "9100";
-    _charsController.text = "32";
-    
-    // Muat data dari memori saat modal dibuka
-    _loadSavedPrinterData();
+    final p = widget.existingPrinter;
+    if (p != null) {
+      // Mode edit: prefill form dari data printer yang dipilih
+      _nameController.text = p.name;
+      _ipController.text = p.ip;
+      _portController.text = p.port.toString();
+      _charsController.text = "32";
+      selectedType = p.type;
+      selectedConn = p.conn;
+      isAutoCut = p.isAutoCut;
+      isActive = p.isActive;
+    } else {
+      // Mode tambah baru: nilai default + load dari storage
+      _nameController.text = "Kasir Baru";
+      _ipController.text = "192.168.1.";
+      _portController.text = "9100";
+      _charsController.text = "32";
+      _loadSavedPrinterData();
+    }
   }
 
   // 🔥 PERBAIKAN: Memuat semua data (IP, Port, Chars) dari StorageService
@@ -58,6 +73,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
     final inputIp = _ipController.text.trim();
     final inputPort = int.tryParse(_portController.text.trim()) ?? 9100;
     final inputChars = double.tryParse(_charsController.text.trim()) ?? 32.0;
+    final inputName = _nameController.text.trim();
 
     if (inputIp.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -66,16 +82,30 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
       return;
     }
 
-    // Eksekusi penyimpanan ke memori perangkat
+    // Buat objek PrinterDevice dari input form
+    final newPrinter = PrinterDevice(
+      name: inputName.isEmpty ? "Printer Baru" : inputName,
+      status: isActive ? 'Online' : 'Offline',
+      type: selectedType,
+      conn: selectedConn,
+      ip: selectedConn == 'Network Printer' ? inputIp : 'BT:00:11:22',
+      port: inputPort,
+      stationName: 'Kasir (Semua Item)',
+      isAutoCut: isAutoCut,
+      isActive: isActive,
+    );
+
+    // Tetap simpan IP & Port aktif agar test print tetap berfungsi
     await StorageService.savePrinterIp(inputIp);
     await StorageService.savePrinterPort(inputPort);
-    await StorageService.savePaddingSize(inputChars); // Menyimpan chars/padding
+    await StorageService.savePaddingSize(inputChars);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Berhasil menyimpan konfigurasi untuk IP: $inputIp")),
+        SnackBar(content: Text("Berhasil menyimpan: ${newPrinter.name}")),
       );
-      Navigator.pop(context, true); // Mengembalikan nilai true untuk me-refresh layar utama
+      // Return PrinterDevice (bukan bool) ke PrinterScreen
+      Navigator.pop(context, newPrinter);
     }
   }
 

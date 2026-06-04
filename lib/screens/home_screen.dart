@@ -98,8 +98,13 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   bool _shouldKeepOrder(Order order) {
-    return !_dismissedOrderIds.contains(order.id) && !order.isAccepted;
-  }
+  return !_dismissedOrderIds.contains(order.id) && !order.isAccepted;
+}
+
+bool _isToday(Order order) {
+  final String todayStr = DateFormat('yyyyMMdd').format(DateTime.now());
+  return order.invoiceNo.contains(todayStr);
+}
 
   @override
   void initState() {
@@ -234,7 +239,7 @@ class HomeScreenState extends State<HomeScreen> {
           _allProducts = productsData;
           _bestsellerProductIds = calculatedBestsellers;
           _pendingOrders = loadedPendingOrders
-            .where((o) => !_dismissedOrderIds.contains(o.id))
+            .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
             .toList();
           _isLoading = false;
         });
@@ -369,7 +374,7 @@ class HomeScreenState extends State<HomeScreen> {
         if (mounted) {
           setState(() {
             _pendingOrders = freshPending
-                .where((o) => !_dismissedOrderIds.contains(o.id))
+               .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
                 .toList();
             _isLoadingPendingOrders = false;
           });
@@ -434,7 +439,7 @@ Future<void> _acceptOrder(Order order) async {
     final freshOrders = await ApiService.getPendingOrders();
     if (mounted) {
       setState(() => _pendingOrders = freshOrders
-          .where((o) => !_dismissedOrderIds.contains(o.id))
+            .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
           .toList());
     }
   } catch (e) {
@@ -447,7 +452,7 @@ Future<void> _acceptOrder(Order order) async {
     final freshOrders = await ApiService.getPendingOrders();
     if (mounted) {
       setState(() => _pendingOrders = freshOrders
-          .where((o) => !_dismissedOrderIds.contains(o.id))
+          .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
           .toList());
     }
   } catch (e) {
@@ -838,7 +843,7 @@ double originalTotalAmount = _isPendingOrderLoaded
           final Order o = item['order'] as Order;
           return seenIds.add(o.id); // false kalau sudah ada → dibuang
         }).toList();
-
+    
     return Container(
       width: 340,
       margin: const EdgeInsets.all(15),

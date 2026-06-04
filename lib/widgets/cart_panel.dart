@@ -6,6 +6,7 @@ import '../services/storage_service.dart';
 import 'checkout_dialog.dart';
 import 'table_panel.dart';
 import 'package:flutter/services.dart'; 
+import '../utils/keyboard_util.dart';
 
 class CartPanel extends StatefulWidget {
   final Map<int, OrderItem> cart;
@@ -60,6 +61,7 @@ class _CartPanelState extends State<CartPanel> {
   late TextEditingController _customerController;
 
   final Map<int, TextEditingController> _noteControllers = {};
+  final Map<int, TextEditingController> _qtyControllers = {};
   final Map<int, GlobalKey> _itemKeys = {};       
   final Map<int, FocusNode> _noteFocusNodes = {}; 
   final ScrollController _listScrollController = ScrollController(); 
@@ -131,6 +133,17 @@ void _syncNoteControllers() {
       }
     }
 
+    if (!_qtyControllers.containsKey(id)) {
+      _qtyControllers[id] = TextEditingController(text: "${item.quantity}");
+    } else {
+      if (_qtyControllers[id]!.text != "${item.quantity}") {
+        _qtyControllers[id]!.text = "${item.quantity}";
+        _qtyControllers[id]!.selection = TextSelection.collapsed(
+          offset: "${item.quantity}".length,
+        );
+      }
+    }
+
     if (!_itemKeys.containsKey(id)) {
       _itemKeys[id] = GlobalKey();
     }
@@ -167,6 +180,10 @@ void _syncNoteControllers() {
   });
 
   _noteControllers.removeWhere((id, _) => !widget.cart.containsKey(id));
+  _qtyControllers.removeWhere((id, c) {
+    if (!widget.cart.containsKey(id)) { c.dispose(); return true; }
+    return false;
+  });
   _itemKeys.removeWhere((id, _) => !widget.cart.containsKey(id));
   _noteFocusNodes.removeWhere((id, node) {
     if (!widget.cart.containsKey(id)) {
@@ -194,6 +211,9 @@ void dispose() {
   _tableController.dispose();
   _customerController.dispose();
   for (var controller in _noteControllers.values) {
+    controller.dispose();
+  }
+   for (var controller in _qtyControllers.values) { // ← TAMBAH INI
     controller.dispose();
   }
   for (var node in _noteFocusNodes.values) {
@@ -421,10 +441,12 @@ const SizedBox(height: 15),
                 color: isReadOnly ? Colors.grey.shade700 : AppStyle.primaryBlue,
                 fontFamily: 'Poppins',
               ),
+              onTap: isReadOnly ? null : () => KeyboardUtil.show(),
+              textInputAction: TextInputAction.next,
               decoration: InputDecoration(
-                hintText: hint,
-                border: InputBorder.none,
-                isDense: true,
+              hintText: hint,
+              border: InputBorder.none,
+              isDense: true,
               ),
             ),
           ),
@@ -578,9 +600,9 @@ const SizedBox(height: 15),
   filled: true,
   fillColor: AppStyle.primaryBlue.withValues(alpha: 0.05),
 ),
-      controller: TextEditingController(text: "${item.quantity}")
-        ..selection = TextSelection.collapsed(offset: "${item.quantity}".length),
+      controller: _qtyControllers[id] ?? TextEditingController(text: "${item.quantity}"),
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      onTap: () => KeyboardUtil.show(),
       onChanged: (val) {
         final parsed = int.tryParse(val);
         if (parsed != null && parsed > 0) {
@@ -611,6 +633,7 @@ const SizedBox(height: 15),
                 child: TextField(
                   controller: noteController,
                   onChanged: (v) => item.notes = v,
+                  onTap: () => KeyboardUtil.show(),
                   style: const TextStyle(fontSize: 11),
                   decoration: InputDecoration(
                     hintText: "Catatan (mis: Pedas)...",

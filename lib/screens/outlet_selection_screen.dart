@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../constants/style.dart';
 import '../services/storage_service.dart';
 import 'login_screen.dart';
@@ -14,6 +15,8 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
   final TextEditingController _outletIdController = TextEditingController();
   bool _isLoading = false;
 
+  // ❌ DIHAPUS: FocusNode & initState dengan KeyboardUtil → konflik dengan autofocus
+
   @override
   void dispose() {
     _outletIdController.dispose();
@@ -21,6 +24,7 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
   }
 
   void _saveAndContinue() async {
+    FocusScope.of(context).unfocus(); // sembunyikan keyboard
     String idText = _outletIdController.text.trim();
 
     if (idText.isEmpty) {
@@ -38,10 +42,7 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
 
     try {
       await StorageService.saveOutletId(id);
-      debugPrint("DEBUG: Berhasil menyimpan ID $id ke Storage");
-
       await Future.delayed(const Duration(milliseconds: 300));
-
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -51,9 +52,7 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        _showSnackBar("Gagal menyimpan konfigurasi: $e", isError: true);
-      }
+      if (mounted) _showSnackBar("Gagal menyimpan konfigurasi: $e", isError: true);
     }
   }
 
@@ -71,84 +70,77 @@ class _OutletSelectionScreenState extends State<OutletSelectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
+      resizeToAvoidBottomInset: true, // ✅ layar naik saat keyboard muncul
       body: Center(
-        child: Container(
-          width: 450,
-          padding: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.storefront_rounded,
-                size: 60,
-                color: AppStyle.primaryBlue,
-              ),
-              const SizedBox(height: 20),
-              Text(
-                "Konfigurasi Outlet",
-                style: AppStyle.titleText.copyWith(fontSize: 22),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                "Masukkan ID Outlet sesuai instruksi Manager.\nIdentitas ini akan mengunci menu dan akses kasir.",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, height: 1.5),
-              ),
-              const SizedBox(height: 30),
-              TextField(
-                controller: _outletIdController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+        child: SingleChildScrollView( // ✅ agar tidak overflow saat keyboard naik
+          child: Container(
+            width: 450,
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
-                decoration: InputDecoration(
-                  labelText: "ID Outlet",
-                  prefixIcon: const Icon(Icons.numbers),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.storefront_rounded, size: 60, color: AppStyle.primaryBlue),
+                const SizedBox(height: 20),
+                Text("Konfigurasi Outlet", style: AppStyle.titleText.copyWith(fontSize: 22)),
+                const SizedBox(height: 10),
+                const Text(
+                  "Masukkan ID Outlet sesuai instruksi Manager.\nIdentitas ini akan mengunci menu dan akses kasir.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, height: 1.5),
+                ),
+                const SizedBox(height: 30),
+                TextField(
+                  controller: _outletIdController,
+                  autofocus: true,                          // ✅ keyboard muncul otomatis
+                  keyboardType: TextInputType.number,       // ✅ keyboard ANGKA
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly, // ✅ hanya terima angka
+                  ],
+                  textAlign: TextAlign.center,
+                  textInputAction: TextInputAction.done,    // ✅ tombol "Done" di keyboard
+                  onSubmitted: (_) => _saveAndContinue(),
+                  // ❌ TIDAK ADA onTap KeyboardUtil → itu yang menyebabkan konflik
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  decoration: InputDecoration(
+                    labelText: "ID Outlet",
+                    prefixIcon: const Icon(Icons.numbers),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
                   ),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
                 ),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _saveAndContinue,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppStyle.primaryBlue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _saveAndContinue,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppStyle.primaryBlue,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
                     ),
-                    elevation: 0,
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          "SIMPAN & LANJUT LOGIN",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                            "SIMPAN & LANJUT LOGIN",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                           ),
-                        ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

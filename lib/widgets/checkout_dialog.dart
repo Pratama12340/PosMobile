@@ -54,6 +54,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   bool _isExactChange = false;
   double? _selectedQuickAmount;
 
+  bool _isLoadingPayment = false;
+
   bool _showDiscountList = false;
 
   // ??? MULTI-DISCOUNT: list pengganti single _selectedDiscount ??????????????
@@ -74,34 +76,34 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   /// - Diskon PRODUK: bisa 2 sekaligus, otomatis hapus diskon global
   /// - Diskon TRANSAKSI (global): hapus semua diskon produk, hanya 1 aktif
   void _toggleDiscount(Discount d) {
-  setState(() {
-    // Reset exact change saat diskon berubah agar user konfirmasi ulang
-    //if (_isExactChange) {
+    setState(() {
+      // Reset exact change saat diskon berubah agar user konfirmasi ulang
+      //if (_isExactChange) {
       //_isExactChange = false;
       //_selectedQuickAmount = null;
       //_amountTendered = 0;
       //_manualTenderController.clear();
-    //}
+      //}
 
-    if (_isDiscountSelected(d)) {
-      _selectedDiscounts.removeWhere((s) => s.id == d.id);
-    } else {
-      if (d.scope == 'global') {
-        _selectedDiscounts = [d];
+      if (_isDiscountSelected(d)) {
+        _selectedDiscounts.removeWhere((s) => s.id == d.id);
       } else {
-  // Hapus semua diskon global
-  _selectedDiscounts.removeWhere((s) => s.scope == 'global');
+        if (d.scope == 'global') {
+          _selectedDiscounts = [d];
+        } else {
+          // Hapus semua diskon global
+          _selectedDiscounts.removeWhere((s) => s.scope == 'global');
 
-  // Pastikan tidak ada duplikat sebelum tambah
-  _selectedDiscounts.removeWhere((s) => s.id == d.id);
+          // Pastikan tidak ada duplikat sebelum tambah
+          _selectedDiscounts.removeWhere((s) => s.id == d.id);
 
-  if (_selectedDiscounts.length < 2) {
-    _selectedDiscounts.add(d);
+          if (_selectedDiscounts.length < 2) {
+            _selectedDiscounts.add(d);
+          }
+        }
+      }
+    });
   }
-}
-    }
-  });
-}
 
   List<dynamic> _availableTaxes = [];
 
@@ -123,19 +125,20 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       duration: const Duration(milliseconds: 350),
     );
 
-    _slideOutAnimation = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(-1.0, 0),
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeInOut));
+    _slideOutAnimation =
+        Tween<Offset>(begin: Offset.zero, end: const Offset(-1.0, 0)).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeInOut),
+        );
 
-    _slideInAnimation = Tween<Offset>(
-      begin: const Offset(1.0, 0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeInOut));
+    _slideInAnimation =
+        Tween<Offset>(begin: const Offset(1.0, 0), end: Offset.zero).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeInOut),
+        );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _slideController, curve: Curves.easeIn),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeIn));
   }
 
   @override
@@ -157,43 +160,51 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   }
 
   void _loadDiscounts() async {
-  final discounts = await ApiService.getDiscounts();
-  if (!mounted) return;
-  setState(() {
-    _availableDiscounts = discounts;
- 
-    // Kasus 1: pending order   restore discount lama
-    if (widget.pendingDiscountId != null) {
-      final found = discounts.firstWhere(
-        (d) => d.id == widget.pendingDiscountId,
-        orElse: () => discounts.isEmpty ? Discount(
-          id: 0, name: '', scope: 'global', type: 'percentage',
-          value: 0, minPurchase: 0,
-        ) : discounts.first,
-      );
-      if (found.id != 0) _selectedDiscounts = [found];
-      return;
-    }
- 
-    // Kasus 2: ada diskon per-item/kategori di keranjang ? auto-select
-    if (widget.hasDiscountedItem) {
-      // Kumpulkan semua discountId unik dari item di keranjang
-      final Set<int> cartDiscountIds = widget.cart.values
-          .where((item) => item.discountId != null)
-          .map((item) => item.discountId!)
-          .toSet();
+    final discounts = await ApiService.getDiscounts();
+    if (!mounted) return;
+    setState(() {
+      _availableDiscounts = discounts;
 
-      // Cari objek Discount yang match, ambil maks 2 (untuk scope products/categories)
-      final List<Discount> autoSelected = discounts
-    .where((d) =>
-        cartDiscountIds.contains(d.id) &&
-        widget.totalAmount >= d.minPurchase)
-    .take(2)
-    .toList();
-      _selectedDiscounts = autoSelected;
-    }
-  });
-}
+      // Kasus 1: pending order   restore discount lama
+      if (widget.pendingDiscountId != null) {
+        final found = discounts.firstWhere(
+          (d) => d.id == widget.pendingDiscountId,
+          orElse: () => discounts.isEmpty
+              ? Discount(
+                  id: 0,
+                  name: '',
+                  scope: 'global',
+                  type: 'percentage',
+                  value: 0,
+                  minPurchase: 0,
+                )
+              : discounts.first,
+        );
+        if (found.id != 0) _selectedDiscounts = [found];
+        return;
+      }
+
+      // Kasus 2: ada diskon per-item/kategori di keranjang ? auto-select
+      if (widget.hasDiscountedItem) {
+        // Kumpulkan semua discountId unik dari item di keranjang
+        final Set<int> cartDiscountIds = widget.cart.values
+            .where((item) => item.discountId != null)
+            .map((item) => item.discountId!)
+            .toSet();
+
+        // Cari objek Discount yang match, ambil maks 2 (untuk scope products/categories)
+        final List<Discount> autoSelected = discounts
+            .where(
+              (d) =>
+                  cartDiscountIds.contains(d.id) &&
+                  widget.totalAmount >= d.minPurchase,
+            )
+            .take(2)
+            .toList();
+        _selectedDiscounts = autoSelected;
+      }
+    });
+  }
 
   void _loadTaxes() async {
     final taxes = await ApiService.getTaxes();
@@ -204,52 +215,51 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   }
 
   // ??? Hitung total diskon dari semua diskon yang dipilih ???????????????????
-double _calculateDiscountValue(double subTotal) {
-  if (_selectedDiscounts.isEmpty) return 0;
+  double _calculateDiscountValue(double subTotal) {
+    if (_selectedDiscounts.isEmpty) return 0;
 
-  double total = 0;
+    double total = 0;
 
-  for (var d in _selectedDiscounts) {
-    double dAmt = 0;
+    for (var d in _selectedDiscounts) {
+      double dAmt = 0;
 
-    // Jika punya productIds atau categoryIds ? hitung per item   qty
-    // (berlaku untuk scope apapun: global, products, categories)
-    if (d.productIds.isNotEmpty || d.categoryIds.isNotEmpty) {
-      for (var item in widget.cart.values) {
-        if (item.isVoided || item.activeQty == 0) continue;
+      // Jika punya productIds atau categoryIds ? hitung per item   qty
+      // (berlaku untuk scope apapun: global, products, categories)
+      if (d.productIds.isNotEmpty || d.categoryIds.isNotEmpty) {
+        for (var item in widget.cart.values) {
+          if (item.isVoided || item.activeQty == 0) continue;
 
-        bool matched = false;
-        if (d.productIds.isNotEmpty) {
-          matched = d.productIds.contains(item.productId);
-        } else if (d.categoryIds.isNotEmpty) {
-          matched = item.categoryId != null &&
-              d.categoryIds.contains(item.categoryId);
+          bool matched = false;
+          if (d.productIds.isNotEmpty) {
+            matched = d.productIds.contains(item.productId);
+          } else if (d.categoryIds.isNotEmpty) {
+            matched =
+                item.categoryId != null &&
+                d.categoryIds.contains(item.categoryId);
+          }
+
+          if (!matched) continue;
+
+          double discPerItem = d.type == 'percentage'
+              ? (item.originalPrice * d.value / 100)
+              : d.value;
+
+          dAmt += discPerItem * item.activeQty;
         }
-
-        if (!matched) continue;
-
-        double discPerItem = d.type == 'percentage'
-            ? (item.originalPrice * d.value / 100)
-            : d.value;
-
-        dAmt += discPerItem * item.activeQty;
+      } else {
+        // Tidak ada filter produk/kategori ? berlaku seluruh transaksi
+        dAmt = d.type == 'percentage' ? (subTotal * d.value / 100) : d.value;
       }
-    } else {
-      // Tidak ada filter produk/kategori ? berlaku seluruh transaksi
-      dAmt = d.type == 'percentage'
-          ? (subTotal * d.value / 100)
-          : d.value;
+
+      if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
+        dAmt = d.maxDiscount!;
+      }
+
+      total += dAmt;
     }
 
-    if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
-      dAmt = d.maxDiscount!;
-    }
-
-    total += dAmt;
+    return total;
   }
-
-  return total;
-}
 
   Map<String, dynamic> _calculateTaxesAndGrandTotal(double baseAmount) {
     double serviceAmount = 0;
@@ -306,12 +316,14 @@ double _calculateDiscountValue(double subTotal) {
   static const Color _panelBg = Color(0xFFF4F7F9);
 
   Widget _buildLeftDiscountPanel(double sub) {
-    List<int> cartProductIds =
-        widget.cart.values.map((item) => item.productId).toList();
+    List<int> cartProductIds = widget.cart.values
+        .map((item) => item.productId)
+        .toList();
 
     // Jumlah diskon produk yang sudah dipilih
-    int selectedProductCount =
-        _selectedDiscounts.where((d) => d.scope == 'products').length;
+    int selectedProductCount = _selectedDiscounts
+        .where((d) => d.scope == 'products')
+        .length;
 
     return Container(
       color: _panelBg,
@@ -339,8 +351,10 @@ double _calculateDiscountValue(double subTotal) {
                 // Badge info multi-diskon produk
                 if (selectedProductCount > 0)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: _primaryBlue.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
@@ -368,8 +382,11 @@ double _calculateDiscountValue(double subTotal) {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.local_offer_outlined,
-                            size: 48, color: Colors.black26),
+                        Icon(
+                          Icons.local_offer_outlined,
+                          size: 48,
+                          color: Colors.black26,
+                        ),
                         SizedBox(height: 12),
                         Text(
                           "Tidak ada diskon aktif",
@@ -379,8 +396,10 @@ double _calculateDiscountValue(double subTotal) {
                     ),
                   )
                 : ListView.builder(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 18,
+                    ),
                     itemCount: _availableDiscounts.length,
                     itemBuilder: (context, index) {
                       var d = _availableDiscounts[index];
@@ -395,7 +414,8 @@ double _calculateDiscountValue(double subTotal) {
                       }
 
                       // Diskon produk max 2: disabled jika sudah 2 dan ini belum dipilih
-                      bool isMaxProductReached = d.scope == 'products' &&
+                      bool isMaxProductReached =
+                          d.scope == 'products' &&
                           selectedProductCount >= 2 &&
                           !_isDiscountSelected(d);
 
@@ -405,14 +425,18 @@ double _calculateDiscountValue(double subTotal) {
                       bool isBlockedByProduct =
                           d.scope == 'global' && _hasProductDiscount;
 
-                      bool eligible = isMinPurchaseMet &&
-    isProductEligible &&
-    !isMaxProductReached &&
-    !isBlockedByGlobal;
+                      bool eligible =
+                          isMinPurchaseMet &&
+                          isProductEligible &&
+                          !isMaxProductReached &&
+                          !isBlockedByGlobal;
 
-bool canTap = _isDiscountSelected(d) ||
-    (isMinPurchaseMet && isProductEligible && !isMaxProductReached) ||
-    d.scope == 'global'; // transaksi selalu bisa diklik
+                      bool canTap =
+                          _isDiscountSelected(d) ||
+                          (isMinPurchaseMet &&
+                              isProductEligible &&
+                              !isMaxProductReached) ||
+                          d.scope == 'global'; // transaksi selalu bisa diklik
 
                       return Opacity(
                         opacity: canTap ? 1.0 : 0.45,
@@ -499,10 +523,12 @@ bool canTap = _isDiscountSelected(d) ||
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: isSelected
-                    ? const Icon(Icons.check_circle_rounded,
+                    ? const Icon(
+                        Icons.check_circle_rounded,
                         key: ValueKey('check'),
                         color: _primaryBlue,
-                        size: 26)
+                        size: 26,
+                      )
                     : Icon(
                         isProduct
                             ? Icons.shopping_bag_outlined
@@ -549,7 +575,9 @@ bool canTap = _isDiscountSelected(d) ||
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: isProduct
                                 ? const Color(0xFFEDE7FD)
@@ -611,8 +639,8 @@ bool canTap = _isDiscountSelected(d) ||
                         color: isSelected
                             ? _primaryBlue
                             : (eligible
-                                ? const Color(0xFF2563EB)
-                                : Colors.grey),
+                                  ? const Color(0xFF2563EB)
+                                  : Colors.grey),
                         fontWeight: FontWeight.w900,
                         fontSize: 18,
                         letterSpacing: -0.5,
@@ -624,8 +652,11 @@ bool canTap = _isDiscountSelected(d) ||
                     // Footer row
                     Row(
                       children: [
-                        const Icon(Icons.payments_outlined,
-                            size: 10, color: Colors.black38),
+                        const Icon(
+                          Icons.payments_outlined,
+                          size: 10,
+                          color: Colors.black38,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           "Min. ${widget.formatCurrency(d.minPurchase.toDouble())}",
@@ -640,7 +671,9 @@ bool canTap = _isDiscountSelected(d) ||
                           Expanded(
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.amber[50],
                                 borderRadius: BorderRadius.circular(20),
@@ -661,7 +694,9 @@ bool canTap = _isDiscountSelected(d) ||
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.red[50],
                               borderRadius: BorderRadius.circular(20),
@@ -680,7 +715,9 @@ bool canTap = _isDiscountSelected(d) ||
                           const Spacer(),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: _primaryBlue.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(20),
@@ -714,14 +751,15 @@ bool canTap = _isDiscountSelected(d) ||
 
     // Label dinamis berdasarkan jumlah diskon terpilih
     String btnText;
-if (_selectedDiscounts.isEmpty) {
-  btnText = "Pilih diskon tambahan";
-} else if (_selectedDiscounts.length == 1) {
-  btnText = _selectedDiscounts.first.name;
-} else {
-  btnText = "${_selectedDiscounts.length} Diskon: "
-      "${_selectedDiscounts.map((d) => d.name).join(', ')}";
-}
+    if (_selectedDiscounts.isEmpty) {
+      btnText = "Pilih diskon tambahan";
+    } else if (_selectedDiscounts.length == 1) {
+      btnText = _selectedDiscounts.first.name;
+    } else {
+      btnText =
+          "${_selectedDiscounts.length} Diskon: "
+          "${_selectedDiscounts.map((d) => d.name).join(', ')}";
+    }
 
     bool isHighlighted = isProductDiscountActive || hasAnyDiscount;
 
@@ -753,8 +791,8 @@ if (_selectedDiscounts.isEmpty) {
                     isProductDiscountActive
                         ? Icons.verified_rounded
                         : (hasAnyDiscount
-                            ? Icons.confirmation_number_rounded
-                            : Icons.local_offer_outlined),
+                              ? Icons.confirmation_number_rounded
+                              : Icons.local_offer_outlined),
                     size: 18,
                     color: isHighlighted ? Colors.orange : Colors.black45,
                   ),
@@ -765,8 +803,9 @@ if (_selectedDiscounts.isEmpty) {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color:
-                            isHighlighted ? Colors.orange[900] : Colors.black54,
+                        color: isHighlighted
+                            ? Colors.orange[900]
+                            : Colors.black54,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -789,8 +828,11 @@ if (_selectedDiscounts.isEmpty) {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  const Icon(Icons.swap_horiz_rounded,
-                      size: 16, color: Colors.orange),
+                  const Icon(
+                    Icons.swap_horiz_rounded,
+                    size: 16,
+                    color: Colors.orange,
+                  ),
                 ] else if (hasAnyDiscount) ...[
                   Text(
                     "- ${widget.formatCurrency(discAmount)}",
@@ -804,7 +846,11 @@ if (_selectedDiscounts.isEmpty) {
                   // Tombol hapus semua diskon
                   GestureDetector(
                     onTap: () => setState(() => _selectedDiscounts.clear()),
-                    child: const Icon(Icons.cancel, size: 18, color: Colors.red),
+                    child: const Icon(
+                      Icons.cancel,
+                      size: 18,
+                      color: Colors.red,
+                    ),
                   ),
                 ] else ...[
                   Text(
@@ -841,31 +887,32 @@ if (_selectedDiscounts.isEmpty) {
         if (_selectedDiscounts.length > 1) ...[
           const SizedBox(height: 6),
           ...(_selectedDiscounts.map((d) {
-          double dAmt = 0;
-if (d.productIds.isNotEmpty || d.categoryIds.isNotEmpty) {
-  for (var item in widget.cart.values) {
-    if (item.isVoided || item.activeQty == 0) continue;
-    bool matched = false;
-    if (d.productIds.isNotEmpty) {
-      matched = d.productIds.contains(item.productId);
-    } else if (d.categoryIds.isNotEmpty) {
-      matched = item.categoryId != null &&
-          d.categoryIds.contains(item.categoryId);
-    }
-    if (!matched) continue;
-    double discPerItem = d.type == 'percentage'
-        ? (item.originalPrice * d.value / 100)
-        : d.value;
-    dAmt += discPerItem * item.activeQty;
-  }
-} else {
-  dAmt = d.type == 'percentage'
-      ? (sub * d.value / 100)
-      : d.value.toDouble();
-}
-if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
-  dAmt = d.maxDiscount!;
-}
+            double dAmt = 0;
+            if (d.productIds.isNotEmpty || d.categoryIds.isNotEmpty) {
+              for (var item in widget.cart.values) {
+                if (item.isVoided || item.activeQty == 0) continue;
+                bool matched = false;
+                if (d.productIds.isNotEmpty) {
+                  matched = d.productIds.contains(item.productId);
+                } else if (d.categoryIds.isNotEmpty) {
+                  matched =
+                      item.categoryId != null &&
+                      d.categoryIds.contains(item.categoryId);
+                }
+                if (!matched) continue;
+                double discPerItem = d.type == 'percentage'
+                    ? (item.originalPrice * d.value / 100)
+                    : d.value;
+                dAmt += discPerItem * item.activeQty;
+              }
+            } else {
+              dAmt = d.type == 'percentage'
+                  ? (sub * d.value / 100)
+                  : d.value.toDouble();
+            }
+            if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
+              dAmt = d.maxDiscount!;
+            }
 
             return Padding(
               padding: const EdgeInsets.only(left: 12, bottom: 4),
@@ -874,22 +921,28 @@ if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.subdirectory_arrow_right_rounded,
-                          size: 12, color: Colors.black26),
+                      const Icon(
+                        Icons.subdirectory_arrow_right_rounded,
+                        size: 12,
+                        color: Colors.black26,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         d.name,
                         style: const TextStyle(
-                            fontSize: 10, color: Colors.black45),
+                          fontSize: 10,
+                          color: Colors.black45,
+                        ),
                       ),
                     ],
                   ),
                   Text(
                     "- ${widget.formatCurrency(dAmt)}",
                     style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.red,
-                        fontWeight: FontWeight.w600),
+                      fontSize: 10,
+                      color: Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -901,8 +954,7 @@ if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
         const Divider(color: Color(0xFFEEEEEE), height: 1),
         const SizedBox(height: 10),
         ...taxBreakdown.map((tax) {
-          double rate =
-              double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+          double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
           double amt = tax['calculated_amount'] ?? 0.0;
           String label = tax['name'] ?? "Pajak";
           if (tax['type'] == 'percentage') {
@@ -941,8 +993,12 @@ if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
   }
 
   // ??? LEFT PANEL: PAYMENT METHOD ???????????????????????????????????????????
-  Widget _buildPaymentMethodPanel(double grandTotal, int tagihanInt,
-      int uangMasukInt, int change) {
+  Widget _buildPaymentMethodPanel(
+    double grandTotal,
+    int tagihanInt,
+    int uangMasukInt,
+    int change,
+  ) {
     return Padding(
       padding: const EdgeInsets.all(40),
       child: Column(
@@ -1022,8 +1078,7 @@ if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
             ),
             const Spacer(),
             if (change >= 0) _buildChangeDisplay(change.toDouble()),
-          ] else if (_paymentMethod == 'Card' ||
-              _paymentMethod == 'Qris') ...[
+          ] else if (_paymentMethod == 'Card' || _paymentMethod == 'Qris') ...[
             Expanded(
               child: _webViewController != null
                   ? Container(
@@ -1038,9 +1093,40 @@ if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
                       clipBehavior: Clip.antiAlias,
                       child: WebViewWidget(controller: _webViewController!),
                     )
-                  : const Center(
-                      child: CircularProgressIndicator(
-                        color: AppStyle.primaryBlue,
+                  : Center(
+                      // ← HAPUS const
+                      child: Column(
+                        // ← GANTI jadi Column
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(
+                            color: AppStyle.primaryBlue,
+                          ),
+                          const SizedBox(height: 16),
+                          if (_errorMessage != null) // ← TAMBAH error message
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 13,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            )
+                          else
+                            const Text(
+                              // ← TAMBAH loading text
+                              "Memuat halaman pembayaran...",
+                              style: TextStyle(
+                                color: Colors.black45,
+                                fontSize: 13,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
             ),
@@ -1054,12 +1140,12 @@ if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
   Widget build(BuildContext context) {
     // subTotal: pakai originalTotalAmount jika ada diskon produk aktif
     double subTotal = widget.originalTotalAmount > 0
-    ? widget.originalTotalAmount
-    : widget.totalAmount;
+        ? widget.originalTotalAmount
+        : widget.totalAmount;
 
-double discountAmount = _calculateDiscountValue(subTotal);
-double baseAmount = subTotal - discountAmount;
-if (baseAmount < 0) baseAmount = 0;
+    double discountAmount = _calculateDiscountValue(subTotal);
+    double baseAmount = subTotal - discountAmount;
+    if (baseAmount < 0) baseAmount = 0;
 
     var taxData = _calculateTaxesAndGrandTotal(baseAmount);
     List<Map<String, dynamic>> taxBreakdown = taxData['tax_breakdown'];
@@ -1067,16 +1153,18 @@ if (baseAmount < 0) baseAmount = 0;
     if (grandTotal < 0) grandTotal = 0;
 
     if (_isExactChange) {
-  final formatted = NumberFormat.decimalPattern('id').format(grandTotal.toInt());
-  if (_manualTenderController.text != formatted) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _manualTenderController.text = formatted;
-      // Update _amountTendered tanpa setState agar tidak rebuild loop
-      _amountTendered = grandTotal;
-    });
-  }
-}
+      final formatted = NumberFormat.decimalPattern(
+        'id',
+      ).format(grandTotal.toInt());
+      if (_manualTenderController.text != formatted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _manualTenderController.text = formatted;
+          // Update _amountTendered tanpa setState agar tidak rebuild loop
+          _amountTendered = grandTotal;
+        });
+      }
+    }
 
     int tagihanInt = grandTotal.toInt();
     int uangMasukInt = _amountTendered.toInt();
@@ -1117,7 +1205,11 @@ if (baseAmount < 0) baseAmount = 0;
                             SlideTransition(
                               position: _slideOutAnimation,
                               child: _buildPaymentMethodPanel(
-                                  grandTotal, tagihanInt, uangMasukInt, change),
+                                grandTotal,
+                                tagihanInt,
+                                uangMasukInt,
+                                change,
+                              ),
                             ),
                             if (_showDiscountList)
                               SlideTransition(
@@ -1136,20 +1228,17 @@ if (baseAmount < 0) baseAmount = 0;
                 Expanded(
                   flex: 4,
                   child: Container(
-                    decoration:
-                        const BoxDecoration(color: Color(0xFFFBFBFB)),
+                    decoration: const BoxDecoration(color: Color(0xFFFBFBFB)),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(30, 25, 30, 25),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     "Kasir: ${widget.cashierName}",
@@ -1168,8 +1257,7 @@ if (baseAmount < 0) baseAmount = 0;
                                 ],
                               ),
                               Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text(
                                     widget.customerName.isEmpty
@@ -1198,11 +1286,9 @@ if (baseAmount < 0) baseAmount = 0;
                             child: ListView.builder(
                               itemCount: widget.cart.length,
                               itemBuilder: (context, index) {
-                                var item =
-                                    widget.cart.values.elementAt(index);
+                                var item = widget.cart.values.elementAt(index);
                                 return Padding(
-                                  padding:
-                                      const EdgeInsets.only(bottom: 14),
+                                  padding: const EdgeInsets.only(bottom: 14),
                                   child: Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
@@ -1220,26 +1306,23 @@ if (baseAmount < 0) baseAmount = 0;
                                               ),
                                             ),
                                             Text(
-  "${item.quantity} x ${widget.formatCurrency(item.originalPrice)}",
-  style: const TextStyle(
-    color: Colors.black45,
-    fontSize: 11,
-  ),
-),
-                                            if (item.notes
-                                                .trim()
-                                                .isNotEmpty)
+                                              "${item.quantity} x ${widget.formatCurrency(item.originalPrice)}",
+                                              style: const TextStyle(
+                                                color: Colors.black45,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                            if (item.notes.trim().isNotEmpty)
                                               Padding(
-                                                padding:
-                                                    const EdgeInsets.only(
-                                                        top: 2),
+                                                padding: const EdgeInsets.only(
+                                                  top: 2,
+                                                ),
                                                 child: Text(
                                                   "Note: ${item.notes}",
                                                   style: const TextStyle(
                                                     color: Colors.grey,
                                                     fontSize: 10,
-                                                    fontStyle:
-                                                        FontStyle.italic,
+                                                    fontStyle: FontStyle.italic,
                                                   ),
                                                 ),
                                               ),
@@ -1247,7 +1330,9 @@ if (baseAmount < 0) baseAmount = 0;
                                         ),
                                       ),
                                       Text(
-                                        widget.formatCurrency(item.originalPrice * item.activeQty),
+                                        widget.formatCurrency(
+                                          item.originalPrice * item.activeQty,
+                                        ),
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13,
@@ -1266,7 +1351,8 @@ if (baseAmount < 0) baseAmount = 0;
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(15),
                               border: Border.all(
-                                  color: const Color(0xFFEEEEEE)),
+                                color: const Color(0xFFEEEEEE),
+                              ),
                             ),
                             child: _buildReceiptSummary(
                               subTotal,
@@ -1281,8 +1367,7 @@ if (baseAmount < 0) baseAmount = 0;
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppStyle.primaryBlue,
-                                minimumSize:
-                                    const Size(double.infinity, 60),
+                                minimumSize: const Size(double.infinity, 60),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(15),
                                 ),
@@ -1290,8 +1375,8 @@ if (baseAmount < 0) baseAmount = 0;
                               onPressed: _isLoading
                                   ? null
                                   : (uangMasukInt < tagihanInt
-                                      ? null
-                                      : _processPayment),
+                                        ? null
+                                        : _processPayment),
                               child: _isLoading
                                   ? const SizedBox(
                                       width: 24,
@@ -1327,12 +1412,16 @@ if (baseAmount < 0) baseAmount = 0;
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 450),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 20),
+                      horizontal: 20,
+                      vertical: 20,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.red.shade50,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                          color: Colors.red.shade200, width: 1.5),
+                        color: Colors.red.shade200,
+                        width: 1.5,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.05),
@@ -1344,8 +1433,11 @@ if (baseAmount < 0) baseAmount = 0;
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.error_outline,
-                            color: Colors.red.shade700, size: 20),
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red.shade700,
+                          size: 20,
+                        ),
                         const SizedBox(width: 10),
                         Flexible(
                           child: Text(
@@ -1378,8 +1470,7 @@ if (baseAmount < 0) baseAmount = 0;
     try {
       final outletData = await ApiService.fetchOutletInfoLive();
       final String currentOutletName = outletData['name']!;
-      final String currentOutletAddress =
-          outletData['address_outlet'] ?? "-";
+      final String currentOutletAddress = outletData['address_outlet'] ?? "-";
 
       final savedOutletId = await StorageService.getOutletId();
       if (savedOutletId == null || savedOutletId == 0) {
@@ -1387,8 +1478,8 @@ if (baseAmount < 0) baseAmount = 0;
       }
 
       double subTotal = widget.originalTotalAmount > 0
-    ? widget.originalTotalAmount
-    : widget.totalAmount;
+          ? widget.originalTotalAmount
+          : widget.totalAmount;
       double discountAmount = _calculateDiscountValue(subTotal);
       double baseAmount = subTotal - discountAmount;
 
@@ -1397,63 +1488,68 @@ if (baseAmount < 0) baseAmount = 0;
       double grandTotal = taxData['grand_total'];
 
       List<Map<String, dynamic>> simplifiedTaxBreakdown =
-          List<Map<String, dynamic>>.from(taxData['tax_breakdown'])
-              .map((tax) {
-        return {
-          'id': tax['id'],
-          'name': tax['name'],
-          'calculated_amount': tax['calculated_amount'],
-        };
-      }).toList();
+          List<Map<String, dynamic>>.from(taxData['tax_breakdown']).map((tax) {
+            return {
+              'id': tax['id'],
+              'name': tax['name'],
+              'calculated_amount': tax['calculated_amount'],
+            };
+          }).toList();
 
       int tagihanInt = grandTotal.toInt();
       int uangMasukInt = _isExactChange ? tagihanInt : _amountTendered.toInt();
       int change = uangMasukInt - tagihanInt;
 
       var existingItems = widget.cart.values
-    .where((item) => item.id > 0)
-    .map((item) => {
-          'product_id': item.productId,
-          'qty': item.quantity,
-          'price': item.originalPrice.toInt(),  // ? harga asli
-          'notes': item.notes,
-          'id': item.id,
-        })
-    .toList();
- 
-var newItems = widget.cart.values
-    .where((item) => item.id == 0)
-    .map((item) => {
-          'product_id': item.productId,
-          'qty': item.quantity,
-          'price': item.originalPrice.toInt(),  // ? harga asli
-          'notes': item.notes,
-        })
-    .toList();
+          .where((item) => item.id > 0)
+          .map(
+            (item) => {
+              'product_id': item.productId,
+              'qty': item.quantity,
+              'price': item.originalPrice.toInt(), // ? harga asli
+              'notes': item.notes,
+              'id': item.id,
+            },
+          )
+          .toList();
 
-var mappedItems = [...existingItems, ...newItems];
+      var newItems = widget.cart.values
+          .where((item) => item.id == 0)
+          .map(
+            (item) => {
+              'product_id': item.productId,
+              'qty': item.quantity,
+              'price': item.originalPrice.toInt(), // ? harga asli
+              'notes': item.notes,
+            },
+          )
+          .toList();
 
-// payload tetap sama, hanya harga item yang berubah ke originalPrice
-Map<String, dynamic> payload = {
-  'outlet_id': savedOutletId,
-  'customer_name': widget.customerName,
-  'table_id': widget.tableId,
-  'subtotal_price': subTotal.toInt(),          // ? originalTotalAmount
-  'discount_amount': discountAmount.toInt(),
-  'total_price': grandTotal.toInt(),
-  'tax_amount': taxAmountFinal.toInt(),
-  'tax_breakdown': simplifiedTaxBreakdown,
-  'payment_method': _paymentMethod.toLowerCase(),
-  'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
-  'items': mappedItems,
-  if (_selectedDiscounts.length == 1)
-    'discount_id': _selectedDiscounts.first.id,
-};
+      var mappedItems = [...existingItems, ...newItems];
+
+      // payload tetap sama, hanya harga item yang berubah ke originalPrice
+      Map<String, dynamic> payload = {
+        'outlet_id': savedOutletId,
+        'customer_name': widget.customerName,
+        'table_id': widget.tableId,
+        'subtotal_price': subTotal.toInt(), // ? originalTotalAmount
+        'discount_amount': discountAmount.toInt(),
+        'total_price': grandTotal.toInt(),
+        'tax_amount': taxAmountFinal.toInt(),
+        'tax_breakdown': simplifiedTaxBreakdown,
+        'payment_method': _paymentMethod.toLowerCase(),
+        'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
+        'items': mappedItems,
+        if (_selectedDiscounts.length == 1)
+          'discount_id': _selectedDiscounts.first.id,
+      };
 
       debugPrint("=== DEBUG CHECKOUT ===");
       debugPrint("isUpdatingOrder: ${widget.isUpdatingOrder}");
       debugPrint("pendingDiscountId: ${widget.pendingDiscountId}");
-      debugPrint("selectedDiscounts: ${_selectedDiscounts.map((d) => '${d.name}(${d.scope})').join(', ')}");
+      debugPrint(
+        "selectedDiscounts: ${_selectedDiscounts.map((d) => '${d.name}(${d.scope})').join(', ')}",
+      );
       debugPrint("subTotal: $subTotal");
       debugPrint("discountAmount: $discountAmount");
       debugPrint("grandTotal: $grandTotal");
@@ -1499,55 +1595,66 @@ Map<String, dynamic> payload = {
         } else {
           String? redirectUrl = res['data']?['redirect_url'];
           if (redirectUrl != null && redirectUrl.isNotEmpty) {
-            setState(() {
-              _webViewController = WebViewController()
-                // 1. KUNCI UTAMA: Ubah User-Agent menjadi Desktop agar Midtrans langsung memunculkan Barcode QRIS
-                ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                ..setBackgroundColor(const Color(0x00000000))
-                ..setNavigationDelegate(
-                  NavigationDelegate(
-                    onPageFinished: (_) => _webViewController
-                        // Sedikit memperkecil zoom jika QR code terpotong di layar POS Anda
-                        ?.runJavaScript("document.body.style.zoom = '0.85';"),
-                    onNavigationRequest: (request) {
-                      // 2. Cegah error jika WebView mencoba membuka deeplink aplikasi (gojek://, shopeeid://, intent://)
-                      if (!request.url.startsWith('http')) {
-                        return NavigationDecision.prevent;
-                      }
+            debugPrint("[REDIRECT URL] --> ${res['data']?['redirect_url']}");
+            debugPrint("[FULL RESPONSE] --> ${res['data']}");
 
-                      if (request.url.contains('status_code=200') ||
-                          request.url.contains('transaction_status=settlement')) {
-                        Navigator.pop(context, {'status': 'success'});
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (c) => SuccessPaymentPage(
-                              orderId: realOrderId,
-                              outletName: currentOutletName,
-                              outletAddress: currentOutletAddress,
-                              paymentMethod: _paymentMethod,
-                              grandTotal: grandTotal,
-                              amountPaid: grandTotal, // Karena cashless, uang masuk = tagihan
-                              change: 0,
-                              cart: cartSnapshot,
-                              tableNumber: widget.tableNumber,
-                              customerName: widget.customerName,
-                              cashierName: widget.cashierName,
-                              formatCurrency: widget.formatCurrency,
-                              discountAmount: discountAmount,
-                              taxBreakdown: simplifiedTaxBreakdown,
+            if (redirectUrl != null && redirectUrl.isNotEmpty) {
+              setState(() {
+                _isLoadingPayment = false;
+                _webViewController = WebViewController()
+                  ..setUserAgent(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                  )
+                  ..setJavaScriptMode(JavaScriptMode.unrestricted)
+                  ..setBackgroundColor(const Color(0x00000000))
+                  ..setNavigationDelegate(
+                    NavigationDelegate(
+                      onPageFinished: (_) =>
+                          _webViewController
+                          // Sedikit memperkecil zoom jika QR code terpotong di layar POS Anda
+                          ?.runJavaScript("document.body.style.zoom = '0.85';"),
+                      onNavigationRequest: (request) {
+                        // 2. Cegah error jika WebView mencoba membuka deeplink aplikasi (gojek://, shopeeid://, intent://)
+                        if (!request.url.startsWith('http')) {
+                          return NavigationDecision.prevent;
+                        }
+
+                        if (request.url.contains('status_code=200') ||
+                            request.url.contains(
+                              'transaction_status=settlement',
+                            )) {
+                          Navigator.pop(context, {'status': 'success'});
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (c) => SuccessPaymentPage(
+                                orderId: realOrderId,
+                                outletName: currentOutletName,
+                                outletAddress: currentOutletAddress,
+                                paymentMethod: _paymentMethod,
+                                grandTotal: grandTotal,
+                                amountPaid:
+                                    grandTotal, // Karena cashless, uang masuk = tagihan
+                                change: 0,
+                                cart: cartSnapshot,
+                                tableNumber: widget.tableNumber,
+                                customerName: widget.customerName,
+                                cashierName: widget.cashierName,
+                                formatCurrency: widget.formatCurrency,
+                                discountAmount: discountAmount,
+                                taxBreakdown: simplifiedTaxBreakdown,
+                              ),
                             ),
-                          ),
-                        );
-                        return NavigationDecision.prevent;
-                      }
-                      return NavigationDecision.navigate;
-                    },
-                  ),
-                )
-                ..loadRequest(Uri.parse(redirectUrl));
-            });
+                          );
+                          return NavigationDecision.prevent;
+                        }
+                        return NavigationDecision.navigate;
+                      },
+                    ),
+                  )
+                  ..loadRequest(Uri.parse(redirectUrl));
+              });
+            }
           }
         }
       } else {
@@ -1556,7 +1663,8 @@ Map<String, dynamic> payload = {
     } catch (e) {
       if (mounted) {
         setState(
-            () => _errorMessage = e.toString().replaceAll('Exception: ', ''));
+          () => _errorMessage = e.toString().replaceAll('Exception: ', ''),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -1564,35 +1672,33 @@ Map<String, dynamic> payload = {
   }
 
   Widget _rowInf(String l, double v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(l,
-                style: const TextStyle(color: Colors.black45, fontSize: 11)),
-            Text(
-              widget.formatCurrency(v),
-              style:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(l, style: const TextStyle(color: Colors.black45, fontSize: 11)),
+        Text(
+          widget.formatCurrency(v),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _payBtn(String l, IconData i, {bool isEnabled = true}) {
     bool s = _paymentMethod == l;
     return Expanded(
       child: GestureDetector(
         onTap: (isEnabled && !_isLoading)
-            ? () async {
-                setState(() {
-                  if (_errorMessage != null) _errorMessage = null;
-                  _paymentMethod = l;
-                  _webViewController = null;
-                });
-                if (l != 'Cash') await _processPayment();
-              }
-            : null,
+    ? () async {
+        setState(() {
+          if (_errorMessage != null) _errorMessage = null;
+          _paymentMethod = l;
+          _webViewController = null; // reset dulu, lalu proses
+        });
+        if (l != 'Cash') await _processPayment();
+      }
+    : null,
         child: Opacity(
           opacity: isEnabled ? 1.0 : 0.4,
           child: Container(
@@ -1601,8 +1707,7 @@ Map<String, dynamic> payload = {
               color: s ? AppStyle.primaryBlue : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color:
-                    s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE),
+                color: s ? AppStyle.primaryBlue : const Color(0xFFEEEEEE),
               ),
             ),
             child: Column(
@@ -1618,9 +1723,11 @@ Map<String, dynamic> payload = {
                     ),
                   )
                 else
-                  Icon(i,
-                      color: s ? Colors.white : AppStyle.textMain,
-                      size: 28),
+                  Icon(
+                    i,
+                    color: s ? Colors.white : AppStyle.textMain,
+                    size: 28,
+                  ),
                 const SizedBox(height: 8),
                 Text(
                   l,
@@ -1638,7 +1745,8 @@ Map<String, dynamic> payload = {
   }
 
   Widget _quickBtn(double v, {String? label, bool isExact = false}) {
-    bool isSelected = _selectedQuickAmount == v &&
+    bool isSelected =
+        _selectedQuickAmount == v &&
         (label == null || _isExactChange == isExact);
 
     if (label == "Bayar Pas") {
@@ -1651,8 +1759,9 @@ Map<String, dynamic> payload = {
         _isExactChange = isExact;
         _selectedQuickAmount = v;
         _amountTendered = v;
-        _manualTenderController.text =
-            NumberFormat.decimalPattern('id').format(v.toInt());
+        _manualTenderController.text = NumberFormat.decimalPattern(
+          'id',
+        ).format(v.toInt());
       }),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
@@ -1661,9 +1770,7 @@ Map<String, dynamic> payload = {
           color: isSelected ? AppStyle.primaryBlue : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected
-                ? AppStyle.primaryBlue
-                : const Color(0xFFEEEEEE),
+            color: isSelected ? AppStyle.primaryBlue : const Color(0xFFEEEEEE),
           ),
           boxShadow: isSelected
               ? [
@@ -1688,36 +1795,34 @@ Map<String, dynamic> payload = {
   }
 
   Widget _buildChangeDisplay(double c) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        decoration: BoxDecoration(
-          color: Colors.green.shade50,
-          borderRadius: BorderRadius.circular(15),
-          border:
-              Border.all(color: Colors.green.withValues(alpha: 0.1)),
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+    decoration: BoxDecoration(
+      color: Colors.green.shade50,
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: Colors.green.withValues(alpha: 0.1)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          "Kembalian",
+          style: TextStyle(
+            color: Colors.green,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              "Kembalian",
-              style: TextStyle(
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
-            Text(
-              widget.formatCurrency(c),
-              style: const TextStyle(
-                color: Colors.green,
-                fontWeight: FontWeight.w900,
-                fontSize: 24,
-              ),
-            ),
-          ],
+        Text(
+          widget.formatCurrency(c),
+          style: const TextStyle(
+            color: Colors.green,
+            fontWeight: FontWeight.w900,
+            fontSize: 24,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _BackButton extends StatelessWidget {
@@ -1755,11 +1860,11 @@ class _BackButton extends StatelessWidget {
 
 class CurrencyInputFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(
-      TextEditingValue o, TextEditingValue n) {
+  TextEditingValue formatEditUpdate(TextEditingValue o, TextEditingValue n) {
     if (n.text.isEmpty) return n.copyWith(text: '');
-    String t = NumberFormat.decimalPattern('id')
-        .format(double.parse(n.text.replaceAll('.', '')));
+    String t = NumberFormat.decimalPattern(
+      'id',
+    ).format(double.parse(n.text.replaceAll('.', '')));
     return n.copyWith(
       text: t,
       selection: TextSelection.collapsed(offset: t.length),

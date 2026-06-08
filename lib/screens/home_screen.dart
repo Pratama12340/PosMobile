@@ -191,22 +191,27 @@ class HomeScreenState extends State<HomeScreen> {
 
         for (var product in productsData) {
           final productDiscount = discountsData
-      .where((d) => d.scope == 'products' && d.productIds.contains(product.id))
-      .toList();
+              .where(
+                (d) =>
+                    d.scope == 'products' && d.productIds.contains(product.id),
+              )
+              .toList();
 
-  // Cek diskon per-kategori (BARU)
-  final categoryDiscount = discountsData
-      .where((d) =>
-          d.scope == 'categories' &&
-          product.categoryId != null &&
-          d.categoryIds.contains(product.categoryId))
-      .toList();
+          // Cek diskon per-kategori (BARU)
+          final categoryDiscount = discountsData
+              .where(
+                (d) =>
+                    d.scope == 'categories' &&
+                    product.categoryId != null &&
+                    d.categoryIds.contains(product.categoryId),
+              )
+              .toList();
 
-  // Prioritas: diskon produk > diskon kategori
-  product.discount = productDiscount.isNotEmpty
-      ? productDiscount.first
-      : (categoryDiscount.isNotEmpty ? categoryDiscount.first : null);
-}
+          // Prioritas: diskon produk > diskon kategori
+          product.discount = productDiscount.isNotEmpty
+              ? productDiscount.first
+              : (categoryDiscount.isNotEmpty ? categoryDiscount.first : null);
+        }
 
         final sortedBySales = List<Product>.from(productsData)
           ..sort((a, b) {
@@ -300,28 +305,28 @@ class HomeScreenState extends State<HomeScreen> {
           unitPrice = (item.price > 0) ? item.price : product.price.toDouble();
         }
         // Ambil data diskon dari produk jika ada
-final product = productIndex != -1 ? _allProducts[productIndex] : null;
-double discountedPrice = unitPrice;
-if (product?.discount != null) {
-  if (product!.discount!.type == 'percentage') {
-    discountedPrice = unitPrice * (1 - (product.discount!.value / 100));
-  } else {
-    discountedPrice = unitPrice - product.discount!.value;
-  }
-}
+        final product = productIndex != -1 ? _allProducts[productIndex] : null;
+        double discountedPrice = unitPrice;
+        if (product?.discount != null) {
+          if (product!.discount!.type == 'percentage') {
+            discountedPrice = unitPrice * (1 - (product.discount!.value / 100));
+          } else {
+            discountedPrice = unitPrice - product.discount!.value;
+          }
+        }
 
-_cart[item.productId] = OrderItem(
-  id: item.id,
-  productId: item.productId,
-  categoryId: product?.categoryId,
-  itemName: itemName,
-  originalQty: item.quantity,
-  activeQty: item.quantity,
-  unitPrice: discountedPrice,        // ← harga setelah diskon
-  originalPrice: unitPrice,          // ← harga asli
-  discountId: product?.discount?.id, // ← set discountId dari produk
-  stationId: item.stationId,
-);
+        _cart[item.productId] = OrderItem(
+          id: item.id,
+          productId: item.productId,
+          categoryId: product?.categoryId,
+          itemName: itemName,
+          originalQty: item.quantity,
+          activeQty: item.quantity,
+          unitPrice: discountedPrice, // ← harga setelah diskon
+          originalPrice: unitPrice, // ← harga asli
+          discountId: product?.discount?.id, // ← set discountId dari produk
+          stationId: item.stationId,
+        );
       }
 
       _currentCustomerName = order.customerName;
@@ -387,7 +392,7 @@ _cart[item.productId] = OrderItem(
     }
   }
 
-Future<void> _acceptOrder(Order order) async {
+  Future<void> _acceptOrder(Order order) async {
     debugPrint("Menghubungi API accept untuk Order ID: ${order.id}");
     final success = await ApiService.acceptOrder(order.id);
     if (success && mounted) {
@@ -433,7 +438,7 @@ Future<void> _acceptOrder(Order order) async {
       );
     }
   }
-  
+
   Future<void> refreshPendingOrdersSilently() async {
     try {
       final freshOrders = await ApiService.getPendingOrders();
@@ -478,11 +483,13 @@ Future<void> _acceptOrder(Order order) async {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
 
-    bool hasDiscountedItem = _cart.values.any((item) => item.discountId != null);
+    bool hasDiscountedItem = _cart.values.any(
+      (item) => item.discountId != null,
+    );
 
-double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
-  return sum + (item.originalPrice * item.quantity);
-});
+    double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
+      return sum + (item.originalPrice * item.quantity);
+    });
 
     // ✅ Total badge = pending + paid
     final int totalOrderBadge = _pendingOrders.length + _paidOrders.length;
@@ -714,18 +721,19 @@ double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
                       },
                       onSaveDraft: (name, table, id) =>
                           _saveToDraft(name, table, id),
-                          onCancelPendingMode: () {   // ← ini yang kemungkinan belum ada
-    setState(() {
-      _cart.clear();
-      _currentCustomerName = null;
-      _currentTableNumber = null;
-      _currentTableId = null;
-      _isPendingOrderLoaded = false;
-      _currentPendingOrderId = null;
-      _currentPendingDiscountId = null;
-      widget.onCartToggled?.call(false);
-    });
-  },
+                      onCancelPendingMode: () {
+                        // ← ini yang kemungkinan belum ada
+                        setState(() {
+                          _cart.clear();
+                          _currentCustomerName = null;
+                          _currentTableNumber = null;
+                          _currentTableId = null;
+                          _isPendingOrderLoaded = false;
+                          _currentPendingOrderId = null;
+                          _currentPendingDiscountId = null;
+                          widget.onCartToggled?.call(false);
+                        });
+                      },
                     ),
                 ],
               ),
@@ -822,12 +830,12 @@ double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
 
   // Hitung harga diskon (sudah ada di kode asli untuk display, tinggal reuse)
   double _discountedPrice(Product p) {
-  if (p.discount == null) return p.price.toDouble();
-  if (p.discount!.type == 'percentage') {
-    return p.price * (1 - (p.discount!.value / 100));
+    if (p.discount == null) return p.price.toDouble();
+    if (p.discount!.type == 'percentage') {
+      return p.price * (1 - (p.discount!.value / 100));
+    }
+    return (p.price - p.discount!.value).toDouble();
   }
-  return (p.price - p.discount!.value).toDouble();
-}
 
   // ✅ Panel gabungan: pending (orange) + paid/siap cetak (blue)
   Widget _buildPendingOrderPanel() {
@@ -975,98 +983,106 @@ double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
     );
   }
 
- Widget _buildOrderTile(Order order, bool isPaid) {
-  final String tableNo = order.tableId?.toString() ?? '-';
-  final bool isCash = order.isCashOrder;
+  Widget _buildOrderTile(Order order, bool isPaid) {
+    final String tableNo = order.tableId?.toString() ?? '-';
+    final bool isCash = order.isCashOrder;
 
-  return ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-    leading: CircleAvatar(
-      backgroundColor: isCash
-          ? Colors.orange.withValues(alpha: 0.1)
-          : Colors.green.withValues(alpha: 0.1),
-      child: Text(
-        tableNo,
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: isCash ? Colors.orange : Colors.green,
-          fontSize: 14,
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: CircleAvatar(
+        backgroundColor: isCash
+            ? Colors.orange.withValues(alpha: 0.1)
+            : Colors.green.withValues(alpha: 0.1),
+        child: Text(
+          tableNo,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isCash ? Colors.orange : Colors.green,
+            fontSize: 14,
+          ),
         ),
       ),
-    ),
-    title: Text(
-      order.customerName,
-      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-    ),
-    subtitle: Padding(
-      padding: const EdgeInsets.only(top: 4.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Total: ${formatHarga(order.totalPrice)}",
-            style: const TextStyle(color: Colors.black54, fontSize: 13),
-          ),
-          Text(
-            order.paymentMethodDisplay,
-            style: TextStyle(
-              fontSize: 11,
-              color: isCash ? Colors.orange : Colors.green,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+      title: Text(
+        order.customerName,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
       ),
-    ),
-    trailing: isCash
-        // ✅ PENDING + CASH → arrow ke checkout kasir
-        ? InkWell(
-            onTap: () => _loadPendingOrderToCart(order),
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(
-                Icons.arrow_forward_ios,
-                size: 12,
-                color: Colors.orange,
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Total: ${formatHarga(order.totalPrice)}",
+              style: const TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+            Text(
+              order.paymentMethodDisplay,
+              style: TextStyle(
+                fontSize: 11,
+                color: isCash ? Colors.orange : Colors.green,
+                fontWeight: FontWeight.w500,
               ),
             ),
-          )
-        // ✅ PENDING + NON-CASH → langsung accept
-        : InkWell(
-            onTap: () => _acceptOrder(order),
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
+          ],
+        ),
+      ),
+      trailing: isCash
+          // ✅ PENDING + CASH → arrow ke checkout kasir
+          ? InkWell(
+              onTap: () => _loadPendingOrderToCart(order),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 12,
+                  color: Colors.orange,
+                ),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
-                  SizedBox(width: 4),
-                  Text(
-                    "Terima",
-                    style: TextStyle(
-                      fontSize: 12,
+            )
+          // ✅ PENDING + NON-CASH → langsung accept
+          : InkWell(
+              onTap: () => _acceptOrder(order),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 14,
                       color: Colors.green,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: 'Poppins',
                     ),
-                  ),
-                ],
+                    SizedBox(width: 4),
+                    Text(
+                      "Terima",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-    onTap: isCash ? () => _loadPendingOrderToCart(order) : null,
-  );
-}
+      onTap: isCash ? () => _loadPendingOrderToCart(order) : null,
+    );
+  }
+
   Widget _buildCategoryChips() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -1249,15 +1265,15 @@ double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
                         ),
                         if (isDiskon) ...[
                           Text(
-  formatHarga(p.price.toDouble()),
-  style: const TextStyle(
-    color: Colors.white,
-    fontSize: 10,
-    decoration: TextDecoration.lineThrough,
-    decorationColor: Color.fromARGB(255, 245, 0, 0),
-    decorationThickness: 2.5,
-  ),
-),
+                            formatHarga(p.price.toDouble()),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              decoration: TextDecoration.lineThrough,
+                              decorationColor: Color.fromARGB(255, 245, 0, 0),
+                              decorationThickness: 2.5,
+                            ),
+                          ),
                           Text(
                             formatHarga(priceAfterDiscount),
                             style: const TextStyle(
@@ -1277,23 +1293,32 @@ double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
                     onTap: isOutOfStock
                         ? null
                         : () => setState(() {
-                            if (_isPendingOrderLoaded &&
-                                !_cart.containsKey(p.id)) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Text(
-                                    "Tidak bisa menambah menu baru ke pesanan pending.\nHanya bisa mengubah jumlah menu yang sudah ada.",
-                                  ),
-                                  backgroundColor: Colors.orange,
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: const Duration(seconds: 3),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
+                            onTap:
+                            isOutOfStock
+                                ? null
+                                : () => setState(() {
+                                    _isPendingPanelVisible = false;
+                                    _isDraftPanelVisible = false;
+                                    widget.onCartToggled?.call(true);
+
+                                    if (_cart.containsKey(p.id)) {
+                                      _cart[p.id]!.quantity++;
+                                    } else {
+                                      // ← item baru, id = 0 = belum ada di server
+                                      _cart[p.id] = OrderItem(
+                                        id: 0,
+                                        productId: p.id,
+                                        categoryId: p.categoryId,
+                                        itemName: p.name,
+                                        originalQty: 1,
+                                        activeQty: 1,
+                                        unitPrice: _discountedPrice(p),
+                                        originalPrice: p.price.toDouble(),
+                                        discountId: p.discount?.id,
+                                        stationId: p.stationId,
+                                      );
+                                    }
+                                  });
 
                             _isPendingPanelVisible = false;
                             _isDraftPanelVisible = false;
@@ -1309,9 +1334,12 @@ double originalTotalAmount = _cart.values.fold(0.0, (sum, item) {
                                 itemName: p.name,
                                 originalQty: 1,
                                 activeQty: 1,
-                                unitPrice: _discountedPrice(p),         // ← harga setelah diskon
-                                originalPrice: p.price.toDouble(),      // ← harga asli selalu disimpan
-                                discountId: p.discount?.id, 
+                                unitPrice: _discountedPrice(
+                                  p,
+                                ), // ← harga setelah diskon
+                                originalPrice: p.price
+                                    .toDouble(), // ← harga asli selalu disimpan
+                                discountId: p.discount?.id,
                                 stationId: p.stationId,
                               );
                             }

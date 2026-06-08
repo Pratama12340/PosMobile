@@ -408,11 +408,11 @@ class ApiService {
         "Step 1A - Update Existing Items: ${jsonEncode(itemsPayload)}",
       );
 
-      final itemsResponse = await http.post(
-        Uri.parse('$baseUrl/orders/$orderId/items'),
-        headers: headers,
-        body: jsonEncode(itemsPayload),
-      );
+      final itemsResponse = await http.put(
+  Uri.parse('$baseUrl/orders/$orderId/items'),
+  headers: headers,
+  body: jsonEncode({'items': existingItems}),
+);
 
       debugPrint("[Step 1A RESPONSE] <-- STATUS: ${itemsResponse.statusCode}");
       debugPrint("[Step 1A BODY]: ${itemsResponse.body}");
@@ -425,62 +425,34 @@ class ApiService {
         };
       }
 
-      // ✅ STEP 1B: Tambah item baru
-      if (newItems.isNotEmpty) {
-        List<dynamic> cleanNewItems = newItems.map((item) {
-          final Map<String, dynamic> clean = Map.from(item);
-          clean.remove('id');
-          return clean;
-        }).toList();
+      // ✅ STEP 1B: Tambah item baru — kirim satu per satu
+if (newItems.isNotEmpty) {
+  for (final item in newItems) {
+    final singlePayload = {
+      'product_id': item['product_id'],
+      'qty': item['qty'] ?? item['quantity'] ?? 1,
+    };
 
-        final newItemsPayload = {
-          'outlet_id': orderData['outlet_id'],
-          'items': cleanNewItems,
-        };
+    debugPrint("Step 1B - Add New Item: ${jsonEncode(singlePayload)}");
 
-        debugPrint("Step 1B - Add New Items: ${jsonEncode(newItemsPayload)}");
+    final resp = await http.post(
+      Uri.parse('$baseUrl/orders/$orderId/items'),
+      headers: headers,
+      body: jsonEncode(singlePayload),
+    );
 
-        final newItemsResponse = await http.post(
-          Uri.parse('$baseUrl/orders/$orderId/add-items'),
-          headers: headers,
-          body: jsonEncode(newItemsPayload),
-        );
+    debugPrint("[Step 1B RESPONSE] <-- STATUS: ${resp.statusCode}");
+    debugPrint("[Step 1B BODY]: ${resp.body}");
 
-        debugPrint(
-          "[Step 1B RESPONSE] <-- STATUS: ${newItemsResponse.statusCode}",
-        );
-        debugPrint("[Step 1B BODY]: ${newItemsResponse.body}");
-
-        if (newItemsResponse.statusCode == 404) {
-          // Coba endpoint alternatif
-          final altResponse = await http.post(
-            Uri.parse('$baseUrl/orders/$orderId/items/add'),
-            headers: headers,
-            body: jsonEncode(newItemsPayload),
-          );
-          debugPrint(
-            "[Step 1B ALT RESPONSE] <-- STATUS: ${altResponse.statusCode}",
-          );
-          debugPrint("[Step 1B ALT BODY]: ${altResponse.body}");
-
-          // ✅ FIX 4: Jika endpoint alternatif juga gagal, return error
-          if (altResponse.statusCode != 200 && altResponse.statusCode != 201) {
-            final err = jsonDecode(altResponse.body);
-            return {
-              'success': false,
-              'message': err['message'] ?? 'Gagal tambah item baru',
-            };
-          }
-        } else if (newItemsResponse.statusCode != 200 &&
-            newItemsResponse.statusCode != 201) {
-          // ✅ FIX 4: Jika endpoint pertama gagal (bukan 404), return error
-          final err = jsonDecode(newItemsResponse.body);
-          return {
-            'success': false,
-            'message': err['message'] ?? 'Gagal tambah item',
-          };
-        }
-      }
+    if (resp.statusCode != 200 && resp.statusCode != 201) {
+      final err = jsonDecode(resp.body);
+      return {
+        'success': false,
+        'message': err['message'] ?? 'Gagal tambah item baru',
+      };
+    }
+  }
+}
 
       // ✅ STEP 2: Proses pembayaran
       final paymentPayload = {

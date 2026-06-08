@@ -11,8 +11,9 @@ class ReverbService {
 
   PusherClient? _pusher;
   final Map<String, Channel> _channels = {};
+  
   bool _isConnected = false;
-  Timer? _connectionCheckTimer;  // ← TAMBAH
+  bool _isConnecting = false; // ← FLAG BARU UNTUK MENCEGAH SPAM KONEKSI
 
   final List<Map<String, dynamic>> _pendingSubscriptions = [];
 
@@ -46,6 +47,14 @@ class ReverbService {
         return;
       }
 
+      // ← TAMBAHAN: Cegah pemanggilan koneksi berkali-kali jika masih loading
+      if (_isConnecting) {
+        debugPrint("⏳ [REVERB] Sedang proses koneksi, harap tunggu...");
+        return; 
+      }
+
+      _isConnecting = true; // Tandai sedang proses connect
+
       // Reset dulu jika pusher sudah ada tapi tidak connected
       if (_pusher != null) {
         debugPrint("🔄 [REVERB] Reset pusher lama...");
@@ -56,43 +65,10 @@ class ReverbService {
 
       await _initPusher(token);
 
-      // ← TAMBAH: timer fallback jika callback tidak firing
-      _startConnectionCheckTimer(token);
-
     } catch (e) {
       debugPrint("💥 [REVERB ERROR]: $e");
+      _isConnecting = false; // Reset flag jika error
     }
-  }
-
-  // ← TAMBAH method ini
-  void _startConnectionCheckTimer(String token) {
-    _connectionCheckTimer?.cancel();
-    _connectionCheckTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (timer) async {
-        if (_isConnected) {
-          debugPrint("✅ [REVERB] Sudah connected, stop timer.");
-          timer.cancel();
-          return;
-        }
-
-        debugPrint("🔄 [REVERB] Belum connected setelah ${timer.tick * 5}s, coba reconnect...");
-
-        if (timer.tick >= 6) {
-          // Sudah 30 detik, stop
-          debugPrint("🔴 [REVERB] Menyerah setelah 30 detik.");
-          timer.cancel();
-          return;
-        }
-
-        // Reset dan coba lagi
-        try { await _pusher!.disconnect(); } catch (_) {}
-        _pusher = null;
-        _channels.clear();
-
-        await _initPusher(token);
-      },
-    );
   }
 
   Future<void> _initPusher(String token) async {
@@ -123,10 +99,11 @@ class ReverbService {
 
       if (current == 'CONNECTED') {
         _isConnected = true;
-        _connectionCheckTimer?.cancel(); // ← stop timer jika berhasil
+        _isConnecting = false; // ← Reset flag setelah sukses konek
         _processPendingSubscriptions();
       } else if (current == 'DISCONNECTED') {
         _isConnected = false;
+        _isConnecting = false; // ← Reset flag setelah putus
       }
     });
 
@@ -135,6 +112,7 @@ class ReverbService {
       debugPrint("🔴 [REVERB ERROR] exception: ${error?.exception}");
       debugPrint("🔴 [REVERB ERROR] toString : $error");
       _isConnected = false;
+      _isConnecting = false; // ← Reset flag jika gagal
     });
 
     debugPrint("🔌 [REVERB] Konek ke: $reverbHost:$reverbPort");
@@ -198,8 +176,6 @@ class ReverbService {
   }
 
   Future<void> disconnect() async {
-    _connectionCheckTimer?.cancel(); // ← TAMBAH
-    _connectionCheckTimer = null;
     try {
       for (var channel in _channels.values) {
         await _pusher?.unsubscribe(channel.name);
@@ -207,6 +183,7 @@ class ReverbService {
       _channels.clear();
       _pendingSubscriptions.clear();
       _isConnected = false;
+      _isConnecting = false; // ← Reset flag
       if (_pusher != null) await _pusher!.disconnect();
       _pusher = null;
       debugPrint("⏹️ [REVERB] Koneksi ditutup bersih.");
@@ -216,6 +193,7 @@ class ReverbService {
       _channels.clear();
       _pendingSubscriptions.clear();
       _isConnected = false;
+      _isConnecting = false; // ← Reset flag
     }
   }
 }

@@ -8,26 +8,31 @@ import '../models/discount_model.dart';
 import '../models/rekap_model.dart';
 import 'printer_service.dart';
 import '../models/print_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String baseUrl = 'https://api.etres.my.id/api/v1';
 
-  // Helper untuk mendapatkan header secara otomatis
+  // -------------------------------------------------------------------------
+  // HELPER
+  // -------------------------------------------------------------------------
+
   static Future<Map<String, String>> _getHeaders() async {
     final token = await StorageService.getToken();
     final headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-
     if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
-
     return headers;
   }
 
-  // --- 1. LOGIN PIN ---
+  // -------------------------------------------------------------------------
+  // 1. LOGIN PIN
+  // -------------------------------------------------------------------------
+
   static Future<Map<String, dynamic>> loginPin(String pin, int outletId) async {
     debugPrint("\n=========================================");
     debugPrint("[API REQUEST] --> LOGIN PIN");
@@ -44,9 +49,7 @@ class ApiService {
       );
 
       debugPrint("[API RESPONSE] <-- STATUS: ${response.statusCode}");
-      
 
-      // ✅ FIX 2: Token tidak dicetak ke log (keamanan)
       if (kDebugMode) {
         final body = Map<String, dynamic>.from(jsonDecode(response.body));
         body.remove('token');
@@ -59,51 +62,33 @@ class ApiService {
         final user = data['user'];
         if (user == null) {
           debugPrint("❌ [API ERROR] Data user dari server bernilai null.");
-          return {
-            'success': false,
-            'message': 'Format data server tidak valid.',
-          };
+          return {'success': false, 'message': 'Format data server tidak valid.'};
         }
 
-        final int userOutletId =
-            int.tryParse(user['outlet_id'].toString()) ?? 0;
-        debugPrint(
-          "🔍 [API VALIDASI] Cek Cabang Karyawan: DB ($userOutletId) vs App ($outletId)",
-        );
+        final int userOutletId = int.tryParse(user['outlet_id'].toString()) ?? 0;
+        debugPrint("🔍 [API VALIDASI] Cek Cabang Karyawan: DB ($userOutletId) vs App ($outletId)");
 
         if (userOutletId != outletId) {
           debugPrint("❌ [API REJECTED] Karyawan terdaftar di cabang lain!");
-          return {
-            'success': false,
-            'message': 'Akses Ditolak: Anda terdaftar di Cabang lain.',
-          };
+          return {'success': false, 'message': 'Akses Ditolak: Anda terdaftar di Cabang lain.'};
         }
 
         final String? shiftId = data['shift_id']?.toString();
         if (shiftId == null || shiftId == 'null' || shiftId.isEmpty) {
-          debugPrint(
-            "❌ [API REJECTED] Karyawan tidak memiliki jadwal shift aktif saat ini.",
-          );
+          debugPrint("❌ [API REJECTED] Karyawan tidak memiliki jadwal shift aktif saat ini.");
           return {
             'success': false,
-            'message':
-                'Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.',
+            'message': 'Akses Ditolak: Anda tidak memiliki jadwal shift aktif saat ini.',
           };
         }
 
         await StorageService.saveToken(data['token']);
         await StorageService.saveCashierName(user['name'] ?? "Kasir");
-        await StorageService.saveUserRole(
-          user['role']?.toString() ?? "Cashier",
-        );
+        await StorageService.saveUserRole(user['role']?.toString() ?? "Cashier");
         await StorageService.saveOutletId(outletId);
-
-        if (user['image'] != null) {
-          await StorageService.saveProfilePhoto(user['image'].toString());
-        } else {
-          await StorageService.saveProfilePhoto("");
-        }
-
+        await StorageService.saveProfilePhoto(
+          user['image'] != null ? user['image'].toString() : "",
+        );
         await StorageService.saveCurrentShiftId(shiftId);
 
         if (data['opening_balance'] != null) {
@@ -121,11 +106,13 @@ class ApiService {
     }
   }
 
-  // --- 2. FETCH OUTLET INFO LIVE ---
+  // -------------------------------------------------------------------------
+  // 2. FETCH OUTLET INFO LIVE
+  // -------------------------------------------------------------------------
+
   static Future<Map<String, dynamic>> fetchOutletInfoLive() async {
     debugPrint("[API REQUEST] --> FETCH OUTLET INFO LIVE");
     try {
-      // ✅ FIX 1: Deklarasikan role dari storage agar kondisi di bawah bisa berjalan
       final String role = await StorageService.getUserRole();
       final outletId = await StorageService.getOutletId();
 
@@ -140,13 +127,8 @@ class ApiService {
         };
       }
 
-      // ✅ FIX 3: Gunakan _getHeaders() agar konsisten, tidak perlu ambil token manual
       final headers = await _getHeaders();
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/outlets'),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse('$baseUrl/outlets'), headers: headers);
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -159,32 +141,17 @@ class ApiService {
             String ownerName = "Belum diatur";
             String ownerEmail = "Belum diatur";
 
-            // ✅ FIX 1: role sudah terdefinisi, kondisi ini kini berjalan dengan benar
             if (role == 'owner' && outlet['owner_id'] != null) {
               try {
-                debugPrint(
-                  "==================================================",
-                );
+                debugPrint("==================================================");
                 debugPrint("🚨 [DEBUG Laporan Backend] MULAI CEK AKSES /users");
-                debugPrint(
-                  "🚨 [DEBUG Laporan Backend] Mencari owner_id : ${outlet['owner_id']}",
-                );
+                debugPrint("🚨 [DEBUG Laporan Backend] Mencari owner_id : ${outlet['owner_id']}");
 
-                // ✅ FIX 3: Pakai headers yang sama, tidak perlu tulis ulang
-                final userResponse = await http.get(
-                  Uri.parse('$baseUrl/users'),
-                  headers: headers,
-                );
+                final userResponse = await http.get(Uri.parse('$baseUrl/users'), headers: headers);
 
-                debugPrint(
-                  "🚨 [DEBUG Laporan Backend] Status HTTP   : ${userResponse.statusCode}",
-                );
-                debugPrint(
-                  "🚨 [DEBUG Laporan Backend] Body Response : ${userResponse.body}",
-                );
-                debugPrint(
-                  "==================================================",
-                );
+                debugPrint("🚨 [DEBUG Laporan Backend] Status HTTP   : ${userResponse.statusCode}");
+                debugPrint("🚨 [DEBUG Laporan Backend] Body Response : ${userResponse.body}");
+                debugPrint("==================================================");
 
                 if (userResponse.statusCode == 200) {
                   final userResult = jsonDecode(userResponse.body);
@@ -196,8 +163,7 @@ class ApiService {
                   }
 
                   for (var user in users) {
-                    if (user['id'].toString() ==
-                        outlet['owner_id'].toString()) {
+                    if (user['id'].toString() == outlet['owner_id'].toString()) {
                       ownerName = user['name']?.toString() ?? "Belum diatur";
                       ownerEmail = user['email']?.toString() ?? "Belum diatur";
                       break;
@@ -211,11 +177,8 @@ class ApiService {
 
             return {
               'name': outlet['name']?.toString() ?? "Outlet",
-              'address_outlet':
-                  outlet['address_outlet']?.toString() ??
-                  "Alamat tidak tersedia",
-              'phone_number_outlet':
-                  outlet['phone_number_outlet']?.toString() ?? "-",
+              'address_outlet': outlet['address_outlet']?.toString() ?? "Alamat tidak tersedia",
+              'phone_number_outlet': outlet['phone_number_outlet']?.toString() ?? "-",
               'image': outlet['image'],
               'owner_name': ownerName,
               'owner_email': ownerEmail,
@@ -223,6 +186,7 @@ class ApiService {
           }
         }
       }
+
       return {
         'name': "Outlet Tidak Ditemukan",
         'address_outlet': "-",
@@ -244,7 +208,10 @@ class ApiService {
     }
   }
 
-  // --- 3. GET CATEGORIES ---
+  // -------------------------------------------------------------------------
+  // 3. GET CATEGORIES
+  // -------------------------------------------------------------------------
+
   static Future<List<dynamic>> getCategories() async {
     try {
       final headers = await _getHeaders();
@@ -264,7 +231,10 @@ class ApiService {
     }
   }
 
-  // --- 4. GET PRODUCTS ---
+  // -------------------------------------------------------------------------
+  // 4. GET PRODUCTS
+  // -------------------------------------------------------------------------
+
   static Future<List<Product>> getProducts() async {
     try {
       final headers = await _getHeaders();
@@ -286,53 +256,53 @@ class ApiService {
     }
   }
 
-  // --- 5. SUBMIT ORDER ---
-  static Future<Map<String, dynamic>> submitOrder(
-    Map<String, dynamic> orderData,
-  ) async {
+  // -------------------------------------------------------------------------
+  // 5. SUBMIT ORDER
+  // -------------------------------------------------------------------------
+
+  static Future<Map<String, dynamic>> submitOrder(Map<String, dynamic> orderData) async {
     debugPrint("\n[API REQUEST] --> CHECKOUT ORDER");
     try {
       final headers = await _getHeaders();
       if (!orderData.containsKey('outlet_id')) {
         orderData['outlet_id'] = await StorageService.getOutletId();
       }
+
       debugPrint("Payload: ${jsonEncode(orderData)}");
+
       final response = await http.post(
         Uri.parse('$baseUrl/orders/checkout'),
         headers: headers,
         body: jsonEncode(orderData),
       );
+
       debugPrint("[API RESPONSE] <-- STATUS: ${response.statusCode}");
       debugPrint("[API RESPONSE BODY] >>>>> ${response.body} <<<<<");
       debugPrint("[API RESPONSE BODY LENGTH] ${response.body.length}");
-      
+
       final result = jsonDecode(response.body);
-      
+
       if (response.statusCode == 201 || response.statusCode == 200) {
         final resData = result['data'] ?? result;
 
-        // =========================================================================
         // Pemicu Otomatis Printer Fisik (Direct Socket LAN/Wi-Fi)
-        // =========================================================================
         try {
-          // 1. Ambil nama kasir dan data IP Printer dari lokal storage
           final cashierName = await StorageService.getCashierName() ?? "Kasir";
-          final printerIp = "192.168.1.87"; 
+          final printerIp = "192.168.1.87";
 
-          // 2. Map data ke TransactionModel (Mematuhi aturan notes backend & nama customer kosong)
           final printTransaction = TransactionModel(
             orderId: resData['id']?.toString() ?? resData['order_id']?.toString() ?? "TRX",
             outletName: "ARANUS POS",
-            outletAddress: "Lokasi Outlet", 
+            outletAddress: "Lokasi Outlet",
             cashierName: cashierName,
-            customerName: "", // Dikosongkan sesuai regulasi internal Aranus POS
+            customerName: "",
             tableNumber: resData['table_id']?.toString() ?? orderData['table_id']?.toString() ?? "-",
             items: (orderData['items'] as List).map((item) {
               return CartItem(
                 itemName: item['product_name'] ?? item['name'] ?? "Item",
                 quantity: int.tryParse(item['qty'].toString()) ?? 1,
                 unitPrice: double.tryParse(item['price'].toString()) ?? 0.0,
-                notes: item['notes'] ?? "", // Key 'notes' sesuai database audit backend
+                notes: item['notes'] ?? "",
                 stationId: item['station_id']?.toString() ?? "STN-KASIR",
               );
             }).toList(),
@@ -341,34 +311,25 @@ class ApiService {
             totalDariHalaman: double.tryParse(orderData['total_price']?.toString() ?? '0') ?? 0.0,
           );
 
-          // 3. Eksekusi cetak fisik secara asynchronous (Tanpa await agar UI kasir tidak nge-lag saat printer loading)
           final printerService = NetworkPrinterService();
-          
-          // Cetak Struk Utama Kasir
           printerService.printReceipt(ipAddress: printerIp, transaction: printTransaction);
-          
-          // Jika Anda ingin otomatis cetak ke dapur juga, hilangkan komentar di bawah ini:
-          // printerService.printKitchenReceipt(ipAddress: printerIp, transaction: printTransaction);
-
         } catch (printError) {
-          // Jika printer mati/gagal koneksi, aplikasi kasir tidak akan ikut crash atau tertahan
           debugPrint("⚠️ [PRINTER WARNING] Server sukses, tapi gagal cetak fisik: $printError");
         }
-        // =========================================================================
 
         return {'success': true, 'data': resData};
       } else {
-        return {
-          'success': false,
-          'message': result['message'] ?? 'Gagal Simpan',
-        };
+        return {'success': false, 'message': result['message'] ?? 'Gagal Simpan'};
       }
     } catch (e) {
       return {'success': false, 'message': 'Kesalahan Sistem: $e'};
     }
   }
 
-  // --- 5B. UPDATE PENDING ORDER ---
+  // -------------------------------------------------------------------------
+  // 5B. UPDATE PENDING ORDER
+  // -------------------------------------------------------------------------
+
   static Future<Map<String, dynamic>> updatePendingOrder(
     String orderId,
     Map<String, dynamic> orderData,
@@ -390,71 +351,50 @@ class ApiService {
           .where((item) => item['id'] == null || item['id'] == 0)
           .toList();
 
-      // ✅ STEP 1A: Update item lama
-      final itemsPayload = {
-        '_method': 'PUT',
-        'outlet_id': orderData['outlet_id'],
-        'customer_name': orderData['customer_name'],
-        'table_id': orderData['table_id'],
-        'subtotal_price': orderData['subtotal_price'],
-        'discount_amount': orderData['discount_amount'],
-        'tax_amount': orderData['tax_amount'],
-        'tax_breakdown': orderData['tax_breakdown'],
-        'total_price': orderData['total_price'],
-        'items': existingItems,
-      };
-
-      debugPrint(
-        "Step 1A - Update Existing Items: ${jsonEncode(itemsPayload)}",
-      );
+      // STEP 1A: Update item lama
+      debugPrint("Step 1A - Update Existing Items: ${jsonEncode({'items': existingItems})}");
 
       final itemsResponse = await http.put(
-  Uri.parse('$baseUrl/orders/$orderId/items'),
-  headers: headers,
-  body: jsonEncode({'items': existingItems}),
-);
+        Uri.parse('$baseUrl/orders/$orderId/items'),
+        headers: headers,
+        body: jsonEncode({'items': existingItems}),
+      );
 
       debugPrint("[Step 1A RESPONSE] <-- STATUS: ${itemsResponse.statusCode}");
       debugPrint("[Step 1A BODY]: ${itemsResponse.body}");
 
       if (itemsResponse.statusCode != 200 && itemsResponse.statusCode != 201) {
         final err = jsonDecode(itemsResponse.body);
-        return {
-          'success': false,
-          'message': err['message'] ?? 'Gagal update items',
-        };
+        return {'success': false, 'message': err['message'] ?? 'Gagal update items'};
       }
 
-      // ✅ STEP 1B: Tambah item baru — kirim satu per satu
-if (newItems.isNotEmpty) {
-  for (final item in newItems) {
-    final singlePayload = {
-      'product_id': item['product_id'],
-      'qty': item['qty'] ?? item['quantity'] ?? 1,
-    };
+      // STEP 1B: Tambah item baru — kirim satu per satu
+      if (newItems.isNotEmpty) {
+        for (final item in newItems) {
+          final singlePayload = {
+            'product_id': item['product_id'],
+            'qty': item['qty'] ?? item['quantity'] ?? 1,
+          };
 
-    debugPrint("Step 1B - Add New Item: ${jsonEncode(singlePayload)}");
+          debugPrint("Step 1B - Add New Item: ${jsonEncode(singlePayload)}");
 
-    final resp = await http.post(
-      Uri.parse('$baseUrl/orders/$orderId/items'),
-      headers: headers,
-      body: jsonEncode(singlePayload),
-    );
+          final resp = await http.post(
+            Uri.parse('$baseUrl/orders/$orderId/items'),
+            headers: headers,
+            body: jsonEncode(singlePayload),
+          );
 
-    debugPrint("[Step 1B RESPONSE] <-- STATUS: ${resp.statusCode}");
-    debugPrint("[Step 1B BODY]: ${resp.body}");
+          debugPrint("[Step 1B RESPONSE] <-- STATUS: ${resp.statusCode}");
+          debugPrint("[Step 1B BODY]: ${resp.body}");
 
-    if (resp.statusCode != 200 && resp.statusCode != 201) {
-      final err = jsonDecode(resp.body);
-      return {
-        'success': false,
-        'message': err['message'] ?? 'Gagal tambah item baru',
-      };
-    }
-  }
-}
+          if (resp.statusCode != 200 && resp.statusCode != 201) {
+            final err = jsonDecode(resp.body);
+            return {'success': false, 'message': err['message'] ?? 'Gagal tambah item baru'};
+          }
+        }
+      }
 
-      // ✅ STEP 2: Proses pembayaran
+      // STEP 2: Proses pembayaran
       final paymentPayload = {
         'payments': [
           {
@@ -482,17 +422,12 @@ if (newItems.isNotEmpty) {
 
       final result = jsonDecode(paymentResponse.body);
 
-      // Ubah pengecekan status menjadi >= 200 dan < 300
-      if (paymentResponse.statusCode >= 200 &&
-          paymentResponse.statusCode < 300) {
+      if (paymentResponse.statusCode >= 200 && paymentResponse.statusCode < 300) {
         debugPrint("✅ [API SUCCESS] Pembayaran Pending Order Berhasil.");
         return {'success': true, 'data': result['data'] ?? result};
       } else {
         debugPrint("❌ [API FAILED] Pembayaran Gagal: ${result['message']}");
-        return {
-          'success': false,
-          'message': result['message'] ?? 'Gagal proses pembayaran',
-        };
+        return {'success': false, 'message': result['message'] ?? 'Gagal proses pembayaran'};
       }
     } catch (e) {
       debugPrint("💥 [API ERROR] updatePendingOrder: $e");
@@ -500,7 +435,10 @@ if (newItems.isNotEmpty) {
     }
   }
 
-  // --- 5C. GET PENDING ORDERS ---
+  // -------------------------------------------------------------------------
+  // 5C. GET PENDING ORDERS
+  // -------------------------------------------------------------------------
+
   static Future<List<Order>> getPendingOrders() async {
     try {
       final headers = await _getHeaders();
@@ -510,18 +448,17 @@ if (newItems.isNotEmpty) {
       );
 
       if (response.statusCode == 200) {
-        
         debugPrint('=== RAW JSON ORDER 43 ===');
-  final decoded = jsonDecode(response.body);
-  final rawList = decoded['data'] is Map 
-      ? decoded['data']['data'] 
-      : decoded['data'];
-  for (var o in rawList) {
-    if (o['id'] == 43 || o['id'] == 42) {
-      debugPrint('ID ${o['id']} raw payment_method: ${o['payment_method']}');
-      debugPrint('Semua field: ${o.keys.toList()}');
-    }
-  }
+        final decoded = jsonDecode(response.body);
+        final rawList = decoded['data'] is Map
+            ? decoded['data']['data']
+            : decoded['data'];
+        for (var o in rawList) {
+          if (o['id'] == 43 || o['id'] == 42) {
+            debugPrint('ID ${o['id']} raw payment_method: ${o['payment_method']}');
+            debugPrint('Semua field: ${o.keys.toList()}');
+          }
+        }
 
         final result = jsonDecode(response.body);
         List<dynamic> rawData = [];
@@ -534,21 +471,21 @@ if (newItems.isNotEmpty) {
         }
 
         debugPrint('=== PENDING ORDERS DEBUG ===');
-      debugPrint('Total order: ${rawData.length}');
-      for (var o in rawData) {
-        debugPrint('---');
-        debugPrint('ID: ${o['id']}');
-        debugPrint('Customer: ${o['customer_name']}');
-        debugPrint('payment_method (orders table): ${o['payment_method']}');
-        debugPrint('payments array: ${o['payments']}');
-        debugPrint('payments length: ${(o['payments'] as List?)?.length ?? 0}');
-        if ((o['payments'] as List?)?.isNotEmpty == true) {
-          for (var p in o['payments']) {
-            debugPrint('  → payment method: ${p['method']}');
+        debugPrint('Total order: ${rawData.length}');
+        for (var o in rawData) {
+          debugPrint('---');
+          debugPrint('ID: ${o['id']}');
+          debugPrint('Customer: ${o['customer_name']}');
+          debugPrint('payment_method (orders table): ${o['payment_method']}');
+          debugPrint('payments array: ${o['payments']}');
+          debugPrint('payments length: ${(o['payments'] as List?)?.length ?? 0}');
+          if ((o['payments'] as List?)?.isNotEmpty == true) {
+            for (var p in o['payments']) {
+              debugPrint('  → payment method: ${p['method']}');
+            }
           }
         }
-      }
-      debugPrint('=== END DEBUG ===');
+        debugPrint('=== END DEBUG ===');
 
         return rawData.map((json) => Order.fromJson(json)).toList();
       }
@@ -559,39 +496,42 @@ if (newItems.isNotEmpty) {
     }
   }
 
- // --- 5D. ACCEPT ORDER ---
-static Future<bool> acceptOrder(int orderId) async {
-  try {
-    final headers = await _getHeaders();
+  // -------------------------------------------------------------------------
+  // 5D. ACCEPT ORDER
+  // -------------------------------------------------------------------------
 
-    final body = jsonEncode({'scope': 'cashier'});
+  static Future<bool> acceptOrder(int orderId) async {
+    try {
+      final headers = await _getHeaders();
+      final body = jsonEncode({'scope': 'cashier'});
 
-    debugPrint('=== ACCEPT ORDER ===');
-    debugPrint('URL: $baseUrl/orders/$orderId/accept');
-    debugPrint('Body: $body');
+      debugPrint('=== ACCEPT ORDER ===');
+      debugPrint('URL: $baseUrl/orders/$orderId/accept');
+      debugPrint('Body: $body');
 
-    final response = await http.post(
-      Uri.parse('$baseUrl/orders/$orderId/accept'),
-      headers: headers,
-      body: body,
-    );
+      final response = await http.post(
+        Uri.parse('$baseUrl/orders/$orderId/accept'),
+        headers: headers,
+        body: body,
+      );
 
-    debugPrint('Status: ${response.statusCode}');
-    debugPrint('Response: ${response.body}');
+      debugPrint('Status: ${response.statusCode}');
+      debugPrint('Response: ${response.body}');
 
-    if (response.statusCode == 200) {
-      return true;
+      if (response.statusCode == 200) return true;
+
+      debugPrint('acceptOrder failed: ${response.statusCode} - ${response.body}');
+      return false;
+    } catch (e) {
+      debugPrint('acceptOrder error: $e');
+      return false;
     }
-
-    debugPrint('acceptOrder failed: ${response.statusCode} - ${response.body}');
-    return false;
-  } catch (e) {
-    debugPrint('acceptOrder error: $e');
-    return false;
   }
-}
 
-  // --- 5E. GET PAID ORDERS (belum di-accept) ---
+  // -------------------------------------------------------------------------
+  // 5E. GET PAID ORDERS (belum di-accept)
+  // -------------------------------------------------------------------------
+
   static Future<List<Order>> getPaidOrders() async {
     try {
       final headers = await _getHeaders();
@@ -620,68 +560,90 @@ static Future<bool> acceptOrder(int orderId) async {
     }
   }
 
-  // --- 6. API HISTORY TRANSACTIONS ---
- // ✅ Method 1 - sudah diupdate dengan pagination
-static Future<List<Order>> fetchHistory() async {
-  try {
-    final headers = await _getHeaders();
-    final int? outletId = await StorageService.getOutletId();
-    final String? shiftId = await StorageService.getCurrentShiftId();
+  // -------------------------------------------------------------------------
+  // 6. FETCH HISTORY TRANSACTIONS
+  // -------------------------------------------------------------------------
 
-    List<Order> allOrders = [];
-    int currentPage = 1;
-    int lastPage = 1;
+  static Future<List<Order>> fetchHistory() async {
+    try {
+      final headers = await _getHeaders();
+      final int? outletId = await StorageService.getOutletId();
+      final String? shiftId = await StorageService.getCurrentShiftId();
 
-    do {
+      List<Order> allOrders = [];
+      int currentPage = 1;
+      int lastPage = 1;
+      const int maxRetry = 3;
+
+      do {
+        int attempt = 0;
+        http.Response? response;
+
+        while (attempt < maxRetry) {
+          try {
+            response = await http.get(
+              Uri.parse(
+                '$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=50&page=$currentPage',
+              ),
+              headers: headers,
+            ).timeout(const Duration(seconds: 15));
+            break;
+          } catch (e) {
+            attempt++;
+            debugPrint("⚠️ fetchHistory page $currentPage attempt $attempt gagal: $e");
+            if (attempt >= maxRetry) rethrow;
+            await Future.delayed(Duration(milliseconds: 500 * attempt));
+          }
+        }
+
+        if (response == null || response.statusCode != 200) break;
+
+        final result = jsonDecode(response.body);
+        final dynamic paginatedData = (result['data'] is Map) ? result['data'] : result;
+        final List<dynamic> pageData = (paginatedData['data'] is List) ? paginatedData['data'] : [];
+
+        lastPage = paginatedData['last_page'] ?? 1;
+        allOrders.addAll(pageData.map((json) => Order.fromJson(json)).toList());
+        debugPrint("📦 Page $currentPage/$lastPage — ${pageData.length} orders");
+
+        currentPage++;
+
+        if (currentPage <= lastPage) {
+          await Future.delayed(const Duration(milliseconds: 200));
+        }
+      } while (currentPage <= lastPage);
+
+      debugPrint("✅ Total semua data: ${allOrders.length}");
+      return allOrders;
+    } catch (e) {
+      debugPrint("💥 fetchHistory: $e");
+      return [];
+    }
+  }
+
+  // Dipakai oleh edit_dialog.dart — jangan hapus
+  static Future<Order?> fetchHistoryDetail(int id) async {
+    try {
+      final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse(
-          '$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=100&page=$currentPage',
-        ),
+        Uri.parse('$baseUrl/history-transactions/$id'),
         headers: headers,
       );
-
-      if (response.statusCode != 200) break;
-
-      final result = jsonDecode(response.body);
-      final dynamic paginatedData =
-          (result['data'] is Map) ? result['data'] : result;
-      final List<dynamic> pageData =
-          (paginatedData['data'] is List) ? paginatedData['data'] : [];
-
-      lastPage = paginatedData['last_page'] ?? 1;
-      allOrders.addAll(pageData.map((json) => Order.fromJson(json)).toList());
-      debugPrint("📦 Page $currentPage/$lastPage — ${pageData.length} orders");
-      currentPage++;
-    } while (currentPage <= lastPage);
-
-    debugPrint("✅ Total semua data: ${allOrders.length}");
-    return allOrders;
-  } catch (e) {
-    debugPrint("💥 fetchHistory: $e");
-    return [];
-  }
-}
-
-// ✅ Method 2 - JANGAN SAMPAI TERHAPUS, dipakai oleh edit_dialog.dart
-static Future<Order?> fetchHistoryDetail(int id) async {
-  try {
-    final headers = await _getHeaders();
-    final response = await http.get(
-      Uri.parse('$baseUrl/history-transactions/$id'),
-      headers: headers,
-    );
-    if (response.statusCode == 200) {
-      final result = jsonDecode(response.body);
-      final data = result['data'] ?? result;
-      return Order.fromJson(data);
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        final data = result['data'] ?? result;
+        return Order.fromJson(data);
+      }
+    } catch (e) {
+      debugPrint("💥 fetchHistoryDetail: $e");
     }
-  } catch (e) {
-    debugPrint("💥 fetchHistoryDetail: $e");
+    return null;
   }
-  return null;
-}
 
-  // --- 7. UPDATE ORDER (VOID ITEMS) ---
+  // -------------------------------------------------------------------------
+  // 7. UPDATE ORDER (VOID ITEMS)
+  // -------------------------------------------------------------------------
+
   static Future<bool> updateOrder({
     required int orderId,
     required List<OrderItem> items,
@@ -708,7 +670,10 @@ static Future<Order?> fetchHistoryDetail(int id) async {
     }
   }
 
-  // --- 8. VOID / EDIT ITEM ---
+  // -------------------------------------------------------------------------
+  // 8. VOID / EDIT ITEM
+  // -------------------------------------------------------------------------
+
   static Future<Map<String, dynamic>> voidOrEditItem({
     required int itemId,
     required int orderId,
@@ -723,35 +688,33 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       return (response.statusCode == 200 || response.statusCode == 201)
           ? {'success': true}
-          : {
-              'success': false,
-              'message': json.decode(response.body)['message'] ?? 'Gagal',
-            };
+          : {'success': false, 'message': json.decode(response.body)['message'] ?? 'Gagal'};
     } catch (e) {
       return {'success': false, 'message': 'Terjadi kesalahan: $e'};
     }
   }
 
-  // --- 9. UPDATE ITEM STATUS ---
-  static Future<Map<String, dynamic>> updateItemStatus(
-    int itemId,
-    String status,
-  ) async {
+  // -------------------------------------------------------------------------
+  // 9. UPDATE ITEM STATUS
+  // -------------------------------------------------------------------------
+
+  static Future<Map<String, dynamic>> updateItemStatus(int itemId, String status) async {
     try {
       final response = await http.patch(
         Uri.parse('$baseUrl/order-items/$itemId/status'),
         headers: await _getHeaders(),
         body: jsonEncode({'status': status}),
       );
-      return response.statusCode == 200
-          ? {'success': true}
-          : {'success': false};
+      return response.statusCode == 200 ? {'success': true} : {'success': false};
     } catch (e) {
       return {'success': false};
     }
   }
 
-  // --- 10. GET STATIONS & OUTLETS ---
+  // -------------------------------------------------------------------------
+  // 10. GET STATIONS & OUTLETS
+  // -------------------------------------------------------------------------
+
   static Future<List<dynamic>> getStations() async {
     try {
       final response = await http.get(
@@ -760,9 +723,7 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       final result = jsonDecode(response.body);
       return response.statusCode == 200
-          ? (result['data'] is List
-                ? result['data']
-                : result['data']['data'] ?? [])
+          ? (result['data'] is List ? result['data'] : result['data']['data'] ?? [])
           : [];
     } catch (e) {
       return [];
@@ -777,9 +738,7 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        return result['data'] is List
-            ? result['data']
-            : result['data']['data'] ?? [];
+        return result['data'] is List ? result['data'] : result['data']['data'] ?? [];
       }
       return [];
     } catch (e) {
@@ -787,7 +746,10 @@ static Future<Order?> fetchHistoryDetail(int id) async {
     }
   }
 
-  // --- 11. GET DISCOUNTS ---
+  // -------------------------------------------------------------------------
+  // 11. GET DISCOUNTS
+  // -------------------------------------------------------------------------
+
   static Future<List<Discount>> getDiscounts() async {
     try {
       final response = await http.get(
@@ -816,7 +778,10 @@ static Future<Order?> fetchHistoryDetail(int id) async {
     return [];
   }
 
-  // --- 12. GET TAXES ---
+  // -------------------------------------------------------------------------
+  // 12. GET TAXES
+  // -------------------------------------------------------------------------
+
   static Future<List<dynamic>> getTaxes() async {
     try {
       final response = await http.get(
@@ -825,15 +790,11 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       if (response.statusCode == 200) {
         final dynamic result = jsonDecode(response.body);
-        if (result is List) {
-          return result;
-        }
+        if (result is List) return result;
         if (result is Map) {
-          if (result['data'] is List) {
-            return result['data'];
-          }
+          if (result['data'] is List) return result['data'];
           if (result['data'] != null && result['data']['data'] is List) {
-            return result['data']['data']; // ✅ tambah {}
+            return result['data']['data'];
           }
         }
       }
@@ -843,7 +804,10 @@ static Future<Order?> fetchHistoryDetail(int id) async {
     }
   }
 
-  // --- 13. CEK STATUS SHIFT ---
+  // -------------------------------------------------------------------------
+  // 13. CEK STATUS SHIFT
+  // -------------------------------------------------------------------------
+
   static Future<Map<String, dynamic>> checkShiftStatus(int outletId) async {
     try {
       final headers = await _getHeaders();
@@ -853,22 +817,18 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       final data = jsonDecode(response.body);
       return response.statusCode == 200
-          ? {
-              'success': data['success'] ?? true,
-              'message': data['message'],
-              'data': data['data'],
-            }
+          ? {'success': data['success'] ?? true, 'message': data['message'], 'data': data['data']}
           : {'success': false, 'message': data['message'] ?? 'Gagal'};
     } catch (e) {
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 
-  // --- 14. MULAI SHIFT ---
-  static Future<Map<String, dynamic>> startShift(
-    int nominal,
-    int outletId,
-  ) async {
+  // -------------------------------------------------------------------------
+  // 14. MULAI SHIFT
+  // -------------------------------------------------------------------------
+
+  static Future<Map<String, dynamic>> startShift(int nominal, int outletId) async {
     try {
       final headers = await _getHeaders();
       final response = await http.post(
@@ -884,29 +844,23 @@ static Future<Order?> fetchHistoryDetail(int id) async {
         await StorageService.saveShiftStatus(true);
         return {'success': true, 'data': data};
       }
-      return {
-        'success': false,
-        'message': data['message'] ?? 'Gagal memulai shift',
-      };
+      return {'success': false, 'message': data['message'] ?? 'Gagal memulai shift'};
     } catch (e) {
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 
-  // --- 15. AKHIRI SHIFT ---
-  static Future<Map<String, dynamic>> endShift(
-    int totalFisik,
-    String notes,
-  ) async {
+  // -------------------------------------------------------------------------
+  // 15. AKHIRI SHIFT
+  // -------------------------------------------------------------------------
+
+  static Future<Map<String, dynamic>> endShift(int totalFisik, String notes) async {
     try {
       final headers = await _getHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/shift-karyawans/end'),
         headers: headers,
-        body: jsonEncode({
-          'actual_closing_balance': totalFisik,
-          'notes': notes,
-        }),
+        body: jsonEncode({'actual_closing_balance': totalFisik, 'notes': notes}),
       );
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -916,11 +870,7 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       } else if (response.statusCode == 404) {
         await StorageService.clearOpeningBalance();
         await StorageService.saveShiftStatus(false);
-        return {
-          'success': true,
-          'message': 'Shift sinkron.',
-          'is_forced_sync': true,
-        };
+        return {'success': true, 'message': 'Shift sinkron.', 'is_forced_sync': true};
       }
       return {'success': false, 'message': data['message'] ?? 'Gagal'};
     } catch (e) {
@@ -936,9 +886,7 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        List data = result['data'] is List
-            ? result['data']
-            : result['data']['data'] ?? [];
+        List data = result['data'] is List ? result['data'] : result['data']['data'] ?? [];
         return data.map((json) => RekapShift.fromJson(json)).toList();
       }
       return [];
@@ -955,9 +903,7 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        List data = result['data'] is List
-            ? result['data']
-            : result['data']['data'] ?? [];
+        List data = result['data'] is List ? result['data'] : result['data']['data'] ?? [];
         return data.map((json) => ShiftMaster.fromJson(json)).toList();
       }
       return [];
@@ -966,7 +912,10 @@ static Future<Order?> fetchHistoryDetail(int id) async {
     }
   }
 
-  // --- 16. MIDTRANS PAYMENTS ---
+  // -------------------------------------------------------------------------
+  // 16. MIDTRANS PAYMENTS
+  // -------------------------------------------------------------------------
+
   static Future<Map<String, dynamic>> getMidtransToken(
     String orderId,
     String paymentMethod,
@@ -988,23 +937,20 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       if (response.statusCode == 200 || response.statusCode == 201) {
         return {'success': true, 'data': result['data'] ?? result};
       }
-      return {
-        'success': false,
-        'message': result['message'] ?? 'Gagal mendapatkan token',
-      };
+      return {'success': false, 'message': result['message'] ?? 'Gagal mendapatkan token'};
     } catch (e) {
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 
-  // --- 17. MIDTRANS CONFIG ---
+  // -------------------------------------------------------------------------
+  // 17. MIDTRANS CONFIG
+  // -------------------------------------------------------------------------
+
   static Future<Map<String, dynamic>> getMidtransConfig() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/midtrans-config'),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse('$baseUrl/midtrans-config'), headers: headers);
       final result = jsonDecode(response.body);
       return response.statusCode == 200
           ? {
@@ -1018,7 +964,10 @@ static Future<Order?> fetchHistoryDetail(int id) async {
     }
   }
 
-  // --- 18. REPORTS ---
+  // -------------------------------------------------------------------------
+  // 18. REPORTS
+  // -------------------------------------------------------------------------
+
   static Future<List<dynamic>> getReports() async {
     try {
       final response = await http.get(
@@ -1027,18 +976,60 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        return result['data'] is List
-            ? result['data']
-            : result['data']['data'] ?? [];
+        return result['data'] is List ? result['data'] : result['data']['data'] ?? [];
       }
       return [];
     } catch (e) {
       return [];
     }
   }
-  
 
-  // --- 19. TABLES ---
+  // -------------------------------------------------------------------------
+  // 19. GET TOP PRODUCTS (BESTSELLER)
+  // -------------------------------------------------------------------------
+
+  static Future<List<String>> getTopProducts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final int outletId = prefs.getInt('outlet_id') ?? 1;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/public/top-products?outlet_id=$outletId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        debugPrint("🏆 [CEK API BESTSELLER - OUTLET $outletId]: $result");
+
+        List<dynamic> rawData = [];
+        if (result['top_products'] != null) {
+          rawData = result['top_products'];
+        } else if (result['data'] != null) {
+          rawData = result['data'] is List ? result['data'] : (result['data']['data'] ?? []);
+        } else if (result is List) {
+          rawData = result;
+        }
+
+        return rawData
+            .map((item) => item['name']?.toString().toLowerCase().trim() ?? '')
+            .where((name) => name.isNotEmpty)
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint("💥 [API ERROR] getTopProducts: $e");
+      return [];
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 20. TABLES
+  // -------------------------------------------------------------------------
+
   static Future<List<dynamic>> getTables() async {
     try {
       final response = await http.get(
@@ -1047,9 +1038,7 @@ static Future<Order?> fetchHistoryDetail(int id) async {
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        return result['data'] is List
-            ? result['data']
-            : result['data']['data'] ?? [];
+        return result['data'] is List ? result['data'] : result['data']['data'] ?? [];
       }
       return [];
     } catch (e) {

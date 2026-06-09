@@ -160,8 +160,18 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   }
 
   void _loadDiscounts() async {
-    final discounts = await ApiService.getDiscounts();
-    if (!mounted) return;
+  final discounts = await ApiService.getDiscounts();
+  if (!mounted) return;
+
+  for (var d in discounts) {
+    debugPrint("=== DISKON: ${d.name}");
+    debugPrint("    scope: ${d.scope}");
+    debugPrint("    type: ${d.type}");
+    debugPrint("    value: ${d.value}");
+    debugPrint("    productIds: ${d.productIds}");
+    debugPrint("    categoryIds: ${d.categoryIds}");
+    debugPrint("    minPurchase: ${d.minPurchase}");
+  }
     setState(() {
       _availableDiscounts = discounts;
 
@@ -320,6 +330,10 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         .map((item) => item.productId)
         .toList();
 
+    List<int> cartCategoryIds = widget.cart.values
+      .where((item) => item.categoryId != null)
+      .map((item) => item.categoryId!)
+      .toList();
     // Jumlah diskon produk yang sudah dipilih
     int selectedProductCount = _selectedDiscounts
         .where((d) => d.scope == 'products')
@@ -405,13 +419,18 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                       var d = _availableDiscounts[index];
 
                       bool isMinPurchaseMet = sub >= d.minPurchase;
-                      bool isProductEligible = true;
+bool isProductEligible = true;
 
-                      if (d.scope == 'products' && d.productIds.isNotEmpty) {
-                        isProductEligible = cartProductIds.any(
-                          (cartId) => d.productIds.contains(cartId),
-                        );
-                      }
+if (d.scope == 'products' && d.productIds.isNotEmpty) {
+  isProductEligible = cartProductIds.any(
+    (cartId) => d.productIds.contains(cartId),
+  );
+} else if (d.scope == 'categories' && d.categoryIds.isNotEmpty) {
+  // ← TAMBAH INI
+  isProductEligible = cartCategoryIds.any(
+    (catId) => d.categoryIds.contains(catId),
+  );
+}
 
                       // Diskon produk max 2: disabled jika sudah 2 dan ini belum dipilih
                       bool isMaxProductReached =
@@ -1143,6 +1162,13 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         ? widget.originalTotalAmount
         : widget.totalAmount;
 
+        for (var item in widget.cart.values) {
+    debugPrint("=== CART ITEM: ${item.itemName}");
+    debugPrint("    productId: ${item.productId}");
+    debugPrint("    categoryId: ${item.categoryId}");
+    debugPrint("    discountId: ${item.discountId}");
+  }
+
     double discountAmount = _calculateDiscountValue(subTotal);
     double baseAmount = subTotal - discountAmount;
     if (baseAmount < 0) baseAmount = 0;
@@ -1480,6 +1506,13 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       double subTotal = widget.originalTotalAmount > 0
           ? widget.originalTotalAmount
           : widget.totalAmount;
+
+          for (var item in widget.cart.values) {
+    debugPrint("=== CART ITEM: ${item.itemName}");
+    debugPrint("    productId: ${item.productId}");
+    debugPrint("    categoryId: ${item.categoryId}");
+    debugPrint("    discountId: ${item.discountId}");
+  }
       double discountAmount = _calculateDiscountValue(subTotal);
       double baseAmount = subTotal - discountAmount;
 

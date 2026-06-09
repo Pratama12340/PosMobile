@@ -117,127 +117,58 @@ class HomeScreenState extends State<HomeScreen> {
   Future<void> _loadInitialData() async {
     try {
       final results = await Future.wait([
-        ApiService.getCategories().catchError((e) => []),
-        ApiService.getProducts().catchError((e) => <Product>[]),
-        ApiService.getDiscounts().catchError((e) => <Discount>[]),
-        ApiService.getReports().catchError((e) => []),
-        ApiService.fetchHistory().catchError((e) => <Order>[]),
-        ApiService.getPendingOrders().catchError((e) => <Order>[]),
-      ]);
+  ApiService.getCategories().catchError((e) => []),
+  ApiService.getProducts().catchError((e) => <Product>[]),
+  ApiService.getDiscounts().catchError((e) => <Discount>[]),
+  ApiService.getPendingOrders().catchError((e) => <Order>[]),
+  ApiService.getTopProducts().catchError((e) => <int>[]),  // ← GANTI
+]);
 
-      if (mounted) {
-        final List categoriesData = results[0];
-        final List<Product> productsData = results[1] as List<Product>;
-        final List<Discount> discountsData = results[2] as List<Discount>;
-        final List reportsData = results[3];
-        final List<Order> historyData = results[4] as List<Order>;
-        final List<Order> pendingData = results[5] as List<Order>;
+if (mounted) {
+  final List categoriesData = results[0];
+  final List<Product> productsData = results[1] as List<Product>;
+  final List<Discount> discountsData = results[2] as List<Discount>;
+  final List<Order> pendingData = results[3] as List<Order>;
+  final List<String> apiTopProductNames = results[4] as List<String>;  // ← GANTI
 
-        List<Order> loadedPendingOrders = pendingData;
-        Map<int, int> productSales = {};
+  for (var product in productsData) {
+    final productDiscount = discountsData
+        .where(
+          (d) => d.scope == 'products' && d.productIds.contains(product.id),
+        )
+        .toList();
 
-        for (var order in historyData) {
-          if (order.status == 'paid') {
-            for (var item in order.items) {
-              productSales[item.productId] =
-                  (productSales[item.productId] ?? 0) + item.quantity;
-            }
-          }
-        }
+    final categoryDiscount = discountsData
+        .where(
+          (d) =>
+              d.scope == 'categories' &&
+              product.categoryId != null &&
+              d.categoryIds.contains(product.categoryId),
+        )
+        .toList();
 
-        void findSales(dynamic data) {
-          if (data is List) {
-            for (var item in data) {
-              findSales(item);
-            }
-          } else if (data is Map) {
-            if (data.containsKey('product_id')) {
-              int pId =
-                  int.tryParse(data['product_id']?.toString() ?? '0') ?? 0;
-              int qty =
-                  int.tryParse(
-                    data['qty']?.toString() ??
-                        data['total_qty']?.toString() ??
-                        data['sold']?.toString() ??
-                        '0',
-                  ) ??
-                  0;
-              if (pId != 0 && qty > 0) {
-                productSales[pId] = (productSales[pId] ?? 0) + qty;
-              }
-            }
-            for (var value in data.values) {
-              if (value is List || value is Map) {
-                findSales(value);
-              }
-            }
-          }
-        }
+    product.discount = productDiscount.isNotEmpty
+        ? productDiscount.first
+        : (categoryDiscount.isNotEmpty ? categoryDiscount.first : null);
+  }
 
-        findSales(reportsData);
+  // Match nama produk dari API ke id produk yang ada
+final Set<int> bestsellerIds = {};
+for (var product in productsData) {
+  if (apiTopProductNames.contains(product.name.toLowerCase().trim())) {
+    bestsellerIds.add(product.id);
+  }
+}
 
-        if (productSales.isEmpty) {
-          for (var order in historyData) {
-            if (order.status == 'paid') {
-              for (var item in order.items) {
-                productSales[item.productId] =
-                    (productSales[item.productId] ?? 0) + item.quantity;
-              }
-            }
-          }
-        }
-
-        Set<int> calculatedBestsellers = {};
-
-        for (var product in productsData) {
-          final productDiscount = discountsData
-              .where(
-                (d) =>
-                    d.scope == 'products' && d.productIds.contains(product.id),
-              )
-              .toList();
-
-          // Cek diskon per-kategori (BARU)
-          final categoryDiscount = discountsData
-              .where(
-                (d) =>
-                    d.scope == 'categories' &&
-                    product.categoryId != null &&
-                    d.categoryIds.contains(product.categoryId),
-              )
-              .toList();
-
-          // Prioritas: diskon produk > diskon kategori
-          product.discount = productDiscount.isNotEmpty
-              ? productDiscount.first
-              : (categoryDiscount.isNotEmpty ? categoryDiscount.first : null);
-        }
-
-        final sortedBySales = List<Product>.from(productsData)
-          ..sort((a, b) {
-            int salesA = productSales[a.id] ?? 0;
-            int salesB = productSales[b.id] ?? 0;
-            return salesB.compareTo(salesA);
-          });
-
-        final top5 = sortedBySales
-            .where((p) => (productSales[p.id] ?? 0) > 0)
-            .take(5)
-            .toList();
-
-        for (var product in top5) {
-          calculatedBestsellers.add(product.id);
-        }
-
-        setState(() {
-          _categories = categoriesData;
-          _allProducts = productsData;
-          _bestsellerProductIds = calculatedBestsellers;
-          _pendingOrders = loadedPendingOrders;
-          _isLoading = false;
-        });
-        _applyFilters();
-      }
+setState(() {
+  _categories = categoriesData;
+  _allProducts = productsData;
+  _bestsellerProductIds = bestsellerIds;
+  _pendingOrders = pendingData;
+  _isLoading = false;
+});
+  _applyFilters();
+}
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }

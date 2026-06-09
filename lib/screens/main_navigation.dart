@@ -71,9 +71,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
-  // ────────────────────────────────────────────────────────────
-  // Kirim notifikasi ke overlay
-  // ────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // Kirim notifikasi ke overlay — beda judul untuk QRIS vs Cash
+  // ─────────────────────────────────────────────────────────────
   void _fireNotification({
     required String paymentMethod,
     required String customerName,
@@ -85,13 +85,19 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     final method = paymentMethod.toLowerCase().trim();
     final isQris = ['qris', 'midtrans', 'gopay', 'other_qris'].contains(method);
 
+    final String title = isQris
+        ? 'QRIS Terbayar! Konfirmasi pesanan'
+        : 'Pesanan baru! Bayar di kasir';
+
+    final String subtitle = isQris
+        ? (invoiceNo != null ? 'Invoice: $invoiceNo' : 'Pesanan siap dikonfirmasi')
+        : (invoiceNo != null ? 'Invoice: $invoiceNo' : 'Pelanggan menunggu di kasir');
+
     OrderNotificationController().show(
       OrderNotification(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: isQris ? 'Pesanan QRIS masuk!' : 'Pesanan tunai masuk!',
-        subtitle: invoiceNo != null
-            ? 'Invoice: $invoiceNo'
-            : 'Segera proses pesanan',
+        title: title,
+        subtitle: subtitle,
         paymentMethod: paymentMethod,
         customerName: customerName,
         totalPrice: totalPrice,
@@ -99,42 +105,46 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
-  // ────────────────────────────────────────────────────────────
-  // Koneksi Reverb — dengan debug lengkap
-  // ────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // Helper parse data dari Reverb event
+  // ─────────────────────────────────────────────────────────────
+  Map<String, dynamic> _parseOrderData(dynamic data) {
+    if (data is! Map) return {};
+    final raw = Map<String, dynamic>.from(data);
+    if (raw.containsKey('order') && raw['order'] is Map) {
+      return Map<String, dynamic>.from(raw['order'] as Map);
+    }
+    return raw;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Koneksi Reverb
+  // ─────────────────────────────────────────────────────────────
   void _connectReverb() async {
     debugPrint('🚀 [REVERB] _connectReverb START');
 
     final int? outletId = await StorageService.getOutletId();
+    final String? token = await StorageService.getToken();
+
     debugPrint('🚀 [REVERB] outletId = $outletId');
 
-    if (outletId == null) {
-      debugPrint('❌ [REVERB] outletId null, batalkan koneksi');
+    if (outletId == null || token == null || token.isEmpty) {
+      debugPrint('❌ [REVERB] outletId atau token kosong, batalkan koneksi');
       return;
     }
 
     final channelName = 'private-orders.outlet.$outletId';
     debugPrint('🚀 [REVERB] channel = $channelName');
 
+    // ── Event: pesanan baru dibuat (QR cash atau awal QRIS) ──
     await _reverbService.initConnection(
       channelName: channelName,
       eventName: '.order.created',
       onEventReceived: (data) {
-        debugPrint('⚡ [ORDER DITERIMA RAW]: $data');
-        debugPrint('⚡ [ORDER DITERIMA TYPE]: ${data.runtimeType}');
+        debugPrint('⚡ [ORDER CREATED RAW]: $data');
 
-        // Backend bisa kirim: { order: {...} } ATAU langsung {...}
-        Map<String, dynamic> orderData = {};
-        if (data is Map) {
-          final raw = Map<String, dynamic>.from(data);
-          if (raw.containsKey('order') && raw['order'] is Map) {
-            orderData = Map<String, dynamic>.from(raw['order'] as Map);
-          } else {
-            orderData = raw;
-          }
-        }
-
-        debugPrint('⚡ [ORDER PARSED]: $orderData');
+        final orderData = _parseOrderData(data);
+        debugPrint('⚡ [ORDER CREATED PARSED]: $orderData');
 
         final String paymentMethod =
             orderData['payment_method']?.toString() ?? '';
@@ -147,7 +157,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             orderData['invoice_number']?.toString() ??
             orderData['invoice_no']?.toString();
 
-        debugPrint('⚡ [PARSED] method=$paymentMethod customer=$customerName total=$totalPrice');
+        debugPrint(
+            '⚡ [CREATED PARSED] method=$paymentMethod customer=$customerName total=$totalPrice');
 
         // Refresh UI
         _homeKey.currentState?.refreshPendingOrdersSilently();
@@ -164,32 +175,55 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       },
     );
 
-    // Event order updated (lebih subtle)
+    // ── Event: status pesanan berubah (QRIS terkonfirmasi → paid) ──
     _reverbService.bindEvent(
       channelName,
       '.order.updated',
       (data) {
-        debugPrint('⚡ [ORDER UPDATED]: $data');
+        debugPrint('⚡ [ORDER UPDATED RAW]: $data');
+
+        // Refresh UI dulu
         _homeKey.currentState?.refreshPendingOrdersSilently();
         _historyKey.currentState?.loadHistory();
         _shiftKey.currentState?.refreshShift();
 
-        snackbarKey.currentState?.showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.sync_rounded, color: Colors.white, size: 16),
-                SizedBox(width: 8),
-                Text('Status pesanan diperbarui'),
-              ],
+        final orderData = _parseOrderData(data);
+        final String status = orderData['status']?.toString() ?? '';
+
+        debugPrint('⚡ [ORDER UPDATED] status=$status');
+
+        // Hanya tembak notifikasi overlay jika status = paid
+        // (QRIS baru dikonfirmasi oleh payment gateway)
+        if (status == 'paid') {
+          _fireNotification(
+            paymentMethod: orderData['payment_method']?.toString() ?? '',
+            customerName:
+                orderData['customer_name']?.toString() ?? 'Pelanggan',
+            totalPrice: orderData['total_price'] != null
+                ? double.tryParse(orderData['total_price'].toString())
+                : null,
+            invoiceNo: orderData['invoice_number']?.toString() ??
+                orderData['invoice_no']?.toString(),
+          );
+        } else {
+          // Status lain (pending, accepted, dll) cukup SnackBar saja
+          snackbarKey.currentState?.showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.sync_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 8),
+                  Text('Status pesanan diperbarui'),
+                ],
+              ),
+              backgroundColor: Colors.blueAccent,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
-            backgroundColor: Colors.blueAccent,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+          );
+        }
       },
     );
   }
@@ -211,26 +245,23 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Konfirmasi Keluar',
-            style: AppStyle.titleText.copyWith(fontSize: 18)),
-        content:
-            const Text('Apakah Anda yakin ingin keluar dari sesi kasir?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title:
+            Text('Konfirmasi Keluar', style: AppStyle.titleText.copyWith(fontSize: 18)),
+        content: const Text('Apakah Anda yakin ingin keluar dari sesi kasir?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Batal')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppStyle.errorRed),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppStyle.errorRed),
             onPressed: () async {
               await StorageService.logoutKasir();
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(
-                      builder: (context) => const LoginScreen()),
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
                   (route) => false,
                 );
               }
@@ -245,7 +276,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ KUNCI: Bungkus seluruh Scaffold dengan OrderNotificationLayer
     return OrderNotificationLayer(
       child: Scaffold(
         key: _scaffoldKey,
@@ -278,8 +308,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       key: _historyKey,
                       searchController: _globalSearchController,
                     ),
-                    SettingScreen(
-                        searchController: _globalSearchController),
+                    SettingScreen(searchController: _globalSearchController),
                   ],
                 ),
               ),
@@ -346,8 +375,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 16)),
                   Text(_userRole,
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.grey)),
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ],
@@ -367,8 +396,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         const Spacer(),
         const Divider(indent: 20, endIndent: 20),
         _buildMenuItem(Icons.settings_rounded, 'Setting', 3),
-        _buildMenuItem(Icons.logout_rounded, 'Logout', -1,
-            isLogout: true),
+        _buildMenuItem(Icons.logout_rounded, 'Logout', -1, isLogout: true),
         const SizedBox(height: 20),
       ],
     );
@@ -398,8 +426,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             color: isActive ? AppStyle.primaryBlue : AppStyle.textGrey),
         title: Text(title,
             style: TextStyle(
-                color:
-                    isActive ? AppStyle.primaryBlue : AppStyle.textMain)),
+                color: isActive ? AppStyle.primaryBlue : AppStyle.textMain)),
       ),
     );
   }

@@ -105,20 +105,18 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Helper parse data dari Reverb event
+// ─────────────────────────────────────────────────────────────
+  // Helper parse data dari Reverb event — KINI LEBIH SEDERHANA
   // ─────────────────────────────────────────────────────────────
   Map<String, dynamic> _parseOrderData(dynamic data) {
     if (data is! Map) return {};
-    final raw = Map<String, dynamic>.from(data);
-    if (raw.containsKey('order') && raw['order'] is Map) {
-      return Map<String, dynamic>.from(raw['order'] as Map);
-    }
-    return raw;
+    // Karena reverb_service baru sudah otomatis memotong root key 'order',
+    // data di sini langsung berupa map order murninya.
+    return Map<String, dynamic>.from(data);
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Koneksi Reverb
+  // Koneksi Reverb — KINI LEBIH BERSIH
   // ─────────────────────────────────────────────────────────────
   void _connectReverb() async {
     debugPrint('🚀 [REVERB] _connectReverb START');
@@ -139,7 +137,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     // ── Event: pesanan baru dibuat (QR cash atau awal QRIS) ──
     await _reverbService.initConnection(
       channelName: channelName,
-      eventName: '.order.created',
+      eventName: 'order.created', // 🛠️ FIX: Tidak perlu titik manual, service baru sudah handle otomatis
       onEventReceived: (data) {
         debugPrint('⚡ [ORDER CREATED RAW]: $data');
 
@@ -178,7 +176,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     // ── Event: status pesanan berubah (QRIS terkonfirmasi → paid) ──
     _reverbService.bindEvent(
       channelName,
-      '.order.updated',
+      'order.updated', // 🛠️ FIX: Tidak perlu titik manual, service baru sudah handle otomatis
       (data) {
         debugPrint('⚡ [ORDER UPDATED RAW]: $data');
 
@@ -193,7 +191,6 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         debugPrint('⚡ [ORDER UPDATED] status=$status');
 
         // Hanya tembak notifikasi overlay jika status = paid
-        // (QRIS baru dikonfirmasi oleh payment gateway)
         if (status == 'paid') {
           _fireNotification(
             paymentMethod: orderData['payment_method']?.toString() ?? '',
@@ -228,6 +225,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     );
   }
 
+
   @override
   void dispose() {
     _globalSearchController.dispose();
@@ -241,6 +239,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
     }
   }
 
+ // ─────────────────────────────────────────────────────────────
+  // Handle Logout Kasir
+  // ─────────────────────────────────────────────────────────────
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
@@ -257,6 +258,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             style:
                 ElevatedButton.styleFrom(backgroundColor: AppStyle.errorRed),
             onPressed: () async {
+              // 🛠️ FIX: Putuskan koneksi Reverb secara bersih saat kasir logout
+              await _reverbService.disconnect();
+              
               await StorageService.logoutKasir();
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(

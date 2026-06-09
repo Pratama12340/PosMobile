@@ -13,7 +13,7 @@ class ReverbService {
   final Map<String, Channel> _channels = {};
   
   bool _isConnected = false;
-  bool _isConnecting = false; // ← FLAG BARU UNTUK MENCEGAH SPAM KONEKSI
+  bool _isConnecting = false;
 
   final List<Map<String, dynamic>> _pendingSubscriptions = [];
 
@@ -47,15 +47,13 @@ class ReverbService {
         return;
       }
 
-      // ← TAMBAHAN: Cegah pemanggilan koneksi berkali-kali jika masih loading
       if (_isConnecting) {
         debugPrint("⏳ [REVERB] Sedang proses koneksi, harap tunggu...");
         return; 
       }
 
-      _isConnecting = true; // Tandai sedang proses connect
+      _isConnecting = true;
 
-      // Reset dulu jika pusher sudah ada tapi tidak connected
       if (_pusher != null) {
         debugPrint("🔄 [REVERB] Reset pusher lama...");
         try { await _pusher!.disconnect(); } catch (_) {}
@@ -67,7 +65,7 @@ class ReverbService {
 
     } catch (e) {
       debugPrint("💥 [REVERB ERROR]: $e");
-      _isConnecting = false; // Reset flag jika error
+      _isConnecting = false;
     }
   }
 
@@ -99,20 +97,19 @@ class ReverbService {
 
       if (current == 'CONNECTED') {
         _isConnected = true;
-        _isConnecting = false; // ← Reset flag setelah sukses konek
+        _isConnecting = false;
         _processPendingSubscriptions();
       } else if (current == 'DISCONNECTED') {
         _isConnected = false;
-        _isConnecting = false; // ← Reset flag setelah putus
+        _isConnecting = false;
       }
     });
 
     _pusher!.onConnectionError((error) {
       debugPrint("🔴 [REVERB ERROR] message  : ${error?.message}");
       debugPrint("🔴 [REVERB ERROR] exception: ${error?.exception}");
-      debugPrint("🔴 [REVERB ERROR] toString : $error");
       _isConnected = false;
-      _isConnecting = false; // ← Reset flag jika gagal
+      _isConnecting = false;
     });
 
     debugPrint("🔌 [REVERB] Konek ke: $reverbHost:$reverbPort");
@@ -148,18 +145,30 @@ class ReverbService {
     final channel = _channels[channelName];
     if (channel == null) return;
 
-    channel.bind(eventName, (PusherEvent? event) {
-      debugPrint("⚡ [REVERB EVENT]: ${event?.eventName}");
+    // 🛠️ FIX 1: Otomatis tambahkan titik (.) di awal jika event menggunakan dot notation custom (misal: order.created)
+    String realEventName = eventName;
+    if (!realEventName.startsWith('.')) {
+      realEventName = '.$realEventName';
+    }
+
+    channel.bind(realEventName, (PusherEvent? event) {
+      debugPrint("⚡ [REVERB EVENT RECEIVED]: ${event?.eventName}");
       if (event?.data != null) {
         try {
-          final data = jsonDecode(event!.data.toString());
-          onEventReceived(data);
+          final decodedData = jsonDecode(event!.data.toString());
+          
+          // 🛠️ FIX 2: Saring data agar langsung mengirim objek order di dalam key 'order' ke fungsi callback
+          if (decodedData is Map && decodedData.containsKey('order')) {
+            onEventReceived(decodedData['order']);
+          } else {
+            onEventReceived(decodedData);
+          }
         } catch (e) {
           debugPrint("💥 [REVERB] Gagal parse data: $e");
         }
       }
     });
-    debugPrint("✅ [REVERB] Bind event $eventName di $channelName");
+    debugPrint("✅ [REVERB] Bind kustom event $realEventName di $channelName");
   }
 
   void bindEvent(String channelName, String eventName, Function(dynamic) onEventReceived) {
@@ -183,7 +192,7 @@ class ReverbService {
       _channels.clear();
       _pendingSubscriptions.clear();
       _isConnected = false;
-      _isConnecting = false; // ← Reset flag
+      _isConnecting = false;
       if (_pusher != null) await _pusher!.disconnect();
       _pusher = null;
       debugPrint("⏹️ [REVERB] Koneksi ditutup bersih.");
@@ -193,7 +202,7 @@ class ReverbService {
       _channels.clear();
       _pendingSubscriptions.clear();
       _isConnected = false;
-      _isConnecting = false; // ← Reset flag
+      _isConnecting = false;
     }
   }
 }

@@ -141,7 +141,7 @@ class ReverbService {
     debugPrint("✅ [REVERB] Subscribe ke: $channelName");
   }
 
- void _bindToChannel(String channelName, String eventName, Function(dynamic) onEventReceived) {
+void _bindToChannel(String channelName, String eventName, Function(dynamic) onEventReceived) {
     final channel = _channels[channelName];
     if (channel == null) return;
 

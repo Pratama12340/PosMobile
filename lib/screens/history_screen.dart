@@ -16,12 +16,22 @@ class HistoryScreen extends StatefulWidget {
 
 class HistoryScreenState extends State<HistoryScreen> {
   late Future<List<Order>> _historyFuture;
+  bool _hasLoaded = false;
 
   @override
   void initState() {
     super.initState();
     widget.searchController.addListener(_onSearchChanged);
-    loadHistory();
+  }
+
+   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Hanya load pertama kali, reload dihandle dari luar via loadHistory()
+    if (!_hasLoaded) {
+      _hasLoaded = true;
+      loadHistory();
+    }
   }
 
   @override

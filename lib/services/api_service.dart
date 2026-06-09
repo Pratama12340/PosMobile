@@ -435,66 +435,52 @@ class ApiService {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // 5C. GET PENDING ORDERS
-  // -------------------------------------------------------------------------
+// get pending orders 
+static Future<List<Order>> getPendingOrders() async {
+  debugPrint('🔥 getPendingOrders DIPANGGIL');
+  try {
+    final headers = await _getHeaders();
+    List<Order> allOrders = [];
+    int currentPage = 1;
 
-  static Future<List<Order>> getPendingOrders() async {
-    try {
-      final headers = await _getHeaders();
+    while (true) {
+      debugPrint('🔥 Fetching page $currentPage');
       final response = await http.get(
-        Uri.parse('$baseUrl/orders?status=pending'),
+        Uri.parse('$baseUrl/orders?status=pending&per_page=100&page=$currentPage'),
         headers: headers,
       );
+      debugPrint('🔥 Response status: ${response.statusCode}');
 
-      if (response.statusCode == 200) {
-        debugPrint('=== RAW JSON ORDER 43 ===');
-        final decoded = jsonDecode(response.body);
-        final rawList = decoded['data'] is Map
-            ? decoded['data']['data']
-            : decoded['data'];
-        for (var o in rawList) {
-          if (o['id'] == 43 || o['id'] == 42) {
-            debugPrint('ID ${o['id']} raw payment_method: ${o['payment_method']}');
-            debugPrint('Semua field: ${o.keys.toList()}');
-          }
-        }
+      if (response.statusCode != 200) break;
 
-        final result = jsonDecode(response.body);
-        List<dynamic> rawData = [];
-        if (result['data'] != null) {
-          if (result['data'] is Map && result['data'].containsKey('data')) {
-            rawData = result['data']['data'];
-          } else if (result['data'] is List) {
-            rawData = result['data'];
-          }
-        }
+      final result = jsonDecode(response.body);
+      debugPrint('🔍 result keys: ${result.keys.toList()}');
+      debugPrint('🔍 result[data] type: ${result['data'].runtimeType}');
+      debugPrint('🔍 raw result: ${response.body.substring(0, 300)}');
+      List<dynamic> rawData = [];
+      int lastPage = 1;
 
-        debugPrint('=== PENDING ORDERS DEBUG ===');
-        debugPrint('Total order: ${rawData.length}');
-        for (var o in rawData) {
-          debugPrint('---');
-          debugPrint('ID: ${o['id']}');
-          debugPrint('Customer: ${o['customer_name']}');
-          debugPrint('payment_method (orders table): ${o['payment_method']}');
-          debugPrint('payments array: ${o['payments']}');
-          debugPrint('payments length: ${(o['payments'] as List?)?.length ?? 0}');
-          if ((o['payments'] as List?)?.isNotEmpty == true) {
-            for (var p in o['payments']) {
-              debugPrint('  → payment method: ${p['method']}');
-            }
-          }
-        }
-        debugPrint('=== END DEBUG ===');
+      if (result['data'] is List) {
+  rawData = result['data'];
+  lastPage = result['last_page'] ?? 1;  // ← last_page ada di root, bukan di dalam data
+} else if (result['data'] is Map && result['data']['data'] is List) {
+  rawData = result['data']['data'];
+  lastPage = result['data']['last_page'] ?? 1;
+}
 
-        return rawData.map((json) => Order.fromJson(json)).toList();
-      }
-      return [];
-    } catch (e) {
-      debugPrint('getPendingOrders error: $e');
-      return [];
+      allOrders.addAll(rawData.map((json) => Order.fromJson(json)).toList());
+
+      if (currentPage >= lastPage) break;
+      currentPage++;
     }
+
+    debugPrint('✅ Total pending: ${allOrders.length}');
+    return allOrders;
+  } catch (e) {
+    debugPrint('getPendingOrders error: $e');
+    return [];
   }
+}
 
   // -------------------------------------------------------------------------
   // 5D. ACCEPT ORDER

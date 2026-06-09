@@ -16,12 +16,11 @@ class ShiftScreen extends StatefulWidget {
 }
 
 class ShiftScreenState extends State<ShiftScreen> {
-  late Future<List<dynamic>> shiftDataFuture;
+  Future<List<dynamic>> shiftDataFuture = Future.value([]);
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
   }
 
   void _loadInitialData() {

@@ -27,14 +27,13 @@ class HomeScreen extends StatefulWidget {
 class HomeScreenState extends State<HomeScreen> {
   final Map<int, OrderItem> _cart = {};
   final List<Map<String, dynamic>> _drafts = [];
-  // final TerminalPrinterService _printerService = TerminalPrinterService();
 
   String? _currentCustomerName;
   String? _currentTableNumber;
   int? _currentTableId;
 
   List<Order> _pendingOrders = [];
-  List<Order> _paidOrders = []; // ✅ List untuk paid orders yang belum di-accept
+  List<Order> _paidOrders = [];
   final Set<int> _dismissedOrderIds = {};
   bool _isPendingOrderLoaded = false;
   int? _currentPendingOrderId;
@@ -101,6 +100,11 @@ class HomeScreenState extends State<HomeScreen> {
     return !_dismissedOrderIds.contains(order.id) && !order.isAccepted;
   }
 
+  bool _isToday(Order order) {
+    final String todayStr = DateFormat('yyyyMMdd').format(DateTime.now());
+    return order.invoiceNo.contains(todayStr);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -117,58 +121,61 @@ class HomeScreenState extends State<HomeScreen> {
   Future<void> _loadInitialData() async {
     try {
       final results = await Future.wait([
-  ApiService.getCategories().catchError((e) => []),
-  ApiService.getProducts().catchError((e) => <Product>[]),
-  ApiService.getDiscounts().catchError((e) => <Discount>[]),
-  ApiService.getPendingOrders().catchError((e) => <Order>[]),
-  ApiService.getTopProducts().catchError((e) => <int>[]),  // ← GANTI
-]);
+        ApiService.getCategories().catchError((e) => []),
+        ApiService.getProducts().catchError((e) => <Product>[]),
+        ApiService.getDiscounts().catchError((e) => <Discount>[]),
+        ApiService.getPendingOrders().catchError((e) => <Order>[]),
+        ApiService.getTopProducts().catchError((e) => <String>[]),
+      ]);
 
-if (mounted) {
-  final List categoriesData = results[0];
-  final List<Product> productsData = results[1] as List<Product>;
-  final List<Discount> discountsData = results[2] as List<Discount>;
-  final List<Order> pendingData = results[3] as List<Order>;
-  final List<String> apiTopProductNames = results[4] as List<String>;  // ← GANTI
+      if (mounted) {
+        final List categoriesData = results[0];
+        final List<Product> productsData = results[1] as List<Product>;
+        final List<Discount> discountsData = results[2] as List<Discount>;
+        final List<Order> pendingData = results[3] as List<Order>;
+        final List<String> topProductNames = results[4] as List<String>;
 
-  for (var product in productsData) {
-    final productDiscount = discountsData
-        .where(
-          (d) => d.scope == 'products' && d.productIds.contains(product.id),
-        )
-        .toList();
+        // Terapkan diskon ke produk
+        for (var product in productsData) {
+          final productDiscount = discountsData
+              .where(
+                (d) => d.scope == 'products' && d.productIds.contains(product.id),
+              )
+              .toList();
 
-    final categoryDiscount = discountsData
-        .where(
-          (d) =>
-              d.scope == 'categories' &&
-              product.categoryId != null &&
-              d.categoryIds.contains(product.categoryId),
-        )
-        .toList();
+          final categoryDiscount = discountsData
+              .where(
+                (d) =>
+                    d.scope == 'categories' &&
+                    product.categoryId != null &&
+                    d.categoryIds.contains(product.categoryId),
+              )
+              .toList();
 
-    product.discount = productDiscount.isNotEmpty
-        ? productDiscount.first
-        : (categoryDiscount.isNotEmpty ? categoryDiscount.first : null);
-  }
+          product.discount = productDiscount.isNotEmpty
+              ? productDiscount.first
+              : (categoryDiscount.isNotEmpty ? categoryDiscount.first : null);
+        }
 
-  // Match nama produk dari API ke id produk yang ada
-final Set<int> bestsellerIds = {};
-for (var product in productsData) {
-  if (apiTopProductNames.contains(product.name.toLowerCase().trim())) {
-    bestsellerIds.add(product.id);
-  }
-}
+        // Tandai bestseller berdasarkan nama dari endpoint getTopProducts
+        final Set<int> bestsellerIds = {};
+        for (var product in productsData) {
+          if (topProductNames.contains(product.name.toLowerCase().trim())) {
+            bestsellerIds.add(product.id);
+          }
+        }
 
-setState(() {
-  _categories = categoriesData;
-  _allProducts = productsData;
-  _bestsellerProductIds = bestsellerIds;
-  _pendingOrders = pendingData;
-  _isLoading = false;
-});
-  _applyFilters();
-}
+        setState(() {
+          _categories = categoriesData;
+          _allProducts = productsData;
+          _bestsellerProductIds = bestsellerIds;
+          _pendingOrders = pendingData
+              .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
+              .toList();
+          _isLoading = false;
+        });
+        _applyFilters();
+      }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -235,7 +242,7 @@ setState(() {
           itemName = product.name;
           unitPrice = (item.price > 0) ? item.price : product.price.toDouble();
         }
-        // Ambil data diskon dari produk jika ada
+
         final product = productIndex != -1 ? _allProducts[productIndex] : null;
         double discountedPrice = unitPrice;
         if (product?.discount != null) {
@@ -253,9 +260,9 @@ setState(() {
           itemName: itemName,
           originalQty: item.quantity,
           activeQty: item.quantity,
-          unitPrice: discountedPrice, // ← harga setelah diskon
-          originalPrice: unitPrice, // ← harga asli
-          discountId: product?.discount?.id, // ← set discountId dari produk
+          unitPrice: discountedPrice,
+          originalPrice: unitPrice,
+          discountId: product?.discount?.id,
           stationId: item.stationId,
         );
       }
@@ -311,7 +318,9 @@ setState(() {
         final freshPending = await ApiService.getPendingOrders();
         if (mounted) {
           setState(() {
-            _pendingOrders = freshPending;
+            _pendingOrders = freshPending
+                .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
+                .toList();
             _isLoadingPendingOrders = false;
           });
         }
@@ -371,32 +380,22 @@ setState(() {
   }
 
   Future<void> refreshPendingOrdersSilently() async {
-    try {
-      final freshOrders = await ApiService.getPendingOrders();
-      if (mounted) {
-        setState(
-          () => _pendingOrders = freshOrders.where(_shouldKeepOrder).toList(),
-        );
-      }
-    } catch (e) {
-      debugPrint('⚠️ Gagal refresh pending orders: $e');
-    }
+    await _refreshPendingOrdersSilently();
   }
 
   Future<void> _refreshPendingOrdersSilently() async {
     try {
       final freshOrders = await ApiService.getPendingOrders();
       if (mounted) {
-        setState(
-          () => _pendingOrders = freshOrders.where(_shouldKeepOrder).toList(),
-        );
+        setState(() => _pendingOrders = freshOrders
+            .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
+            .toList());
       }
     } catch (e) {
       debugPrint('⚠️ Gagal refresh pending orders: $e');
     }
   }
 
-  // ✅ Refresh paid orders dari API
   Future<void> _refreshPaidOrdersSilently() async {
     try {
       final freshOrders = await ApiService.getPaidOrders();
@@ -422,7 +421,6 @@ setState(() {
       return sum + (item.originalPrice * item.quantity);
     });
 
-    // ✅ Total badge = pending + paid
     final int totalOrderBadge = _pendingOrders.length + _paidOrders.length;
 
     return MediaQuery(
@@ -455,7 +453,6 @@ setState(() {
                                 const SizedBox(width: 15),
                                 if (_drafts.isNotEmpty && !_isDraftPanelVisible)
                                   _buildDraftButton(),
-                                // ✅ Badge button muncul jika ada pending ATAU paid orders
                                 if (totalOrderBadge > 0 &&
                                     !_isPendingPanelVisible &&
                                     !_isPendingOrderLoaded) ...[
@@ -478,14 +475,10 @@ setState(() {
                                         height: 45,
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
+                                          borderRadius: BorderRadius.circular(12),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withValues(
-                                                alpha: 0.05,
-                                              ),
+                                              color: Colors.black.withValues(alpha: 0.05),
                                               blurRadius: 10,
                                               offset: const Offset(0, 4),
                                             ),
@@ -508,25 +501,20 @@ setState(() {
                                 builder: (context, constraints) {
                                   double spacing = 18.0;
                                   double itemHeight =
-                                      (constraints.maxHeight - (spacing * 2)) /
-                                      3;
+                                      (constraints.maxHeight - (spacing * 2)) / 3;
                                   double itemWidth =
-                                      (constraints.maxWidth - (spacing * 3)) /
-                                      4;
+                                      (constraints.maxWidth - (spacing * 3)) / 4;
                                   return GridView.builder(
                                     gridDelegate:
                                         SliverGridDelegateWithFixedCrossAxisCount(
                                           crossAxisCount: 4,
-                                          childAspectRatio:
-                                              itemWidth / itemHeight,
+                                          childAspectRatio: itemWidth / itemHeight,
                                           crossAxisSpacing: spacing,
                                           mainAxisSpacing: spacing,
                                         ),
                                     itemCount: _filteredProducts.length,
                                     itemBuilder: (context, index) =>
-                                        _buildProductCard(
-                                          _filteredProducts[index],
-                                        ),
+                                        _buildProductCard(_filteredProducts[index]),
                                   );
                                 },
                               ),
@@ -632,8 +620,7 @@ setState(() {
                               (p) => p.id == productId,
                             );
                             if (productIndex != -1) {
-                              _allProducts[productIndex].stock -=
-                                  cartItem.quantity;
+                              _allProducts[productIndex].stock -= cartItem.quantity;
                               if (_allProducts[productIndex].stock < 0) {
                                 _allProducts[productIndex].stock = 0;
                               }
@@ -653,7 +640,6 @@ setState(() {
                       onSaveDraft: (name, table, id) =>
                           _saveToDraft(name, table, id),
                       onCancelPendingMode: () {
-                        // ← ini yang kemungkinan belum ada
                         setState(() {
                           _cart.clear();
                           _currentCustomerName = null;
@@ -759,7 +745,6 @@ setState(() {
     );
   }
 
-  // Hitung harga diskon (sudah ada di kode asli untuk display, tinggal reuse)
   double _discountedPrice(Product p) {
     if (p.discount == null) return p.price.toDouble();
     if (p.discount!.type == 'percentage') {
@@ -768,16 +753,14 @@ setState(() {
     return (p.price - p.discount!.value).toDouble();
   }
 
-  // ✅ Panel gabungan: pending (orange) + paid/siap cetak (blue)
   Widget _buildPendingOrderPanel() {
     final Set<int> seenIds = {};
-    final List<Map<String, dynamic>> allItems =
-        [
-          ..._pendingOrders.map((o) => {'order': o, 'type': 'pending'}),
-        ].where((item) {
-          final Order o = item['order'] as Order;
-          return seenIds.add(o.id); // false kalau sudah ada → dibuang
-        }).toList();
+    final List<Map<String, dynamic>> allItems = [
+      ..._pendingOrders.map((o) => {'order': o, 'type': 'pending'}),
+    ].where((item) {
+      final Order o = item['order'] as Order;
+      return seenIds.add(o.id);
+    }).toList();
 
     return Container(
       width: 340,
@@ -797,7 +780,6 @@ setState(() {
         borderRadius: BorderRadius.circular(24),
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
@@ -836,8 +818,7 @@ setState(() {
                                 '${_pendingOrders.length} Tertunda',
                                 Colors.orange,
                               ),
-                            if (_pendingOrders.isNotEmpty &&
-                                _paidOrders.isNotEmpty)
+                            if (_pendingOrders.isNotEmpty && _paidOrders.isNotEmpty)
                               const SizedBox(width: 6),
                           ],
                         ),
@@ -860,13 +841,10 @@ setState(() {
               ),
             ),
             const Divider(height: 1, thickness: 1, color: Color(0xFFF5F5F5)),
-
             Expanded(
               child: _isLoadingPendingOrders
                   ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppStyle.primaryBlue,
-                      ),
+                      child: CircularProgressIndicator(color: AppStyle.primaryBlue),
                     )
                   : allItems.isEmpty
                   ? const Center(
@@ -878,11 +856,11 @@ setState(() {
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       itemCount: allItems.length,
-                      separatorBuilder: (_, _) =>
+                      separatorBuilder: (_, __) =>
                           const Divider(height: 1, color: Color(0xFFF5F5F5)),
                       itemBuilder: (context, index) {
                         final item = allItems[index];
-                        final Order order = item['order'];
+                        final Order order = item['order'] as Order;
                         final bool isPaid = item['type'] == 'paid';
                         return _buildOrderTile(order, isPaid);
                       },
@@ -894,7 +872,6 @@ setState(() {
     );
   }
 
-  // Badge kecil di header panel
   Widget _buildStatusBadge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -958,7 +935,6 @@ setState(() {
         ),
       ),
       trailing: isCash
-          // ✅ PENDING + CASH → arrow ke checkout kasir
           ? InkWell(
               onTap: () => _loadPendingOrderToCart(order),
               borderRadius: BorderRadius.circular(6),
@@ -975,15 +951,11 @@ setState(() {
                 ),
               ),
             )
-          // ✅ PENDING + NON-CASH → langsung accept
           : InkWell(
               onTap: () => _acceptOrder(order),
               borderRadius: BorderRadius.circular(6),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
@@ -991,11 +963,7 @@ setState(() {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 14,
-                      color: Colors.green,
-                    ),
+                    Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
                     SizedBox(width: 4),
                     Text(
                       "Terima",
@@ -1223,58 +1191,30 @@ setState(() {
                   GestureDetector(
                     onTap: isOutOfStock
                         ? null
-                        : () => setState(() {
-                            onTap:
-                            isOutOfStock
-                                ? null
-                                : () => setState(() {
-                                    _isPendingPanelVisible = false;
-                                    _isDraftPanelVisible = false;
-                                    widget.onCartToggled?.call(true);
+                        : () {
+                            setState(() {
+                              _isPendingPanelVisible = false;
+                              _isDraftPanelVisible = false;
+                              widget.onCartToggled?.call(true);
 
-                                    if (_cart.containsKey(p.id)) {
-                                      _cart[p.id]!.quantity++;
-                                    } else {
-                                      // ← item baru, id = 0 = belum ada di server
-                                      _cart[p.id] = OrderItem(
-                                        id: 0,
-                                        productId: p.id,
-                                        categoryId: p.categoryId,
-                                        itemName: p.name,
-                                        originalQty: 1,
-                                        activeQty: 1,
-                                        unitPrice: _discountedPrice(p),
-                                        originalPrice: p.price.toDouble(),
-                                        discountId: p.discount?.id,
-                                        stationId: p.stationId,
-                                      );
-                                    }
-                                  });
-
-                            _isPendingPanelVisible = false;
-                            _isDraftPanelVisible = false;
-                            widget.onCartToggled?.call(true);
-
-                            if (_cart.containsKey(p.id)) {
-                              _cart[p.id]!.quantity++;
-                            } else {
-                              _cart[p.id] = OrderItem(
-                                id: 0,
-                                productId: p.id,
-                                categoryId: p.categoryId,
-                                itemName: p.name,
-                                originalQty: 1,
-                                activeQty: 1,
-                                unitPrice: _discountedPrice(
-                                  p,
-                                ), // ← harga setelah diskon
-                                originalPrice: p.price
-                                    .toDouble(), // ← harga asli selalu disimpan
-                                discountId: p.discount?.id,
-                                stationId: p.stationId,
-                              );
-                            }
-                          }),
+                              if (_cart.containsKey(p.id)) {
+                                _cart[p.id]!.quantity++;
+                              } else {
+                                _cart[p.id] = OrderItem(
+                                  id: 0,
+                                  productId: p.id,
+                                  categoryId: p.categoryId,
+                                  itemName: p.name,
+                                  originalQty: 1,
+                                  activeQty: 1,
+                                  unitPrice: _discountedPrice(p),
+                                  originalPrice: p.price.toDouble(),
+                                  discountId: p.discount?.id,
+                                  stationId: p.stationId,
+                                );
+                              }
+                            });
+                          },
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: const BoxDecoration(
@@ -1283,9 +1223,7 @@ setState(() {
                       ),
                       child: Icon(
                         Icons.add,
-                        color: isOutOfStock
-                            ? Colors.grey
-                            : AppStyle.primaryBlue,
+                        color: isOutOfStock ? Colors.grey : AppStyle.primaryBlue,
                       ),
                     ),
                   ),

@@ -3,8 +3,10 @@ import '../models/order_model.dart';
 import '../constants/style.dart';
 import '../services/printer_service.dart';
 import '../models/print_model.dart';
+import '../services/storage_service.dart';
+import '../models/printer_device.dart';
 
-class SuccessPaymentPage extends StatelessWidget {
+class SuccessPaymentPage extends StatefulWidget {
   final String orderId;
   final String outletName;
   final String outletAddress;
@@ -37,6 +39,156 @@ class SuccessPaymentPage extends StatelessWidget {
     required this.cashierName,
     required this.formatCurrency,
   });
+
+  @override
+  State<SuccessPaymentPage> createState() => _SuccessPaymentPageState();
+}
+
+class _SuccessPaymentPageState extends State<SuccessPaymentPage> {
+  bool _isPrinting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-print struk begitu halaman terbuka
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _executePrint();
+    });
+  }
+
+  // Fungsi cetak yang dipakai auto-print & tombol manual
+  Future<void> _executePrint() async {
+    if (_isPrinting) return;
+    setState(() => _isPrinting = true);
+
+    try {
+      // Mapping cart ke CartItem untuk printer
+      final List<CartItem> itemsForPrinting = widget.cart.values.map((item) {
+        return CartItem(
+          itemName: item.itemName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          notes: item.notes,
+          stationId: item.stationId,
+        );
+      }).toList();
+
+      final mainTransaction = TransactionModel(
+        orderId: widget.orderId,
+        outletName: widget.outletName,
+        outletAddress: widget.outletAddress,
+        cashierName: widget.cashierName,
+        customerName: widget.customerName,
+        tableNumber: widget.tableNumber,
+        items: itemsForPrinting,
+        taxBreakdown: List<Map<String, dynamic>>.from(widget.taxBreakdown),
+        discountAmount: widget.discountAmount,
+        totalDariHalaman: widget.grandTotal,
+      );
+
+      // Ambil semua printer aktif dari storage
+      final allPrinters = await StorageService.getPrinterList();
+      final activePrinters = allPrinters.where((p) => p.isActive).toList();
+
+      if (activePrinters.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Tidak ada printer aktif. Struk tidak dicetak."),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      final printerService = NetworkPrinterService();
+
+      // Kelompokkan item per stationId untuk kitchen print
+      Map<String, List<CartItem>> groupedByStation = {};
+      for (var item in itemsForPrinting) {
+        String sId = item.stationId.isNotEmpty ? item.stationId : 'kasir';
+        groupedByStation.putIfAbsent(sId, () => []).add(item);
+      }
+
+      // Loop setiap printer aktif
+      for (final printer in activePrinters) {
+        if (printer.conn != 'Network Printer') continue;
+
+        try {
+          bool isConnected = await printerService.checkPrinterConnection(
+            printer.ip,
+            printer.port,
+          );
+
+          if (!isConnected) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("${printer.name} tidak terjangkau, struk dilewati."),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            continue;
+          }
+
+          // Kasir: cetak struk lengkap
+          if (printer.stationName.toLowerCase().contains('kasir') ||
+              printer.stationName.toLowerCase().contains('semua')) {
+            await printerService.printReceipt(
+              ipAddress: printer.ip,
+              transaction: mainTransaction,
+              port: printer.port,
+            );
+          } else {
+            // Station lain (dapur, bar, dll): cetak hanya item yang relevan
+            final stationItems = groupedByStation[printer.stationName] ??
+                groupedByStation.values.expand((e) => e).toList();
+
+            final stationTransaction = TransactionModel(
+              orderId: widget.orderId,
+              outletName: widget.outletName,
+              outletAddress: widget.outletAddress,
+              cashierName: widget.cashierName,
+              customerName: widget.customerName,
+              tableNumber: widget.tableNumber,
+              items: stationItems,
+              taxBreakdown: List<Map<String, dynamic>>.from(widget.taxBreakdown),
+              discountAmount: widget.discountAmount,
+              totalDariHalaman: widget.grandTotal,
+            );
+
+            await printerService.printKitchenReceipt(
+              ipAddress: printer.ip,
+              transaction: stationTransaction,
+              port: printer.port,
+            );
+          }
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("✓ ${printer.name} berhasil mencetak struk."),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Gagal cetak ke ${printer.name}: $e"),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,17 +232,17 @@ class SuccessPaymentPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  orderId,
+                  widget.orderId,
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
                     fontFamily: 'Poppins',
                   ),
                 ),
-                if (customerName.isNotEmpty) ...[
+                if (widget.customerName.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
-                    "Customer: $customerName",
+                    "Customer: ${widget.customerName}",
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -101,8 +253,8 @@ class SuccessPaymentPage extends StatelessWidget {
                 ],
                 const SizedBox(height: 40),
 
-                if (paymentMethod.toLowerCase() == 'cash' ||
-                    paymentMethod == 'Tunai')
+                if (widget.paymentMethod.toLowerCase() == 'cash' ||
+                    widget.paymentMethod == 'Tunai')
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 30),
@@ -123,7 +275,7 @@ class SuccessPaymentPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          formatCurrency(change),
+                          widget.formatCurrency(widget.change),
                           style: const TextStyle(
                             fontSize: 48,
                             fontWeight: FontWeight.w900,
@@ -142,7 +294,7 @@ class SuccessPaymentPage extends StatelessWidget {
                         style: TextStyle(color: Colors.grey, fontSize: 16),
                       ),
                       Text(
-                        formatCurrency(grandTotal),
+                        widget.formatCurrency(widget.grandTotal),
                         style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
@@ -169,7 +321,7 @@ class SuccessPaymentPage extends StatelessWidget {
                     Expanded(
                       child: _buildActionBtn(
                         context,
-                        "Cetak Struk",
+                        _isPrinting ? "Mencetak..." : "Cetak Struk",
                         const Color(0xFF4285F4),
                         Icons.print_rounded,
                         false,
@@ -195,79 +347,21 @@ class SuccessPaymentPage extends StatelessWidget {
     return SizedBox(
       height: 65,
       child: ElevatedButton.icon(
-        onPressed: isBack
-            ? () => Navigator.of(context).popUntil((route) => route.isFirst)
-            : () {
-                //final printerService = TerminalPrinterService();
-
-                // 1. Mapping Item dari Cart
-                final List<CartItem> itemsForPrinting = cart.values.map((item) {
-                  return CartItem(
-                    itemName: item.itemName,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice,
-                    notes: item.notes, 
-                    stationId: item.stationId, 
-                  );
-                }).toList();
-
-              
-                final mainTransaction = TransactionModel(
-                  orderId: orderId,
-                  outletName: outletName,
-                  outletAddress: outletAddress,
-                  cashierName: cashierName,
-                  customerName: customerName,
-                  tableNumber: tableNumber,
-                  items: itemsForPrinting,
-                  taxBreakdown: List<Map<String, dynamic>>.from(taxBreakdown),
-                  discountAmount: discountAmount,
-                  totalDariHalaman: grandTotal,
-                );
-
-                // Cetak Struk Utuh untuk Kasir / Pelanggan
-                //printerService.printToTerminal(mainTransaction);
-
-                // 3. Kelompokkan item berdasarkan stationId
-                Map<String, List<CartItem>> groupedItems = {};
-                for (var item in itemsForPrinting) {
-                  // Jika ada item yang tidak punya stationId, masukkan ke grup 'Umum'
-                  String sId = item.stationId.isNotEmpty ? item.stationId : 'Umum';
-                  groupedItems.putIfAbsent(sId, () => []).add(item);
-                }
-
-                // 4. Iterasi dan Cetak per Station
-                groupedItems.forEach((stationId, stationItems) {
-                  // Buat objek transaksi khusus yang isinya cuma item untuk station tersebut
-                  final stationTransaction = TransactionModel(
-                    orderId: orderId,
-                    outletName: outletName,
-                    outletAddress: outletAddress,
-                    cashierName: cashierName,
-                    customerName: customerName,
-                    tableNumber: tableNumber,
-                    items: stationItems, 
-                    taxBreakdown: List<Map<String, dynamic>>.from(taxBreakdown),
-                    discountAmount: discountAmount,
-                    totalDariHalaman: grandTotal,
-                  );
-
-                  // TODO: Di file printer_service.dart, Anda sebaiknya membuat method baru 
-                  // seperti `printToStation(stationId, stationTransaction)` agar service
-                  // tahu IP/Koneksi mana yang harus ditembak berdasarkan ID-nya.
-                  
-                  // Sementara menggunakan method lama:
-                  //printerService.printKitchenToTerminal(stationTransaction);
-                });
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Struk Pelanggan & Station Sedang Diproses"),
-                    backgroundColor: Colors.blue,
-                  ),
-                );
-              },
-        icon: Icon(icon, size: 22),
+        onPressed: _isPrinting && !isBack
+            ? null // disable tombol cetak saat sedang mencetak
+            : isBack
+                ? () => Navigator.of(context).popUntil((route) => route.isFirst)
+                : () => _executePrint(), // cetak ulang manual
+        icon: _isPrinting && !isBack
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : Icon(icon, size: 22),
         label: Text(
           label,
           style: const TextStyle(

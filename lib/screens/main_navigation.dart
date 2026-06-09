@@ -420,6 +420,12 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
               _currentIndex = index;
               _globalSearchController.clear();
             });
+            if (index == 2) {
+            _historyKey.currentState?.loadHistory();
+          }
+          if (index == 1) {
+    _shiftKey.currentState?.refreshShift();
+  }
             _scaffoldKey.currentState?.closeDrawer();
           }
         },

@@ -5,7 +5,21 @@ import 'package:flutter/foundation.dart';
 import '../models/print_model.dart'; // Pastikan path model Anda sudah benar
 
 class NetworkPrinterService {
-  
+
+  // =========================================================================
+  // LOGIKA UTAMA CEK JARINGAN (ANTI CRASH / TIMEOUT PROTECTION)
+  // =========================================================================
+  Future<bool> checkPrinterConnection(String ip, int port) async {
+    try {
+      final socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 2));
+      socket.destroy(); 
+      return true; 
+    } catch (e) {
+      debugPrint("🚨 [POS NETWORK CHECK] Printer tidak terjangkau di IP $ip:$port - Error: $e");
+      return false;
+    }
+  }
+
   // Helper format mata uang tanpa simbol Rp
   String _fMoney(double val) {
     return NumberFormat.decimalPattern('id').format(val.toInt());
@@ -33,7 +47,7 @@ class NetworkPrinterService {
         styles: const PosStyles(
           align: PosAlign.center, 
           bold: true, 
-          height: PosTextSize.size2, // FIX: Menggunakan height & width
+          height: PosTextSize.size2, 
           width: PosTextSize.size2
         ),
       );
@@ -61,7 +75,6 @@ class NetworkPrinterService {
 
         // Catatan item ('notes')
         if (item.notes.trim().isNotEmpty) {
-          // FIX: Mengganti italic dengan fontType B agar teks catatan terlihat beda
           bytes += generator.text("  * ${item.notes}", styles: const PosStyles(fontType: PosFontType.fontB));
         }
       }
@@ -139,7 +152,6 @@ class NetworkPrinterService {
       bytes += generator.hr();
 
       for (var item in transaction.items) {
-        // Cetak item dengan ukuran teks besar (Size 2)
         bytes += generator.row([
           PosColumn(text: item.itemName.toUpperCase(), width: 9, styles: const PosStyles(bold: true, height: PosTextSize.size2, width: PosTextSize.size2)),
           PosColumn(text: "x${item.quantity}", width: 3, styles: const PosStyles(align: PosAlign.right, bold: true, height: PosTextSize.size2, width: PosTextSize.size2)),

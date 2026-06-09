@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/printer_device.dart';
 
 class StorageService {
   static const String _keyToken = 'token';
@@ -15,6 +16,9 @@ class StorageService {
   static const String _keyShiftSchedule = 'shift_schedule';
   static const String _keyLastShiftUserId = 'last_shift_user_id';
   static const String _keyPrinterIp = 'printer_ip';
+  static const String _keyPort = 'printer_port';
+  static const String _keyPadding = 'printer_padding';
+  static const String _keyCardWidth = 'printer_card_width';
 
   // --- 1. FUNGSI TOKEN ---
   static Future<void> saveToken(String token) async {
@@ -201,15 +205,62 @@ class StorageService {
     await prefs.remove(_keyLastShiftUserId);
   }
 
-  // --- 7. FUNGSI PRINTER ---
+  // --- 7. FUNGSI PRINTER (IP) ---
   static Future<void> savePrinterIp(String ip) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyPrinterIp, ip);
+    await prefs.setString(_keyPrinterIp, ip); // Pastikan _keyPrinterIp sudah dideklarasikan di atas
   }
 
   static Future<String?> getPrinterIp() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyPrinterIp);
   }
+
+  // --- PORT ---
+  static Future<void> savePrinterPort(int port) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyPort, port);
+  }
   
+  static Future<int> getPrinterPort() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_keyPort) ?? 9100; // default 9100 jika kosong
+  }
+
+  // --- PADDING HALAMAN ---
+  static Future<void> savePaddingSize(double size) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keyPadding, size);
+  }
+  
+  static Future<double> getPaddingSize() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_keyPadding) ?? 32.0; // default 32.0 jika kosong
+  }
+
+  // --- LEBAR KOTAK CARD ---
+  static Future<void> saveCardWidth(double width) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keyCardWidth, width);
+  }
+  
+  static Future<double> getCardWidth() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_keyCardWidth) ?? 320.0; // default 320.0 jika kosong
+  }
+
+  // ---  FUNGSI PRINTER LIST ---
+  static const String _keyPrinterList = 'printer_list';
+
+  static Future<void> savePrinterList(List<PrinterDevice> printers) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPrinterList, PrinterDevice.encodeList(printers));
+  }
+
+  static Future<List<PrinterDevice>> getPrinterList() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_keyPrinterList);
+    if (jsonStr == null || jsonStr.isEmpty) return [];
+    return PrinterDevice.decodeList(jsonStr);
+  }
 }

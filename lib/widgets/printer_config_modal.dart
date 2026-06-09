@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../constants/style.dart';
 import '../services/storage_service.dart';
+import '../models/printer_device.dart';
+
 
 class PrinterConfigModal extends StatefulWidget {
-  const PrinterConfigModal({super.key});
+  final PrinterDevice? existingPrinter;
+
+   const PrinterConfigModal({super.key, this.existingPrinter = null});
 
   @override
   State<PrinterConfigModal> createState() => _PrinterConfigModalState();
@@ -25,27 +29,52 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
   @override
   void initState() {
     super.initState();
-    // Inisialisasi nilai bawaan form
-    _nameController.text = "Kasir Utama";
-    _ipController.text = "192.168.1.87"; 
-    _portController.text = "9100";
-    _charsController.text = "32";
-    _loadSavedPrinterData();
-  }
-
-  // Memuat data IP printer yang tersimpan di lokal device (jika ada)
-  Future<void> _loadSavedPrinterData() async {
-    final savedIp = await StorageService.getPrinterIp();
-    if (savedIp != null && savedIp.isNotEmpty) {
-      setState(() {
-        _ipController.text = savedIp;
-      });
+    final p = widget.existingPrinter;
+    if (p != null) {
+      // Mode edit: prefill form dari data printer yang dipilih
+      _nameController.text = p.name;
+      _ipController.text = p.ip;
+      _portController.text = p.port.toString();
+      _charsController.text = "32";
+      selectedType = p.type;
+      selectedConn = p.conn;
+      isAutoCut = p.isAutoCut;
+      isActive = p.isActive;
+    } else {
+      // Mode tambah baru: nilai default + load dari storage
+      _nameController.text = "Kasir Baru";
+      _ipController.text = "192.168.1.";
+      _portController.text = "9100";
+      _charsController.text = "32";
+      _loadSavedPrinterData();
     }
   }
 
-  // Menyimpan pengaturan IP ke StorageService lokal
+  // 🔥 PERBAIKAN: Memuat semua data (IP, Port, Chars) dari StorageService
+  Future<void> _loadSavedPrinterData() async {
+    final savedIp = await StorageService.getPrinterIp();
+    final savedPort = await StorageService.getPrinterPort(); // Pastikan fungsi ini ada di StorageService
+    
+    // Asumsi: Anda menyimpan input "Chars" atau "Padding" di StorageService
+    // Jika Anda menggunakan getPaddingSize dari contoh sebelumnya, gunakan itu.
+    final savedChars = await StorageService.getPaddingSize(); 
+
+    setState(() {
+      if (savedIp != null && savedIp.isNotEmpty) {
+        _ipController.text = savedIp;
+      }
+      _portController.text = savedPort.toString();
+      _charsController.text = savedChars.toInt().toString(); 
+    });
+  }
+
+  // 🔥 PERBAIKAN: Menyimpan SEMUA pengaturan ke StorageService lokal
   Future<void> _savePrinterSettings() async {
     final inputIp = _ipController.text.trim();
+    final inputPort = int.tryParse(_portController.text.trim()) ?? 9100;
+    final inputChars = double.tryParse(_charsController.text.trim()) ?? 32.0;
+    final inputName = _nameController.text.trim();
+
     if (inputIp.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("IP Address tidak boleh kosong!")),
@@ -53,13 +82,30 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
       return;
     }
 
+    // Buat objek PrinterDevice dari input form
+    final newPrinter = PrinterDevice(
+      name: inputName.isEmpty ? "Printer Baru" : inputName,
+      status: isActive ? 'Online' : 'Offline',
+      type: selectedType,
+      conn: selectedConn,
+      ip: selectedConn == 'Network Printer' ? inputIp : 'BT:00:11:22',
+      port: inputPort,
+      stationName: 'Kasir (Semua Item)',
+      isAutoCut: isAutoCut,
+      isActive: isActive,
+    );
+
+    // Tetap simpan IP & Port aktif agar test print tetap berfungsi
     await StorageService.savePrinterIp(inputIp);
+    await StorageService.savePrinterPort(inputPort);
+    await StorageService.savePaddingSize(inputChars);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Berhasil menyimpan perangkat dengan IP: $inputIp")),
+        SnackBar(content: Text("Berhasil menyimpan: ${newPrinter.name}")),
       );
-      Navigator.pop(context, true); // Mengembalikan nilai true untuk me-refresh layar utama
+      // Return PrinterDevice (bukan bool) ke PrinterScreen
+      Navigator.pop(context, newPrinter);
     }
   }
 
@@ -78,7 +124,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
       backgroundColor: Colors.transparent,
       child: Center(
         child: Container(
-          width: 550, // Ukuran optimal tablet kesukaan Anda
+          width: 550, // Ukuran optimal tablet
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(28),

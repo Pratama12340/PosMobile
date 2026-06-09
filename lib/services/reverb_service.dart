@@ -141,23 +141,23 @@ class ReverbService {
     debugPrint("✅ [REVERB] Subscribe ke: $channelName");
   }
 
-  void _bindToChannel(String channelName, String eventName, Function(dynamic) onEventReceived) {
+ void _bindToChannel(String channelName, String eventName, Function(dynamic) onEventReceived) {
     final channel = _channels[channelName];
     if (channel == null) return;
 
-    // 🛠️ FIX 1: Otomatis tambahkan titik (.) di awal jika event menggunakan dot notation custom (misal: order.created)
-    String realEventName = eventName;
-    if (!realEventName.startsWith('.')) {
-      realEventName = '.$realEventName';
-    }
+    // 🛠️ HAPUS ATAU KOMENTARI BAGIAN INI
+    // String realEventName = eventName;
+    // if (!realEventName.startsWith('.')) {
+    //   realEventName = '.$realEventName';
+    // }
 
-    channel.bind(realEventName, (PusherEvent? event) {
+    // Gunakan eventName langsung dari parameter
+    channel.bind(eventName, (PusherEvent? event) {
       debugPrint("⚡ [REVERB EVENT RECEIVED]: ${event?.eventName}");
       if (event?.data != null) {
         try {
           final decodedData = jsonDecode(event!.data.toString());
           
-          // 🛠️ FIX 2: Saring data agar langsung mengirim objek order di dalam key 'order' ke fungsi callback
           if (decodedData is Map && decodedData.containsKey('order')) {
             onEventReceived(decodedData['order']);
           } else {
@@ -168,7 +168,7 @@ class ReverbService {
         }
       }
     });
-    debugPrint("✅ [REVERB] Bind kustom event $realEventName di $channelName");
+    debugPrint("✅ [REVERB] Bind kustom event $eventName di $channelName");
   }
 
   void bindEvent(String channelName, String eventName, Function(dynamic) onEventReceived) {

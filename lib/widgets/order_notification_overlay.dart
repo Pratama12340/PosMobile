@@ -109,20 +109,23 @@ class _OrderNotificationLayerState extends State<OrderNotificationLayer> {
     return Stack(
       children: [
         widget.child,
-        // Overlay notifikasi — pojok kanan atas
+        // ✅ PERUBAHAN: tengah atas, muncul dari atas ke bawah
         Positioned(
           top: 95,   // tepat di bawah TopBar (85px) + sedikit margin
-          right: 16,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: _active
-                .map((a) => _NotifCard(
-                      key: a.key,
-                      notif: a.notif,
-                      onDismiss: () => _dismiss(a.key),
-                    ))
-                .toList(),
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: _active
+                  .map((a) => _NotifCard(
+                        key: a.key,
+                        notif: a.notif,
+                        onDismiss: () => _dismiss(a.key),
+                      ))
+                  .toList(),
+            ),
           ),
         ),
       ],
@@ -167,11 +170,14 @@ class _NotifCardState extends State<_NotifCard>
       duration: const Duration(milliseconds: 400),
     );
 
-    _slide = Tween<Offset>(begin: const Offset(1.3, 0), end: Offset.zero)
+    // ✅ PERUBAHAN: slide dari atas (Y negatif) bukan dari kanan
+    _slide = Tween<Offset>(begin: const Offset(0, -1.3), end: Offset.zero)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
 
-    _fade = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _ctrl, curve: const Interval(0, 0.5)));
+    _fade = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: const Interval(0, 0.5)));
 
     _ctrl.forward();
 
@@ -210,14 +216,14 @@ class _NotifCardState extends State<_NotifCard>
 
   String _fmtRp(double v) {
     final s = v.toInt().toString();
-    final buf = StringBuffer('Rp ');
+    final buf = StringBuffer();
     int c = 0;
     for (int i = s.length - 1; i >= 0; i--) {
       if (c > 0 && c % 3 == 0) buf.write('.');
       buf.write(s[i]);
       c++;
     }
-    return buf.toString().split('').reversed.join('');
+    return 'Rp ${buf.toString().split('').reversed.join('')}';
   }
 
   @override
@@ -379,8 +385,8 @@ class _NotifCardState extends State<_NotifCard>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Total',
-                                    style: const TextStyle(
+                                const Text('Total',
+                                    style: TextStyle(
                                         color: Colors.black54, fontSize: 11)),
                                 Text(
                                   _fmtRp(widget.notif.totalPrice!),

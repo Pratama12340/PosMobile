@@ -27,15 +27,8 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
   late final TextEditingController portController;
   late final TextEditingController charsController;
 
-  // Controllers
-  late final TextEditingController nameController;
-  late final TextEditingController ipController;
-  late final TextEditingController portController;
-  late final TextEditingController charsController;
-
   // States
   String selectedType = "Thermal Printer";
-  String selectedMode = "Esc/Pos Mode";
   String selectedMode = "Esc/Pos Mode";
   String selectedConn = "Network Printer";
   bool isAutoCut = true;
@@ -356,10 +349,6 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                       _buildStationDropdown(),
 
                       // Dynamic network scan / fields
-                      // Station Dropdown selection
-                      _buildStationDropdown(),
-
-                      // Dynamic network scan / fields
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
                         child: selectedConn == "Network Printer"
@@ -369,8 +358,6 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
 
                       _buildModernTextField(
                         "Nama Printer",
-                        nameController,
-                        hint: "Contoh: Kasir Lantai 1",
                         nameController,
                         hint: "Contoh: Kasir Lantai 1",
                       ),
@@ -383,18 +370,12 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                               charsController,
                               hint: "48",
                               keyboardType: TextInputType.number,
-                              charsController,
-                              hint: "48",
-                              keyboardType: TextInputType.number,
                             ),
                           ),
                           const SizedBox(width: 20),
                           Expanded(
                             child: _buildModernTextField(
                               "Port Printer",
-                              portController,
-                              hint: "9100",
-                              keyboardType: TextInputType.number,
                               portController,
                               hint: "9100",
                               keyboardType: TextInputType.number,
@@ -537,7 +518,6 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                   fontWeight: FontWeight.w500,
                 ),
                 onChanged: isActive ? onChanged : null,
-                onChanged: isActive ? onChanged : null,
                 items: items.map((String item) {
                   return DropdownMenuItem<String>(
                     value: item,
@@ -638,14 +618,10 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
             controller: controller,
             keyboardType: keyboardType,
             enabled: isActive,
-            controller: controller,
-            keyboardType: keyboardType,
-            enabled: isActive,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
               filled: true,
-              fillColor: isActive ? Colors.grey.shade50 : Colors.grey.shade200,
               fillColor: isActive ? Colors.grey.shade50 : Colors.grey.shade200,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,

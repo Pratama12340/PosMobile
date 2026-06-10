@@ -3,7 +3,6 @@ import '../models/order_model.dart';
 import '../constants/style.dart';
 import '../services/printer_service.dart';
 import '../services/storage_service.dart';
-import '../services/storage_service.dart';
 import '../models/print_model.dart';
 import '../models/printer_device.dart';
 

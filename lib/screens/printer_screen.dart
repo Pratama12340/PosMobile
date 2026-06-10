@@ -488,9 +488,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
               child: Column(
                 children: [
                   _buildInfoRow("Station", data.stationName),
-                  _buildInfoRow("Station", data.stationName),
                   const SizedBox(height: 8),
-                  _buildInfoRow("Koneksi", data.conn),
                   _buildInfoRow("Koneksi", data.conn),
                   const SizedBox(height: 8),
                   _buildInfoRow("Address", "${data.ip}:${data.port}"),
@@ -624,15 +622,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-            textAlign: TextAlign.right,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(

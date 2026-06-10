@@ -66,5 +66,14 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Aplikasi ini membutuhkan akses jaringan lokal untuk menerima notifikasi pesanan secara real-time dari server.</string>
 </dict>
 </plist>
+

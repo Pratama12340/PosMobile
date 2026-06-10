@@ -437,47 +437,37 @@ class ApiService {
 
 // SEHARUSNYA — tambah outlet_id + per_page kecil
 static Future<List<Order>> getPendingOrders() async {
-  try {
-    final headers = await _getHeaders();
-    final int? outletId = await StorageService.getOutletId(); // ← tambah ini
-    List<Order> allOrders = [];
-    int currentPage = 1;
+    try {
+      final headers = await _getHeaders();
+      final int? outletId = await StorageService.getOutletId(); 
 
-    while (true) {
+      // 🔥 Tidak perlu perulangan while(true) lagi. 
+      // Ambil page 1 saja dengan per_page besar untuk performa instan.
       final response = await http.get(
         Uri.parse(
-          '$baseUrl/orders?status=pending&outlet_id=$outletId&per_page=20&page=$currentPage',
-          // ← outlet_id filter + per_page diperkecil dari 100 ke 20
+          '$baseUrl/orders?status=pending&outlet_id=$outletId&per_page=100&page=1',
         ),
         headers: headers,
-      );
+      ).timeout(const Duration(seconds: 10));
 
-      if (response.statusCode != 200) break;
+      if (response.statusCode != 200) return [];
 
       final result = jsonDecode(response.body);
       List<dynamic> rawData = [];
-      int lastPage = 1;
 
       if (result['data'] is List) {
         rawData = result['data'];
-        lastPage = result['last_page'] ?? 1;
       } else if (result['data'] is Map && result['data']['data'] is List) {
         rawData = result['data']['data'];
-        lastPage = result['data']['last_page'] ?? 1;
       }
 
-      allOrders.addAll(rawData.map((json) => Order.fromJson(json)).toList());
-
-      if (currentPage >= lastPage) break;
-      currentPage++;
+      return rawData.map((json) => Order.fromJson(json)).toList();
+      
+    } catch (e) {
+      debugPrint('getPendingOrders error: $e');
+      return [];
     }
-
-    return allOrders;
-  } catch (e) {
-    debugPrint('getPendingOrders error: $e');
-    return [];
   }
-}
 
   // -------------------------------------------------------------------------
   // 5D. ACCEPT ORDER
@@ -548,61 +538,83 @@ static Future<List<Order>> getPendingOrders() async {
   // -------------------------------------------------------------------------
 
   static Future<List<Order>> fetchHistory() async {
-    try {
-      final headers = await _getHeaders();
-      final int? outletId = await StorageService.getOutletId();
-      final String? shiftId = await StorageService.getCurrentShiftId();
+  try {
+    final headers = await _getHeaders();
+    final int? outletId = await StorageService.getOutletId();
+    final String? shiftId = await StorageService.getCurrentShiftId();
 
-      List<Order> allOrders = [];
-      int currentPage = 1;
-      int lastPage = 1;
-      const int maxRetry = 3;
+    List<Order> allOrders = [];
+    int currentPage = 1;
+    int lastPage = 1;
+    const int maxRetry = 3;
 
-      do {
-        int attempt = 0;
-        http.Response? response;
+    do {
+      int attempt = 0;
+      http.Response? response;
 
-        while (attempt < maxRetry) {
-          try {
-            response = await http.get(
-              Uri.parse(
-                '$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=50&page=$currentPage',
-              ),
-              headers: headers,
-            ).timeout(const Duration(seconds: 15));
-            break;
-          } catch (e) {
-            attempt++;
-            debugPrint("⚠️ fetchHistory page $currentPage attempt $attempt gagal: $e");
-            if (attempt >= maxRetry) rethrow;
-            await Future.delayed(Duration(milliseconds: 500 * attempt));
-          }
+      while (attempt < maxRetry) {
+        try {
+          // PERUBAHAN: Ubah per_page menjadi lebih besar (misal 100 atau 200) agar mengurangi jumlah HTTP Request
+          response = await http.get(
+            Uri.parse(
+              '$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=100&page=$currentPage',
+            ),
+            headers: headers,
+          ).timeout(const Duration(seconds: 15));
+          break;
+        } catch (e) {
+          attempt++;
+          if (attempt >= maxRetry) rethrow;
         }
+      }
 
-        if (response == null || response.statusCode != 200) break;
+      if (response == null || response.statusCode != 200) break;
 
-        final result = jsonDecode(response.body);
-        final dynamic paginatedData = (result['data'] is Map) ? result['data'] : result;
-        final List<dynamic> pageData = (paginatedData['data'] is List) ? paginatedData['data'] : [];
+      final result = jsonDecode(response.body);
+      final dynamic paginatedData = (result['data'] is Map) ? result['data'] : result;
+      final List<dynamic> pageData = (paginatedData['data'] is List) ? paginatedData['data'] : [];
 
-        lastPage = paginatedData['last_page'] ?? 1;
-        allOrders.addAll(pageData.map((json) => Order.fromJson(json)).toList());
-        debugPrint("📦 Page $currentPage/$lastPage — ${pageData.length} orders");
+      lastPage = paginatedData['last_page'] ?? 1;
+      allOrders.addAll(pageData.map((json) => Order.fromJson(json)).toList());
 
-        currentPage++;
+      currentPage++;
 
-        if (currentPage <= lastPage) {
-          await Future.delayed(const Duration(milliseconds: 200));
-        }
-      } while (currentPage <= lastPage);
+      // PERUBAHAN: HAPUS await Future.delayed(const Duration(milliseconds: 200));
 
-      debugPrint("✅ Total semua data: ${allOrders.length}");
-      return allOrders;
-    } catch (e) {
-      debugPrint("💥 fetchHistory: $e");
-      return [];
-    }
+    } while (currentPage <= lastPage);
+
+    return allOrders;
+  } catch (e) {
+    debugPrint("💥 fetchHistory: $e");
+    return [];
   }
+}
+
+// Tarik data history HANYA untuk satu halaman spesifik
+static Future<List<Order>> fetchHistoryPage({required int page, int perPage = 20}) async {
+  try {
+    final headers = await _getHeaders();
+    final int? outletId = await StorageService.getOutletId();
+    final String? shiftId = await StorageService.getCurrentShiftId();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=$perPage&page=$page'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      final dynamic paginatedData = (result['data'] is Map) ? result['data'] : result;
+      final List<dynamic> pageData = (paginatedData['data'] is List) ? paginatedData['data'] : [];
+      
+      return pageData.map((json) => Order.fromJson(json)).toList();
+    }
+    return [];
+  } catch (e) {
+    debugPrint("💥 fetchHistoryPage error: $e");
+    return [];
+  }
+}
 
   // Dipakai oleh edit_dialog.dart — jangan hapus
   static Future<Order?> fetchHistoryDetail(int id) async {

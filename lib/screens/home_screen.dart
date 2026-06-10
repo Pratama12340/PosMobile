@@ -283,64 +283,78 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   void _togglePendingPanel() async {
-    setState(() {
-      if (_isPendingPanelVisible) {
-        _isPendingPanelVisible = false;
-      } else {
-        if (_cart.isNotEmpty) {
-          if (!_isPendingOrderLoaded) {
-            _drafts.add({
-              'cart': Map<int, OrderItem>.from(_cart),
-              'customerName': _currentCustomerName ?? "",
-              'tableNumber': _currentTableNumber ?? "",
-              'tableId': _currentTableId,
-            });
-          }
-          _cart.clear();
-          _currentCustomerName = null;
-          _currentTableNumber = null;
-          _currentTableId = null;
-          _isPendingOrderLoaded = false;
-          _currentPendingOrderId = null;
-          _currentPendingDiscountId = null;
-        }
-
-        _isDraftPanelVisible = false;
-        widget.onCartToggled?.call(false);
-
-        _isPendingPanelVisible = true;
-        _isLoadingPendingOrders = true;
-      }
-    });
-
+  setState(() {
     if (_isPendingPanelVisible) {
-      try {
-        final freshPending = await ApiService.getPendingOrders();
-        if (mounted) {
-          setState(() {
-            _pendingOrders = freshPending
-                .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
-                .toList();
-            _isLoadingPendingOrders = false;
+      _isPendingPanelVisible = false;
+    } else {
+      if (_cart.isNotEmpty) {
+        if (!_isPendingOrderLoaded) {
+          _drafts.add({
+            'cart': Map<int, OrderItem>.from(_cart),
+            'customerName': _currentCustomerName ?? "",
+            'tableNumber': _currentTableNumber ?? "",
+            'tableId': _currentTableId,
           });
         }
-      } catch (e) {
+        _cart.clear();
+        _currentCustomerName = null;
+        _currentTableNumber = null;
+        _currentTableId = null;
+        _isPendingOrderLoaded = false;
+        _currentPendingOrderId = null;
+        _currentPendingDiscountId = null;
+      }
+
+      _isDraftPanelVisible = false;
+      widget.onCartToggled?.call(false);
+
+      _isPendingPanelVisible = true;
+      _isLoadingPendingOrders = true;
+    }
+  });
+
+  if (_isPendingPanelVisible) {
+    try {
+      // LANGKAH 1: Ambil dari cache dulu — tampil instan jika cache ada
+      final cachedOrders = await ApiService.getPendingOrders();
+      if (mounted) {
+        setState(() {
+          _pendingOrders = cachedOrders
+              .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
+              .toList();
+          _isLoadingPendingOrders = false; // spinner hilang segera
+        });
+      }
+
+      // LANGKAH 2: Refresh data terbaru di background, tanpa spinner
+      ApiService.getPendingOrders(forceRefresh: true).then((freshOrders) {
         if (mounted) {
-          setState(() => _isLoadingPendingOrders = false);
+          setState(() {
+            _pendingOrders = freshOrders
+                .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
+                .toList();
+          });
         }
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingPendingOrders = false);
       }
     }
   }
+}
 
   Future<void> _acceptOrder(Order order) async {
-    debugPrint("Menghubungi API accept untuk Order ID: ${order.id}");
-    final success = await ApiService.acceptOrder(order.id);
-    if (success && mounted) {
-      setState(() {
-        _dismissedOrderIds.add(order.id);
-        _pendingOrders.removeWhere((item) => item.id == order.id);
-        _paidOrders.removeWhere((item) => item.id == order.id);
-      });
+  debugPrint("Menghubungi API accept untuk Order ID: ${order.id}");
+  final success = await ApiService.acceptOrder(order.id);
+  if (success && mounted) {
+    ApiService.invalidatePendingCache(); // ← TAMBAH INI
+
+    setState(() {
+      _dismissedOrderIds.add(order.id);
+      _pendingOrders.removeWhere((item) => item.id == order.id);
+      _paidOrders.removeWhere((item) => item.id == order.id);
+    });
 
       await Future.wait([
         _refreshPendingOrdersSilently(),
@@ -384,17 +398,18 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refreshPendingOrdersSilently() async {
-    try {
-      final freshOrders = await ApiService.getPendingOrders();
-      if (mounted) {
-        setState(() => _pendingOrders = freshOrders
-            .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
-            .toList());
-      }
-    } catch (e) {
-      debugPrint('⚠️ Gagal refresh pending orders: $e');
+  try {
+    // forceRefresh: true karena ini dipanggil setelah ada perubahan data
+    final freshOrders = await ApiService.getPendingOrders(forceRefresh: true);
+    if (mounted) {
+      setState(() => _pendingOrders = freshOrders
+          .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
+          .toList());
     }
+  } catch (e) {
+    debugPrint('⚠️ Gagal refresh pending orders: $e');
   }
+}
 
   Future<void> _refreshPaidOrdersSilently() async {
     try {
@@ -614,29 +629,28 @@ class HomeScreenState extends State<HomeScreen> {
                         });
                       },
                       onCheckoutSuccess: (res) {
-                        setState(() {
-                          _cart.forEach((productId, cartItem) {
-                            int productIndex = _allProducts.indexWhere(
-                              (p) => p.id == productId,
-                            );
-                            if (productIndex != -1) {
-                              _allProducts[productIndex].stock -= cartItem.quantity;
-                              if (_allProducts[productIndex].stock < 0) {
-                                _allProducts[productIndex].stock = 0;
-                              }
-                            }
-                          });
-                          _cart.clear();
-                          _currentCustomerName = null;
-                          _currentTableNumber = null;
-                          _currentTableId = null;
-                          _isPendingOrderLoaded = false;
-                          _currentPendingOrderId = null;
-                          _currentPendingDiscountId = null;
-                          widget.onCartToggled?.call(false);
-                          _loadInitialData();
-                        });
-                      },
+  ApiService.invalidatePendingCache(); // ← TAMBAH INI sebelum setState
+  setState(() {
+    _cart.forEach((productId, cartItem) {
+      int productIndex = _allProducts.indexWhere((p) => p.id == productId);
+      if (productIndex != -1) {
+        _allProducts[productIndex].stock -= cartItem.quantity;
+        if (_allProducts[productIndex].stock < 0) {
+          _allProducts[productIndex].stock = 0;
+        }
+      }
+    });
+    _cart.clear();
+    _currentCustomerName = null;
+    _currentTableNumber = null;
+    _currentTableId = null;
+    _isPendingOrderLoaded = false;
+    _currentPendingOrderId = null;
+    _currentPendingDiscountId = null;
+    widget.onCartToggled?.call(false);
+    _loadInitialData();
+  });
+},
                       onSaveDraft: (name, table, id) =>
                           _saveToDraft(name, table, id),
                       onCancelPendingMode: () {
@@ -657,6 +671,26 @@ class HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  // TAMBAH FUNGSI BARU INI
+// Dipanggil dari main_navigation saat Reverb event masuk
+Future<void> updatePendingPanelIfOpen() async {
+  // Hanya update jika panel sedang terbuka
+  if (!_isPendingPanelVisible) return;
+
+  try {
+    final freshOrders = await ApiService.getPendingOrders(forceRefresh: true);
+    if (mounted) {
+      setState(() {
+        _pendingOrders = freshOrders
+            .where((o) => !_dismissedOrderIds.contains(o.id) && _isToday(o))
+            .toList();
+      });
+    }
+  } catch (e) {
+    debugPrint('⚠️ Gagal update panel pending: $e');
+  }
+}
 
   Widget _buildDraftButton() {
     return InkWell(

@@ -9,9 +9,15 @@ import '../models/rekap_model.dart';
 import 'printer_service.dart';
 import '../models/print_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
 class ApiService {
   static const String baseUrl = 'https://api.etres.my.id/api/v1';
+
+  static List<Order>? _pendingCache;
+  static DateTime? _pendingCacheTime;
+  static const _cacheDuration = Duration(seconds: 30);
+
 
   // -------------------------------------------------------------------------
   // HELPER
@@ -436,47 +442,111 @@ class ApiService {
   }
 
 // SEHARUSNYA — tambah outlet_id + per_page kecil
-static Future<List<Order>> getPendingOrders() async {
+static Future<List<Order>> getPendingOrders({
+  bool forceRefresh = false,
+}) async {
+  // 1. Kembalikan cache jika masih fresh
+  if (!forceRefresh &&
+      _pendingCache != null &&
+      _pendingCacheTime != null &&
+      DateTime.now().difference(_pendingCacheTime!) < _cacheDuration) {
+    debugPrint('✅ [PENDING] Pakai cache (${_pendingCache!.length} orders)');
+    return List.from(_pendingCache!);
+  }
+
   try {
     final headers = await _getHeaders();
-    final int? outletId = await StorageService.getOutletId(); // ← tambah ini
-    List<Order> allOrders = [];
-    int currentPage = 1;
+    final int? outletId = await StorageService.getOutletId();
 
-    while (true) {
-      final response = await http.get(
-        Uri.parse(
-          '$baseUrl/orders?status=pending&outlet_id=$outletId&per_page=20&page=$currentPage',
-          // ← outlet_id filter + per_page diperkecil dari 100 ke 20
-        ),
-        headers: headers,
-      );
+    // 2. Fetch halaman pertama — tampil ke user secepat mungkin
+    final firstPage = await _fetchPendingPage(
+      headers: headers,
+      outletId: outletId,
+      page: 1,
+    );
 
-      if (response.statusCode != 200) break;
+    final List<Order> result = List.from(firstPage.orders);
+    final int totalPages = firstPage.lastPage;
 
-      final result = jsonDecode(response.body);
-      List<dynamic> rawData = [];
-      int lastPage = 1;
+    debugPrint('📦 [PENDING] Page 1: ${result.length} orders, total $totalPages hal.');
 
-      if (result['data'] is List) {
-        rawData = result['data'];
-        lastPage = result['last_page'] ?? 1;
-      } else if (result['data'] is Map && result['data']['data'] is List) {
-        rawData = result['data']['data'];
-        lastPage = result['data']['last_page'] ?? 1;
-      }
-
-      allOrders.addAll(rawData.map((json) => Order.fromJson(json)).toList());
-
-      if (currentPage >= lastPage) break;
-      currentPage++;
+    // 3. Jika hanya 1 halaman, langsung simpan cache dan return
+    if (totalPages <= 1) {
+      _pendingCache = result;
+      _pendingCacheTime = DateTime.now();
+      return result;
     }
 
-    return allOrders;
+    // 4. Fetch sisa halaman PARALEL, batch 3 request bersamaan
+    final remainingPages = List.generate(totalPages - 1, (i) => i + 2);
+    const batchSize = 3;
+
+    for (int i = 0; i < remainingPages.length; i += batchSize) {
+      final batch = remainingPages.skip(i).take(batchSize).toList();
+
+      final batchResults = await Future.wait(
+        batch.map((page) => _fetchPendingPage(
+              headers: headers,
+              outletId: outletId,
+              page: page,
+            ).catchError((_) => _PendingPageResult(orders: [], lastPage: 1))),
+      );
+
+      for (final pageResult in batchResults) {
+        result.addAll(pageResult.orders);
+      }
+    }
+
+    _pendingCache = result;
+    _pendingCacheTime = DateTime.now();
+    debugPrint('✅ [PENDING] Total ${result.length} orders dari $totalPages halaman');
+    return result;
   } catch (e) {
-    debugPrint('getPendingOrders error: $e');
-    return [];
+    debugPrint('💥 getPendingOrders error: $e');
+    return _pendingCache ?? []; // fallback ke cache lama jika ada
   }
+}
+
+// Helper: fetch satu halaman
+static Future<_PendingPageResult> _fetchPendingPage({
+  required Map<String, String> headers,
+  required int? outletId,
+  required int page,
+}) async {
+  final response = await http.get(
+    Uri.parse(
+      '$baseUrl/orders?status=pending&outlet_id=$outletId&per_page=20&page=$page',
+    ),
+    headers: headers,
+  ).timeout(const Duration(seconds: 10));
+
+  if (response.statusCode != 200) {
+    return _PendingPageResult(orders: [], lastPage: 1);
+  }
+
+  final result = jsonDecode(response.body);
+  List<dynamic> rawData = [];
+  int lastPage = 1;
+
+  if (result['data'] is List) {
+    rawData = result['data'];
+    lastPage = result['last_page'] ?? 1;
+  } else if (result['data'] is Map && result['data']['data'] is List) {
+    rawData = result['data']['data'];
+    lastPage = result['data']['last_page'] ?? 1;
+  }
+
+  return _PendingPageResult(
+    orders: rawData.map((json) => Order.fromJson(json)).toList(),
+    lastPage: lastPage,
+  );
+}
+
+// Invalidasi cache — panggil setelah checkout / accept / reverb event
+static void invalidatePendingCache() {
+  _pendingCache = null;
+  _pendingCacheTime = null;
+  debugPrint('🗑️ [PENDING] Cache diinvalidasi');
 }
 
   // -------------------------------------------------------------------------
@@ -1050,4 +1120,10 @@ static Future<List<Order>> fetchHistoryPage({required int page, int perPage = 20
       return [];
     }
   }
+}
+
+class _PendingPageResult {
+  final List<Order> orders;
+  final int lastPage;
+  _PendingPageResult({required this.orders, required this.lastPage});
 }

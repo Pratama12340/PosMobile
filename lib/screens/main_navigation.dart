@@ -10,6 +10,7 @@ import '../widgets/opening_cash_dialog.dart';
 import '../services/reverb_service.dart';
 import '../utils/app_keys.dart';
 import '../widgets/order_notification_overlay.dart';
+import '../services/api_service.dart'; 
 
 class MainNavigationScaffold extends StatefulWidget {
   final bool requireCashInput;
@@ -138,38 +139,30 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       channelName: channelName,
       eventName: 'order.created', // 🛠️ FIX: Tidak perlu titik manual, service baru sudah handle otomatis
       onEventReceived: (data) {
-        debugPrint('⚡ [ORDER CREATED RAW]: $data');
+  debugPrint('⚡ [ORDER CREATED RAW]: $data');
 
-        final orderData = _parseOrderData(data);
-        debugPrint('⚡ [ORDER CREATED PARSED]: $orderData');
+  final orderData = _parseOrderData(data);
+  final String paymentMethod = orderData['payment_method']?.toString() ?? '';
+  final String customerName = orderData['customer_name']?.toString() ?? 'Pelanggan';
+  final double? totalPrice = orderData['total_price'] != null
+      ? double.tryParse(orderData['total_price'].toString())
+      : null;
+  final String? invoiceNo = orderData['invoice_number']?.toString() ??
+      orderData['invoice_no']?.toString();
 
-        final String paymentMethod =
-            orderData['payment_method']?.toString() ?? '';
-        final String customerName =
-            orderData['customer_name']?.toString() ?? 'Pelanggan';
-        final double? totalPrice = orderData['total_price'] != null
-            ? double.tryParse(orderData['total_price'].toString())
-            : null;
-        final String? invoiceNo =
-            orderData['invoice_number']?.toString() ??
-            orderData['invoice_no']?.toString();
+  ApiService.invalidatePendingCache();              // ← TAMBAH: buang cache dulu
+  _homeKey.currentState?.refreshPendingOrdersSilently();
+  _homeKey.currentState?.updatePendingPanelIfOpen(); // ← TAMBAH: update panel jika terbuka
+  _historyKey.currentState?.loadHistory();
+  _shiftKey.currentState?.refreshShift();
 
-        debugPrint(
-            '⚡ [CREATED PARSED] method=$paymentMethod customer=$customerName total=$totalPrice');
-
-        // Refresh UI
-        _homeKey.currentState?.refreshPendingOrdersSilently();
-        _historyKey.currentState?.loadHistory();
-        _shiftKey.currentState?.refreshShift();
-
-        // Tembak notifikasi overlay
-        _fireNotification(
-          paymentMethod: paymentMethod,
-          customerName: customerName,
-          totalPrice: totalPrice,
-          invoiceNo: invoiceNo,
-        );
-      },
+  _fireNotification(
+    paymentMethod: paymentMethod,
+    customerName: customerName,
+    totalPrice: totalPrice,
+    invoiceNo: invoiceNo,
+  );
+},
     );
 
     // ── Event: status pesanan berubah (QRIS terkonfirmasi → paid) ──
@@ -180,7 +173,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         debugPrint('⚡ [ORDER UPDATED RAW]: $data');
 
         // Refresh UI dulu
+        ApiService.invalidatePendingCache();               
         _homeKey.currentState?.refreshPendingOrdersSilently();
+        _homeKey.currentState?.updatePendingPanelIfOpen();
         _historyKey.currentState?.loadHistory();
         _shiftKey.currentState?.refreshShift();
 

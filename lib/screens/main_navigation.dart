@@ -24,8 +24,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
-  final GlobalKey<HistoryScreenState> _historyKey =
-      GlobalKey<HistoryScreenState>();
+  final GlobalKey<HistoryScreenState> _historyKey = GlobalKey<HistoryScreenState>();
   final GlobalKey<ShiftScreenState> _shiftKey = GlobalKey<ShiftScreenState>();
   final ReverbService _reverbService = ReverbService();
 

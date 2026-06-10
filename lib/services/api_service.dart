@@ -435,38 +435,36 @@ class ApiService {
     }
   }
 
-// get pending orders 
+// SEHARUSNYA — tambah outlet_id + per_page kecil
 static Future<List<Order>> getPendingOrders() async {
-  debugPrint('🔥 getPendingOrders DIPANGGIL');
   try {
     final headers = await _getHeaders();
+    final int? outletId = await StorageService.getOutletId(); // ← tambah ini
     List<Order> allOrders = [];
     int currentPage = 1;
 
     while (true) {
-      debugPrint('🔥 Fetching page $currentPage');
       final response = await http.get(
-        Uri.parse('$baseUrl/orders?status=pending&per_page=100&page=$currentPage'),
+        Uri.parse(
+          '$baseUrl/orders?status=pending&outlet_id=$outletId&per_page=20&page=$currentPage',
+          // ← outlet_id filter + per_page diperkecil dari 100 ke 20
+        ),
         headers: headers,
       );
-      debugPrint('🔥 Response status: ${response.statusCode}');
 
       if (response.statusCode != 200) break;
 
       final result = jsonDecode(response.body);
-      debugPrint('🔍 result keys: ${result.keys.toList()}');
-      debugPrint('🔍 result[data] type: ${result['data'].runtimeType}');
-      debugPrint('🔍 raw result: ${response.body.substring(0, 300)}');
       List<dynamic> rawData = [];
       int lastPage = 1;
 
       if (result['data'] is List) {
-  rawData = result['data'];
-  lastPage = result['last_page'] ?? 1;  // ← last_page ada di root, bukan di dalam data
-} else if (result['data'] is Map && result['data']['data'] is List) {
-  rawData = result['data']['data'];
-  lastPage = result['data']['last_page'] ?? 1;
-}
+        rawData = result['data'];
+        lastPage = result['last_page'] ?? 1;
+      } else if (result['data'] is Map && result['data']['data'] is List) {
+        rawData = result['data']['data'];
+        lastPage = result['data']['last_page'] ?? 1;
+      }
 
       allOrders.addAll(rawData.map((json) => Order.fromJson(json)).toList());
 
@@ -474,7 +472,6 @@ static Future<List<Order>> getPendingOrders() async {
       currentPage++;
     }
 
-    debugPrint('✅ Total pending: ${allOrders.length}');
     return allOrders;
   } catch (e) {
     debugPrint('getPendingOrders error: $e');

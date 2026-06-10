@@ -21,9 +21,11 @@ class ShiftScreenState extends State<ShiftScreen> {
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
   }
 
   void _loadInitialData() {
+  setState(() {           // ← bungkus dengan setState
     shiftDataFuture = Future.wait([
       StorageService.getCashierName(),
       ApiService.getShiftHistory(),
@@ -31,12 +33,10 @@ class ShiftScreenState extends State<ShiftScreen> {
       ApiService.getMasterShifts(),
       StorageService.getOpeningBalance(),
     ]);
-  }
-
-void refreshShift() {
-  setState(() {
-    _loadInitialData();
   });
+}
+
+void refreshShift() { // ← tidak perlu setState dobel lagi
 }
   int _parseToInt(dynamic value) {
     if (value == null) return 0;

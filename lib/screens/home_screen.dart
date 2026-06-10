@@ -1134,7 +1134,7 @@ class HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  isOutOfStock ? "HABIS" : "STOK: ${p.stock}",
+                  isOutOfStock ? "HABIS" : "${p.stock}",
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 9,

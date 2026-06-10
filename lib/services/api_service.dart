@@ -437,37 +437,47 @@ class ApiService {
 
 // SEHARUSNYA — tambah outlet_id + per_page kecil
 static Future<List<Order>> getPendingOrders() async {
-    try {
-      final headers = await _getHeaders();
-      final int? outletId = await StorageService.getOutletId(); 
+  try {
+    final headers = await _getHeaders();
+    final int? outletId = await StorageService.getOutletId(); // ← tambah ini
+    List<Order> allOrders = [];
+    int currentPage = 1;
 
-      // 🔥 Tidak perlu perulangan while(true) lagi. 
-      // Ambil page 1 saja dengan per_page besar untuk performa instan.
+    while (true) {
       final response = await http.get(
         Uri.parse(
-          '$baseUrl/orders?status=pending&outlet_id=$outletId&per_page=100&page=1',
+          '$baseUrl/orders?status=pending&outlet_id=$outletId&per_page=20&page=$currentPage',
+          // ← outlet_id filter + per_page diperkecil dari 100 ke 20
         ),
         headers: headers,
-      ).timeout(const Duration(seconds: 10));
+      );
 
-      if (response.statusCode != 200) return [];
+      if (response.statusCode != 200) break;
 
       final result = jsonDecode(response.body);
       List<dynamic> rawData = [];
+      int lastPage = 1;
 
       if (result['data'] is List) {
         rawData = result['data'];
+        lastPage = result['last_page'] ?? 1;
       } else if (result['data'] is Map && result['data']['data'] is List) {
         rawData = result['data']['data'];
+        lastPage = result['data']['last_page'] ?? 1;
       }
 
-      return rawData.map((json) => Order.fromJson(json)).toList();
-      
-    } catch (e) {
-      debugPrint('getPendingOrders error: $e');
-      return [];
+      allOrders.addAll(rawData.map((json) => Order.fromJson(json)).toList());
+
+      if (currentPage >= lastPage) break;
+      currentPage++;
     }
+
+    return allOrders;
+  } catch (e) {
+    debugPrint('getPendingOrders error: $e');
+    return [];
   }
+}
 
   // -------------------------------------------------------------------------
   // 5D. ACCEPT ORDER

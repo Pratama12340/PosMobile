@@ -1201,15 +1201,10 @@ if (d.scope == 'products' && d.productIds.isNotEmpty) {
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      insetPadding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
+      insetPadding: const EdgeInsets.all(24), // <- PERUBAHAN 1
       child: Container(
         width: 1000,
-        height: 680,
+        constraints: const BoxConstraints(maxHeight: 680), // <- PERUBAHAN 2 (Ganti height menjadi constraints)
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,

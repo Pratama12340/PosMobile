@@ -36,7 +36,8 @@ class ShiftScreenState extends State<ShiftScreen> {
   });
 }
 
-void refreshShift() { // ← tidak perlu setState dobel lagi
+void refreshShift() { 
+  _loadInitialData();  // ← tidak perlu setState dobel lagi
 }
   int _parseToInt(dynamic value) {
     if (value == null) return 0;

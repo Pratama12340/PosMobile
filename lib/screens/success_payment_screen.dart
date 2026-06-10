@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/order_model.dart';
 import '../constants/style.dart';
 import '../services/printer_service.dart';
-import '../models/print_model.dart';
 import '../services/storage_service.dart';
+import '../services/storage_service.dart';
+import '../models/print_model.dart';
 import '../models/printer_device.dart';
 
 class SuccessPaymentPage extends StatefulWidget {
@@ -87,8 +88,8 @@ class _SuccessPaymentPageState extends State<SuccessPaymentPage> {
       );
 
       // Ambil semua printer aktif dari storage
-      final allPrinters = await StorageService.getPrinterList();
-      final activePrinters = allPrinters.where((p) => p.isActive).toList();
+      final List<PrinterDevice> allPrinters = await StorageService.getPrinterList();
+      final List<PrinterDevice> activePrinters = allPrinters.where((p) => p.isActive).toList();
 
       if (activePrinters.isEmpty) {
         if (mounted) {

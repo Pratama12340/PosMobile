@@ -144,56 +144,85 @@ class PendingOrderPanel extends StatelessWidget {
                               ),
                             ),
                           ),
-      trailing: (order.paymentMethod?.toLowerCase() ?? '') == 'cash'
-    // CASH → tetap arrow, masuk cart checkout
-    ? InkWell(
-        onTap: () => onOrderSelected(order),
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: AppStyle.primaryBlue.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: const Icon(
-            Icons.arrow_forward_ios,
-            size: 12,
-            color: AppStyle.primaryBlue,
-          ),
-        ),
-      )
-    // NON-CASH → hanya tombol Accept, tanpa arrow
-    : InkWell(
-        onTap: () => onAcceptOrder(order),
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
-              SizedBox(width: 4),
-              Text(
-                "Terima",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.blueAccent,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+                          trailing: (order.paymentMethod?.toLowerCase() == 'qris' && order.status?.toLowerCase() != 'paid')
+                              // JIKA MIDTRANS BELUM LUNAS -> Tampilkan status menunggu warna oren
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.hourglass_bottom, size: 14, color: Colors.orange),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        "Belum Bayar",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.orange,
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : (order.paymentMethod?.toLowerCase() ?? '') == 'cash'
+                                  // JIKA CASH -> Muncul Icon Arrow ke halaman checkout
+                                  ? InkWell(
+                                      onTap: () => onOrderSelected(order),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Icon(
+                                          Icons.arrow_forward_ios,
+                                          size: 12,
+                                          color: AppStyle.primaryBlue,
+                                        ),
+                                      ),
+                                    )
+                                  // JIKA SUDAH LUNAS (Non-Cash) -> Muncul Tombol Terima
+                                  : InkWell(
+                                      onTap: () => onAcceptOrder(order),
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              "Terima",
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.green, // Warnanya disesuaikan hijau
+                                                fontWeight: FontWeight.w600,
+                                                fontFamily: 'Poppins',
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
 
-// onTap juga disesuaikan
-onTap: order.paymentMethod == 'cash' ? () => onOrderSelected(order) : null,
-);
+                          // Kunci interaksi seluruh baris jika belum dibayar
+                          onTap: (order.paymentMethod?.toLowerCase() == 'qris' && order.status?.toLowerCase() != 'paid')
+                              ? null 
+                              : order.paymentMethod?.toLowerCase() == 'cash' 
+                                  ? () => onOrderSelected(order) 
+                                  : null,
+                        );
                       },
                     ),
             ),

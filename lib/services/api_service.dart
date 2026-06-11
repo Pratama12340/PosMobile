@@ -141,7 +141,7 @@ class ApiService {
             String ownerName = "Belum diatur";
             String ownerEmail = "Belum diatur";
 
-            if (role == 'owner' && outlet['owner_id'] != null) {
+            if (outlet['owner_id'] != null)  {
               try {
                 debugPrint("==================================================");
                 debugPrint("🚨 [DEBUG Laporan Backend] MULAI CEK AKSES /users");

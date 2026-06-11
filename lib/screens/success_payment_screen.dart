@@ -112,6 +112,16 @@ class _SuccessPaymentPageState extends State<SuccessPaymentPage> {
         groupedByStation.putIfAbsent(sName, () => []).add(item);
       }
 
+      debugPrint("=== DEBUG PRINT STATION ===");
+      for (var item in itemsForPrinting) {
+        debugPrint("ITEM: ${item.itemName} -> stationId='${item.stationId}' stationName='${item.stationName}'");
+      }
+      for (var p in activePrinters) {
+        debugPrint("PRINTER: ${p.name} -> stationName='${p.stationName}'");
+      }
+      debugPrint("groupedByStation keys: ${groupedByStation.keys.toList()}");
+      debugPrint("===========================");
+
       // Loop setiap printer aktif
       for (final printer in activePrinters) {
         if (printer.conn != 'Network Printer') continue;

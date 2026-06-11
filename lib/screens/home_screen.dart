@@ -7,8 +7,10 @@ import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../widgets/cart_panel.dart';
 import '../widgets/draft_panel.dart';
-//import '../services/printer_service.dart';
-//import '../models/print_model.dart';
+import '../services/printer_service.dart';
+import '../services/storage_service.dart';
+import '../models/print_model.dart';
+import '../models/printer_device.dart';
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -146,6 +148,10 @@ class HomeScreenState extends State<HomeScreen> {
               stationMap[id] = name;
             }
           }
+        }
+        
+         for (var product in productsData) {
+          debugPrint("PRODUCT: ${product.name} -> stationId='${product.stationId}' stationName='${product.stationName}'");
         }
 
         // Terapkan diskon ke produk
@@ -362,7 +368,7 @@ class HomeScreenState extends State<HomeScreen> {
   debugPrint("Menghubungi API accept untuk Order ID: ${order.id}");
   final success = await ApiService.acceptOrder(order.id);
   if (success && mounted) {
-    ApiService.invalidatePendingCache(); // ← TAMBAH INI
+    ApiService.invalidatePendingCache(); 
 
     setState(() {
       _dismissedOrderIds.add(order.id);
@@ -376,6 +382,9 @@ class HomeScreenState extends State<HomeScreen> {
       ]);
 
       if (!mounted) return;
+
+      _printAcceptedOrder(order);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(
@@ -404,6 +413,115 @@ class HomeScreenState extends State<HomeScreen> {
           ),
         ),
       );
+    }
+  }
+
+  Future<void> _printAcceptedOrder(Order order) async {
+    try {
+      final cashierName = await StorageService.getCashierName();
+      final outletName = await StorageService.getOutletName();
+
+      // Mapping OrderItem -> CartItem, lengkapi stationName dari _allProducts
+      final List<CartItem> itemsForPrinting = order.items
+          .where((item) => !item.isVoided && item.activeQty > 0)
+          .map((item) {
+        final productIndex =
+            _allProducts.indexWhere((p) => p.id == item.productId);
+        final String stationName =
+            productIndex != -1 ? _allProducts[productIndex].stationName : '';
+
+        return CartItem(
+          itemName: item.itemName,
+          quantity: item.activeQty,
+          unitPrice: item.unitPrice,
+          notes: item.notes,
+          stationId: item.stationId,
+          stationName: stationName,
+        );
+      }).toList();
+
+      if (itemsForPrinting.isEmpty) return;
+
+      final mainTransaction = TransactionModel(
+        orderId: order.invoiceNo,
+        outletName: outletName,
+        outletAddress: "-",
+        cashierName: cashierName,
+        customerName: order.customerName,
+        tableNumber: order.tableNo,
+        items: itemsForPrinting,
+        taxBreakdown: order.taxBreakdown != null
+            ? List<Map<String, dynamic>>.from(order.taxBreakdown!)
+            : [],
+        discountAmount: order.discountAmount,
+        totalDariHalaman: order.totalPrice,
+      );
+
+      final List<PrinterDevice> allPrinters =
+          await StorageService.getPrinterList();
+      final List<PrinterDevice> activePrinters =
+          allPrinters.where((p) => p.isActive).toList();
+
+      if (activePrinters.isEmpty) return;
+
+      final printerService = NetworkPrinterService();
+
+      // Group item per stationName untuk kitchen print
+      Map<String, List<CartItem>> groupedByStation = {};
+      for (var item in itemsForPrinting) {
+        String sName =
+            item.stationName.isNotEmpty ? item.stationName : 'Kasir (Semua Item)';
+        groupedByStation.putIfAbsent(sName, () => []).add(item);
+      }
+
+      for (final printer in activePrinters) {
+        if (printer.conn != 'Network Printer') continue;
+
+        try {
+          bool isConnected = await printerService.checkPrinterConnection(
+            printer.ip,
+            printer.port,
+          );
+          if (!isConnected) continue;
+
+          if (printer.stationName.toLowerCase().contains('kasir') ||
+              printer.stationName.toLowerCase().contains('semua')) {
+            // Kasir: cetak struk lengkap
+            await printerService.printReceipt(
+              ipAddress: printer.ip,
+              transaction: mainTransaction,
+              port: printer.port,
+            );
+          } else {
+            // Dapur/Bar: cetak hanya item miliknya
+            final stationItems = groupedByStation[printer.stationName] ?? [];
+            if (stationItems.isEmpty) continue;
+
+            final stationTransaction = TransactionModel(
+              orderId: order.invoiceNo,
+              outletName: outletName,
+              outletAddress: "-",
+              cashierName: cashierName,
+              customerName: order.customerName,
+              tableNumber: order.tableNo,
+              items: stationItems,
+              taxBreakdown: mainTransaction.taxBreakdown,
+              discountAmount: order.discountAmount,
+              totalDariHalaman: order.totalPrice,
+            );
+
+            await printerService.printKitchenReceipt(
+              ipAddress: printer.ip,
+              transaction: stationTransaction,
+              port: printer.port,
+            );
+          }
+        } catch (e) {
+          debugPrint("⚠️ [PRINT ACCEPT] Gagal cetak ke ${printer.name}: $e");
+        }
+      }
+    } catch (e) {
+      debugPrint("💥 [PRINT ACCEPT] Error: $e");
     }
   }
 

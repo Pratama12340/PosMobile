@@ -153,9 +153,10 @@ class HomeScreenState extends State<HomeScreen> {
         }
         debugPrint("=== stationMap: $stationMap");
         
-         for (var product in productsData) {
-          debugPrint("PRODUCT: ${product.name} -> stationId='${product.stationId}' stationName='${product.stationName}'");
-        }
+        for (var product in productsData) {
+            product.stationName = stationMap[product.stationId] ?? '';
+            debugPrint("PRODUCT: ${product.name} -> stationId='${product.stationId}' stationName='${product.stationName}'");
+          }
 
         // Terapkan diskon ke produk
         for (var product in productsData) {

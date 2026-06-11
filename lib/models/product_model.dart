@@ -9,7 +9,7 @@ class Product {
   final String image;
   final String category;
   final String stationId;
-  final String stationName;
+  String stationName;
   int stock;
   Discount? discount;
   bool? isBestseller;

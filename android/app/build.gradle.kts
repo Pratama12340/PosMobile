@@ -35,10 +35,33 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+tasks.register("copyReleaseApk") {
+    doLast {
+        val buildDir = layout.buildDirectory.get().asFile
+        val sourceFile = File(buildDir, "outputs/flutter-apk/app-release.apk")
+        val destFile = File(buildDir, "outputs/flutter-apk/posmobile.apk")
+        if (sourceFile.exists()) {
+            sourceFile.copyTo(destFile, overwrite = true)
+            println("✓ APK copied and renamed to: ${destFile.absolutePath}")
+        } else {
+            println("Warning: Release APK not found at ${sourceFile.absolutePath}")
+        }
+    }
+}
+
+tasks.matching { it.name == "assembleRelease" }.all {
+    finalizedBy("copyReleaseApk")
 }

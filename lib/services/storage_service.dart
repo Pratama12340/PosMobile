@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/printer_profile_model.dart';
 import '../models/printer_device.dart';
 
 class StorageService {
@@ -205,48 +207,26 @@ class StorageService {
     await prefs.remove(_keyLastShiftUserId);
   }
 
-  // --- 7. FUNGSI PRINTER (IP) ---
-  static Future<void> savePrinterIp(String ip) async {
+  // --- 7. LOGIKA PRINTER PROFILES ---
+  static const String _keyPrinters = 'printers_config';
+
+  static Future<void> savePrinters(List<PrinterProfile> printers) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyPrinterIp, ip); // Pastikan _keyPrinterIp sudah dideklarasikan di atas
+    final List<Map<String, dynamic>> jsonList = printers.map((p) => p.toJson()).toList();
+    await prefs.setString(_keyPrinters, jsonEncode(jsonList));
   }
 
-  static Future<String?> getPrinterIp() async {
+  static Future<List<PrinterProfile>> getPrinters() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyPrinterIp);
-  }
-
-  // --- PORT ---
-  static Future<void> savePrinterPort(int port) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_keyPort, port);
-  }
-  
-  static Future<int> getPrinterPort() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_keyPort) ?? 9100; // default 9100 jika kosong
-  }
-
-  // --- PADDING HALAMAN ---
-  static Future<void> savePaddingSize(double size) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_keyPadding, size);
-  }
-  
-  static Future<double> getPaddingSize() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble(_keyPadding) ?? 32.0; // default 32.0 jika kosong
-  }
-
-  // --- LEBAR KOTAK CARD ---
-  static Future<void> saveCardWidth(double width) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_keyCardWidth, width);
-  }
-  
-  static Future<double> getCardWidth() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble(_keyCardWidth) ?? 320.0; // default 320.0 jika kosong
+    final String? data = prefs.getString(_keyPrinters);
+    if (data == null) return [];
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is List) {
+        return decoded.map((e) => PrinterProfile.fromJson(Map<String, dynamic>.from(e))).toList();
+      }
+    } catch (_) {}
+    return [];
   }
 
   // ---  FUNGSI PRINTER LIST ---
@@ -262,5 +242,46 @@ class StorageService {
     final jsonStr = prefs.getString(_keyPrinterList);
     if (jsonStr == null || jsonStr.isEmpty) return [];
     return PrinterDevice.decodeList(jsonStr);
+  }
+
+  // --- FUNGSI PRINTER SETTINGS INDIVIDUAL ---
+  static Future<void> savePrinterIp(String ip) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPrinterIp, ip);
+  }
+
+  static Future<String?> getPrinterIp() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyPrinterIp);
+  }
+
+  static Future<void> savePrinterPort(int port) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_keyPort, port);
+  }
+  
+  static Future<int> getPrinterPort() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_keyPort) ?? 9100;
+  }
+
+  static Future<void> savePaddingSize(double size) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keyPadding, size);
+  }
+  
+  static Future<double> getPaddingSize() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_keyPadding) ?? 32.0;
+  }
+
+  static Future<void> saveCardWidth(double width) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keyCardWidth, width);
+  }
+  
+  static Future<double> getCardWidth() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_keyCardWidth) ?? 320.0;
   }
 }

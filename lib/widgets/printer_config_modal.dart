@@ -1,121 +1,283 @@
 import 'package:flutter/material.dart';
 import '../constants/style.dart';
-import '../services/storage_service.dart';
 import '../models/printer_device.dart';
-
+import '../services/storage_service.dart';
+import '../services/api_service.dart';
+import '../services/network_scanner_service.dart';
 
 class PrinterConfigModal extends StatefulWidget {
   final PrinterDevice? existingPrinter;
-
-   const PrinterConfigModal({super.key, this.existingPrinter = null});
+  final String? defaultIp;
+  final int? defaultPort;
+  const PrinterConfigModal({
+    super.key,
+    this.existingPrinter,
+    this.defaultIp,
+    this.defaultPort,
+  });
 
   @override
   State<PrinterConfigModal> createState() => _PrinterConfigModalState();
 }
 
 class _PrinterConfigModalState extends State<PrinterConfigModal> {
-  // Controllers untuk mengambil data input teks form
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _ipController = TextEditingController();
-  final TextEditingController _portController = TextEditingController();
-  final TextEditingController _charsController = TextEditingController();
+  // Controllers
+  late final TextEditingController nameController;
+  late final TextEditingController ipController;
+  late final TextEditingController portController;
+  late final TextEditingController charsController;
 
+  // States
   String selectedType = "Thermal Printer";
-  String selectedMode = "Standard Printing";
+  String selectedMode = "Esc/Pos Mode";
   String selectedConn = "Network Printer";
   bool isAutoCut = true;
   bool isActive = true;
 
+  // Stations List & Selection
+  List<String> stations = ["Kasir (Semua Item)"];
+  String selectedStationName = "Kasir (Semua Item)";
+  bool isLoadingStations = false;
+
+  // Scanning States
+  bool isScanning = false;
+  List<ScanResult> scannedResults = [];
+  int _scanProgress = 0;
+  int _scanTotal = 0;
+  String? _localIp;
+
   @override
   void initState() {
     super.initState();
+
     final p = widget.existingPrinter;
+    nameController = TextEditingController(text: p?.name ?? "Printer Baru");
+    ipController = TextEditingController(text: p?.ip ?? widget.defaultIp ?? "192.168.1.");
+    portController = TextEditingController(text: p?.port.toString() ?? widget.defaultPort?.toString() ?? "9100");
+    charsController = TextEditingController(text: "48"); // Default 48 for Panda PRJ-80USE
+
     if (p != null) {
-      // Mode edit: prefill form dari data printer yang dipilih
-      _nameController.text = p.name;
-      _ipController.text = p.ip;
-      _portController.text = p.port.toString();
-      _charsController.text = "32";
       selectedType = p.type;
       selectedConn = p.conn;
       isAutoCut = p.isAutoCut;
       isActive = p.isActive;
+      selectedStationName = p.stationName;
+      if (!stations.contains(selectedStationName)) {
+        stations.add(selectedStationName);
+      }
     } else {
-      // Mode tambah baru: nilai default + load dari storage
-      _nameController.text = "Kasir Baru";
-      _ipController.text = "192.168.1.";
-      _portController.text = "9100";
-      _charsController.text = "32";
       _loadSavedPrinterData();
     }
-  }
 
-  // 🔥 PERBAIKAN: Memuat semua data (IP, Port, Chars) dari StorageService
-  Future<void> _loadSavedPrinterData() async {
-    final savedIp = await StorageService.getPrinterIp();
-    final savedPort = await StorageService.getPrinterPort(); // Pastikan fungsi ini ada di StorageService
-    
-    // Asumsi: Anda menyimpan input "Chars" atau "Padding" di StorageService
-    // Jika Anda menggunakan getPaddingSize dari contoh sebelumnya, gunakan itu.
-    final savedChars = await StorageService.getPaddingSize(); 
-
-    setState(() {
-      if (savedIp != null && savedIp.isNotEmpty) {
-        _ipController.text = savedIp;
-      }
-      _portController.text = savedPort.toString();
-      _charsController.text = savedChars.toInt().toString(); 
-    });
-  }
-
-  // 🔥 PERBAIKAN: Menyimpan SEMUA pengaturan ke StorageService lokal
-  Future<void> _savePrinterSettings() async {
-    final inputIp = _ipController.text.trim();
-    final inputPort = int.tryParse(_portController.text.trim()) ?? 9100;
-    final inputChars = double.tryParse(_charsController.text.trim()) ?? 32.0;
-    final inputName = _nameController.text.trim();
-
-    if (inputIp.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("IP Address tidak boleh kosong!")),
-      );
-      return;
-    }
-
-    // Buat objek PrinterDevice dari input form
-    final newPrinter = PrinterDevice(
-      name: inputName.isEmpty ? "Printer Baru" : inputName,
-      status: isActive ? 'Online' : 'Offline',
-      type: selectedType,
-      conn: selectedConn,
-      ip: selectedConn == 'Network Printer' ? inputIp : 'BT:00:11:22',
-      port: inputPort,
-      stationName: 'Kasir (Semua Item)',
-      isAutoCut: isAutoCut,
-      isActive: isActive,
-    );
-
-    // Tetap simpan IP & Port aktif agar test print tetap berfungsi
-    await StorageService.savePrinterIp(inputIp);
-    await StorageService.savePrinterPort(inputPort);
-    await StorageService.savePaddingSize(inputChars);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Berhasil menyimpan: ${newPrinter.name}")),
-      );
-      // Return PrinterDevice (bukan bool) ke PrinterScreen
-      Navigator.pop(context, newPrinter);
-    }
+    _fetchStations();
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _ipController.dispose();
-    _portController.dispose();
-    _charsController.dispose();
+    nameController.dispose();
+    ipController.dispose();
+    portController.dispose();
+    charsController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedPrinterData() async {
+    final savedIp = await StorageService.getPrinterIp();
+    final savedPort = await StorageService.getPrinterPort();
+    final savedPadding = await StorageService.getPaddingSize();
+
+    setState(() {
+      if (savedIp != null && savedIp.isNotEmpty) {
+        ipController.text = savedIp;
+      }
+      portController.text = savedPort.toString();
+      charsController.text = savedPadding.toInt().toString();
+    });
+  }
+
+  Future<void> _fetchStations() async {
+    setState(() => isLoadingStations = true);
+    try {
+      final list = await ApiService.getStations();
+      final List<String> fetchedStations = ["Kasir (Semua Item)"];
+
+      for (var item in list) {
+        if (item is Map) {
+          final sName = item['name']?.toString() ?? '';
+          if (sName.isNotEmpty && !fetchedStations.contains(sName)) {
+            fetchedStations.add(sName);
+          }
+        }
+      }
+
+      setState(() {
+        stations = fetchedStations;
+        if (!stations.contains(selectedStationName)) {
+          if (widget.existingPrinter != null) {
+            stations.add(selectedStationName);
+          } else {
+            selectedStationName = "Kasir (Semua Item)";
+          }
+        }
+      });
+    } catch (_) {}
+    setState(() => isLoadingStations = false);
+  }
+
+  Future<void> _startNetworkScan() async {
+    // Tampilkan local IP untuk debugging
+    final ip = await NetworkScannerService.getLocalIp();
+    setState(() {
+      isScanning = true;
+      scannedResults = [];
+      _scanProgress = 0;
+      _scanTotal = 0;
+      _localIp = ip;
+    });
+
+    if (ip == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Gagal mendapatkan IP WiFi perangkat. Pastikan sudah terhubung ke WiFi.",
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() => isScanning = false);
+      }
+      return;
+    }
+
+    try {
+      final results = await NetworkScannerService.scanLocalNetwork(
+        onProgress: (scanned, total) {
+          if (mounted) {
+            setState(() {
+              _scanProgress = scanned;
+              _scanTotal = total;
+            });
+          }
+        },
+      );
+      if (mounted) {
+        setState(() {
+          scannedResults = results;
+        });
+        if (results.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "Tidak ada printer terdeteksi di subnet ${ip.split('.').take(3).join('.')}.x"
+                " pada port 9100/515/631.",
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Gagal scan network: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isScanning = false);
+      }
+    }
+  }
+
+  Future<void> _savePrinterSettings() async {
+    final name = nameController.text.trim();
+    final ip = ipController.text.trim();
+    final portStr = portController.text.trim();
+    final charsStr = charsController.text.trim();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Nama printer tidak boleh kosong")),
+      );
+      return;
+    }
+
+    if (selectedConn == 'Network Printer' && ip.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("IP Address tidak boleh kosong untuk printer jaringan")),
+      );
+      return;
+    }
+
+    final port = int.tryParse(portStr) ?? 9100;
+    final chars = double.tryParse(charsStr) ?? 48.0;
+
+    final newPrinter = PrinterDevice(
+      name: name,
+      status: isActive ? 'Online' : 'Offline',
+      type: selectedType,
+      conn: selectedConn,
+      ip: selectedConn == 'Network Printer' ? ip : 'BT:00:11:22',
+      port: port,
+      stationName: selectedStationName,
+      isAutoCut: isAutoCut,
+      isActive: isActive,
+    );
+
+    // Simpan data kustom ke StorageService
+    await StorageService.savePrinterIp(ip);
+    await StorageService.savePrinterPort(port);
+    await StorageService.savePaddingSize(chars);
+
+    if (mounted) {
+      Navigator.pop(context, newPrinter);
+    }
+  }
+
+  Future<void> _deletePrinter() async {
+    if (widget.existingPrinter == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Hapus Perangkat"),
+        content: const Text(
+          "Apakah Anda yakin ingin menghapus printer ini dari pengaturan?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("BATAL"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("HAPUS"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      // Kembalikan objek khusus dengan penanda hapus
+      final deleteSignal = PrinterDevice(
+        name: '__DELETE__',
+        status: 'Offline',
+        type: selectedType,
+        conn: selectedConn,
+        ip: '',
+        port: 0,
+        stationName: '',
+        isAutoCut: false,
+        isActive: false,
+      );
+      Navigator.pop(context, deleteSignal);
+    }
   }
 
   @override
@@ -124,7 +286,8 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
       backgroundColor: Colors.transparent,
       child: Center(
         child: Container(
-          width: 550, // Ukuran optimal tablet
+          width: 550, // Optimal untuk tablet
+          constraints: const BoxConstraints(maxHeight: 700),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(28),
@@ -138,7 +301,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header Modern
+              // Modern Header
               _buildModalHeader(),
 
               // Form Body
@@ -150,7 +313,8 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                   ),
                   child: Column(
                     children: [
-                      // Toggle Status Printer (Paling Atas agar mudah dilihat)
+                      // Status switch
+                      // Status switch
                       _buildStatusSwitch(),
                       const Divider(
                         height: 40,
@@ -181,7 +345,10 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                         onChanged: (v) => setState(() => selectedConn = v!),
                       ),
 
-                      // Dinamis berdasarkan jenis koneksi
+                      // Station Dropdown selection
+                      _buildStationDropdown(),
+
+                      // Dynamic network scan / fields
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
                         child: selectedConn == "Network Printer"
@@ -190,26 +357,28 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
                       ),
 
                       _buildModernTextField(
-                        label: "Nama Printer",
+                        "Nama Printer",
+                        nameController,
                         hint: "Contoh: Kasir Lantai 1",
-                        controller: _nameController,
                       ),
 
                       Row(
                         children: [
                           Expanded(
                             child: _buildModernTextField(
-                              label: "Chars. per line",
-                              hint: "32",
-                              controller: _charsController,
+                              "Chars. per line",
+                              charsController,
+                              hint: "48",
+                              keyboardType: TextInputType.number,
                             ),
                           ),
                           const SizedBox(width: 20),
                           Expanded(
                             child: _buildModernTextField(
-                              label: "Port Printer",
+                              "Port Printer",
+                              portController,
                               hint: "9100",
-                              controller: _portController,
+                              keyboardType: TextInputType.number,
                             ),
                           ),
                         ],
@@ -239,17 +408,28 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Icon(Icons.print_rounded, color: Colors.white, size: 28),
-          const SizedBox(width: 16),
-          Text(
-            "Pengaturan Perangkat",
-            style: AppStyle.menuText.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
+          Row(
+            children: [
+              const Icon(Icons.print_rounded, color: Colors.white, size: 28),
+              const SizedBox(width: 16),
+              Text(
+                widget.existingPrinter == null ? "Tambah Perangkat" : "Edit Perangkat",
+                style: AppStyle.menuText.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
           ),
+          if (widget.existingPrinter != null)
+            IconButton(
+              icon: const Icon(Icons.delete_forever_rounded, color: Colors.white, size: 26),
+              tooltip: "Hapus Printer",
+              onPressed: _deletePrinter,
+            ),
         ],
       ),
     );
@@ -352,10 +532,73 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
     );
   }
 
-  Widget _buildModernTextField({
-    required String label,
+  Widget _buildStationDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Target Cetak (Station)",
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.black54,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300, width: 1.5),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selectedStationName,
+                isExpanded: true,
+                icon: isLoadingStations
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Colors.black87,
+                      ),
+                dropdownColor: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                elevation: 8,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+                onChanged: isActive
+                    ? (v) => setState(() => selectedStationName = v!)
+                    : null,
+                items: stations.map((s) {
+                  return DropdownMenuItem<String>(
+                    value: s,
+                    child: Text(s),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernTextField(
+    String label,
+    TextEditingController controller, {
     required String hint,
-    required TextEditingController controller,
+    TextInputType keyboardType = TextInputType.text,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
@@ -373,14 +616,13 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
           const SizedBox(height: 10),
           TextField(
             controller: controller,
+            keyboardType: keyboardType,
             enabled: isActive,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
               filled: true,
-              fillColor: isActive
-                  ? Colors.grey.shade50
-                  : Colors.grey.shade200,
+              fillColor: isActive ? Colors.grey.shade50 : Colors.grey.shade200,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 16,
@@ -408,14 +650,263 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
   }
 
   Widget _buildNetworkFields() {
+    final double progress = _scanTotal > 0 ? _scanProgress / _scanTotal : 0;
     return Column(
       key: const ValueKey('network'),
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // WiFi scanner UI section
+        Container(
+          margin: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.blue.shade50 : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isActive ? Colors.blue.shade200 : Colors.grey.shade300,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row: icon + label + SCAN button
+              Row(
+                children: [
+                  Icon(Icons.wifi_find_rounded,
+                      color: isActive ? Colors.blue.shade700 : Colors.grey),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Temukan Printer WiFi Otomatis",
+                          style: TextStyle(
+                            color: isActive
+                                ? Colors.blue.shade900
+                                : Colors.grey,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (_localIp != null)
+                          Text(
+                            "IP perangkat Anda: $_localIp",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.blue.shade600,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 36,
+                    child: ElevatedButton.icon(
+                      onPressed:
+                          isActive && !isScanning ? _startNetworkScan : null,
+                      icon: isScanning
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.search_rounded,
+                              size: 16, color: Colors.white),
+                      label: Text(
+                        isScanning ? "SCAN..." : "SCAN",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Progress bar saat scanning
+              if (isScanning && _scanTotal > 0) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          backgroundColor: Colors.blue.shade100,
+                          color: Colors.blue.shade600,
+                          minHeight: 6,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "$_scanProgress/$_scanTotal",
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.blue.shade700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Memindai subnet ${_localIp?.split('.').take(3).join('.')}.x ...",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.blue.shade600,
+                  ),
+                ),
+              ] else if (isScanning) ...[
+                const SizedBox(height: 8),
+                Text(
+                  "Menginisialisasi scan...",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.blue.shade600,
+                  ),
+                ),
+              ],
+
+              // Hasil scan — chip per perangkat ditemukan
+              if (scannedResults.isNotEmpty && !isScanning) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded,
+                        size: 15, color: Colors.green.shade700),
+                    const SizedBox(width: 6),
+                    Text(
+                      "${scannedResults.length} perangkat ditemukan — tap untuk pilih:",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: scannedResults.map((result) {
+                    final isSelected = ipController.text == result.ip;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          ipController.text = result.ip;
+                          // Auto-isi port jika kosong atau default
+                          portController.text = result.port.toString();
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.blue.shade700
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? Colors.blue.shade700
+                                : Colors.blue.shade200,
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withValues(alpha: 0.08),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.print_rounded,
+                                  size: 14,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.blue.shade700,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  result.ip,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.blue.shade900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              "port: ${result.port}",
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isSelected
+                                    ? Colors.white.withValues(alpha: 0.8)
+                                    : Colors.blue.shade500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ] else if (!isScanning && scannedResults.isEmpty && _scanTotal > 0) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded,
+                        size: 15, color: Colors.orange.shade700),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        "Tidak ada printer terdeteksi. Pastikan printer menyala "
+                        "dan terhubung ke WiFi yang sama.",
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+
         _buildModernTextField(
-          label: "IP Address Printer",
+          "IP Address Printer",
+          ipController,
           hint: "192.168.1.100",
-          controller: _ipController,
-        )
+          keyboardType: TextInputType.number,
+        ),
       ],
     );
   }
@@ -510,7 +1001,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
           const SizedBox(width: 20),
           Expanded(
             child: ElevatedButton(
-              onPressed: _savePrinterSettings, // Mengarah ke fungsi lokal penyimpanan
+              onPressed: _savePrinterSettings,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange.shade800,
                 padding: const EdgeInsets.symmetric(vertical: 18),

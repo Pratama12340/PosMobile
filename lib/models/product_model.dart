@@ -9,6 +9,7 @@ class Product {
   final String image;
   final String category;
   final String stationId;
+  final String stationName;
   int stock;
   Discount? discount;
   bool? isBestseller;
@@ -25,6 +26,7 @@ class Product {
     this.discount,
     this.isBestseller,
     required this.stationId,
+    this.stationName = "",
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,7 @@ class Product {
       description: json['description'] ?? '',
       price: double.parse(json['price'].toString()).toInt(),
       stationId: json['station_id']?.toString() ?? "Dapur",
+      stationName: "",
       image: json['image'] ?? '',
       category:
           (json['category_name'] ??

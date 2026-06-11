@@ -96,6 +96,7 @@ class OrderItem {
   final bool isVoided;
   String notes;
   final String stationId;
+  final String stationName;
 
   int get quantity => activeQty;
   double get price => unitPrice;
@@ -120,6 +121,7 @@ class OrderItem {
     this.isVoided = false,
     this.notes = "",
     required this.stationId,
+    this.stationName = "",
   }) : originalPrice = originalPrice ?? unitPrice;
 
    factory OrderItem.fromJson(Map<String, dynamic> json) {
@@ -159,6 +161,8 @@ class OrderItem {
           active <= 0,
       notes: json['notes'] ?? json['note'] ?? "",
       stationId: json['station_id']?.toString() ?? "",
+      stationName: json['station_name']?.toString() ??
+          json['product']?['station_name']?.toString() ?? "",
     );
   }
 

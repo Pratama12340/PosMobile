@@ -290,39 +290,7 @@ class ApiService {
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final resData = result['data'] ?? result;
-
-        // Pemicu Otomatis Printer Fisik (Direct Socket LAN/Wi-Fi)
-        try {
-          final cashierName = await StorageService.getCashierName() ?? "Kasir";
-          final printerIp = "192.168.1.87";
-
-          final printTransaction = TransactionModel(
-            orderId: resData['id']?.toString() ?? resData['order_id']?.toString() ?? "TRX",
-            outletName: "ARANUS POS",
-            outletAddress: "Lokasi Outlet",
-            cashierName: cashierName,
-            customerName: "",
-            tableNumber: resData['table_id']?.toString() ?? orderData['table_id']?.toString() ?? "-",
-            items: (orderData['items'] as List).map((item) {
-              return CartItem(
-                itemName: item['product_name'] ?? item['name'] ?? "Item",
-                quantity: int.tryParse(item['qty'].toString()) ?? 1,
-                unitPrice: double.tryParse(item['price'].toString()) ?? 0.0,
-                notes: item['notes'] ?? "",
-                stationId: item['station_id']?.toString() ?? "STN-KASIR",
-              );
-            }).toList(),
-            discountAmount: double.tryParse(orderData['discount_amount']?.toString() ?? '0') ?? 0.0,
-            taxBreakdown: List<Map<String, dynamic>>.from(orderData['tax_breakdown'] ?? []),
-            totalDariHalaman: double.tryParse(orderData['total_price']?.toString() ?? '0') ?? 0.0,
-          );
-
-          final printerService = NetworkPrinterService();
-          printerService.printReceipt(ipAddress: printerIp, transaction: printTransaction);
-        } catch (printError) {
-          debugPrint("⚠️ [PRINTER WARNING] Server sukses, tapi gagal cetak fisik: $printError");
-        }
-
+        
         return {'success': true, 'data': resData};
       } else {
         return {'success': false, 'message': result['message'] ?? 'Gagal Simpan'};

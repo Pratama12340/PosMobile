@@ -3,14 +3,16 @@ class CartItem {
   final int quantity;
   final double unitPrice;
   final String notes;
-  final String stationId; 
+  final String stationId;
+  final String stationName; 
 
   CartItem({
     required this.itemName,
     required this.quantity,
     required this.unitPrice,
     required this.notes,
-    required this.stationId, 
+    required this.stationId,
+    this.stationName = "",  
   });
 }
 

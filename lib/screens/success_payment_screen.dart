@@ -70,6 +70,7 @@ class _SuccessPaymentPageState extends State<SuccessPaymentPage> {
           unitPrice: item.unitPrice,
           notes: item.notes,
           stationId: item.stationId,
+          stationName: item.stationName,
         );
       }).toList();
 
@@ -107,8 +108,8 @@ class _SuccessPaymentPageState extends State<SuccessPaymentPage> {
       // Kelompokkan item per stationId untuk kitchen print
       Map<String, List<CartItem>> groupedByStation = {};
       for (var item in itemsForPrinting) {
-        String sId = item.stationId.isNotEmpty ? item.stationId : 'kasir';
-        groupedByStation.putIfAbsent(sId, () => []).add(item);
+       String sName = item.stationName.isNotEmpty ? item.stationName : 'Kasir (Semua Item)';
+        groupedByStation.putIfAbsent(sName, () => []).add(item);
       }
 
       // Loop setiap printer aktif
@@ -143,8 +144,12 @@ class _SuccessPaymentPageState extends State<SuccessPaymentPage> {
             );
           } else {
             // Station lain (dapur, bar, dll): cetak hanya item yang relevan
-            final stationItems = groupedByStation[printer.stationName] ??
+            final stationItems = groupedByStation[printer.stationName] ?? [] ;
                 groupedByStation.values.expand((e) => e).toList();
+            
+             if (stationItems.isEmpty) {
+              continue; 
+            }
 
             final stationTransaction = TransactionModel(
               orderId: widget.orderId,

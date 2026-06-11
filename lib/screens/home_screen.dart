@@ -126,6 +126,7 @@ class HomeScreenState extends State<HomeScreen> {
         ApiService.getDiscounts().catchError((e) => <Discount>[]),
         ApiService.getPendingOrders().catchError((e) => <Order>[]),
         ApiService.getTopProducts().catchError((e) => <String>[]),
+        ApiService.getStations().catchError((e) => <dynamic>[]),
       ]);
 
       if (mounted) {
@@ -134,6 +135,18 @@ class HomeScreenState extends State<HomeScreen> {
         final List<Discount> discountsData = results[2] as List<Discount>;
         final List<Order> pendingData = results[3] as List<Order>;
         final List<String> topProductNames = results[4] as List<String>;
+        final List<dynamic> stationsData = results[5] as List<dynamic>;
+        
+        final Map<String, String> stationMap = {};
+        for (var s in stationsData) {
+          if (s is Map) {
+            final id = s['id']?.toString();
+            final name = s['name']?.toString();
+            if (id != null && name != null) {
+              stationMap[id] = name;
+            }
+          }
+        }
 
         // Terapkan diskon ke produk
         for (var product in productsData) {
@@ -264,6 +277,7 @@ class HomeScreenState extends State<HomeScreen> {
           originalPrice: unitPrice,
           discountId: product?.discount?.id,
           stationId: item.stationId,
+          stationName: item.stationName,
         );
       }
 
@@ -1245,6 +1259,7 @@ Future<void> updatePendingPanelIfOpen() async {
                                   originalPrice: p.price.toDouble(),
                                   discountId: p.discount?.id,
                                   stationId: p.stationId,
+                                  stationName: p.stationName,
                                 );
                               }
                             });

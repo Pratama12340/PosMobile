@@ -282,12 +282,14 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Center(
-        child: Container(
-          width: 550, // Optimal untuk tablet
-          constraints: const BoxConstraints(maxHeight: 700),
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(viewInsets: EdgeInsets.zero),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        child: Center(
+          child: Container(
+            width: 550,
+            constraints: const BoxConstraints(maxHeight: 700),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(28),
@@ -396,6 +398,7 @@ class _PrinterConfigModalState extends State<PrinterConfigModal> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

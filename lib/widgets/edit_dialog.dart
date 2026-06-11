@@ -6,6 +6,8 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/printer_service.dart';
 import '../models/print_model.dart';
+import '../models/printer_device.dart';
+import '../utils/app_keys.dart';
 
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
@@ -24,6 +26,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
   String _currentUserName = "";
   List<dynamic> _masterTaxes = [];
+  bool _isPrinting = false;
 
   SharedPreferences? _prefs;
   double _totalBeforeEdit = 0;
@@ -63,6 +66,95 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   void _loadTaxSettings() async {
     final taxes = await ApiService.getTaxes();
     if (mounted) setState(() => _masterTaxes = taxes);
+  }
+
+  // ← TAMBAH FUNGSI INI
+  Future<void> _executePrint() async {
+    if (_isPrinting) return;
+    setState(() => _isPrinting = true);
+
+    try {
+      final outletInfo = await ApiService.fetchOutletInfoLive();
+      final List<PrinterDevice> allPrinters = await StorageService.getPrinterList();
+      final List<PrinterDevice> activePrinters =
+          allPrinters.where((p) => p.isActive).toList();
+
+      if (activePrinters.isEmpty) {
+        snackbarKey.currentState?.showSnackBar(
+          const SnackBar(
+            content: Text("Tidak ada printer aktif."),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      final List<CartItem> itemsForPrinting = localOrder!.items.map((item) {
+        return CartItem(
+          itemName: item.itemName,
+          quantity: item.activeQty,
+          unitPrice: item.unitPrice,
+          notes: item.notes,
+          stationId: item.stationId,
+        );
+      }).toList();
+
+      final List<Map<String, dynamic>> taxDetails = calculatedTaxBreakdown
+          .map((tax) => {
+                'name': tax['name'],
+                'calculated_amount': tax['calculated_amount'],
+              })
+          .toList();
+
+      final transaction = TransactionModel(
+        orderId: localOrder!.invoiceNo,
+        outletName: outletInfo['name'] ?? "Outlet",
+        outletAddress: outletInfo['address_outlet'] ?? "-",
+        cashierName: _currentUserName,
+        customerName: localOrder!.customerName,
+        tableNumber: localOrder!.tableNo,
+        items: itemsForPrinting,
+        discountAmount: localOrder!.discountAmount,
+        taxBreakdown: taxDetails,
+        totalDariHalaman: isEditMode ? currentTotalPrice : localOrder!.totalPrice,
+      );
+
+      final printerService = NetworkPrinterService();
+
+      for (final printer in activePrinters) {
+        if (printer.conn != 'Network Printer') continue;
+        try {
+          final isConnected = await printerService.checkPrinterConnection(
+              printer.ip, printer.port);
+          if (!isConnected) continue;
+
+          await printerService.printReceipt(
+            ipAddress: printer.ip,
+            transaction: transaction,
+            port: printer.port,
+          );
+
+          snackbarKey.currentState?.showSnackBar(
+            SnackBar(
+              content: Text("✓ ${printer.name} berhasil mencetak."),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } catch (e) {
+          snackbarKey.currentState?.showSnackBar(
+            SnackBar(
+              content: Text("Gagal cetak ke ${printer.name}: $e"),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
+    }
   }
 
   double get currentSubtotalPrice {
@@ -778,55 +870,21 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         ),
         const SizedBox(width: 12),
         ElevatedButton.icon(
-          onPressed: () async {
-            //final printerService = TerminalPrinterService();
-            final outletInfo = await ApiService.fetchOutletInfoLive();
-
-            if (!mounted) return;
-
-            final List<CartItem> itemsForPrinting =
-                localOrder!.items.map((item) {
-              return CartItem(
-                itemName: item.itemName,
-                quantity: item.activeQty,
-                unitPrice: item.unitPrice,
-                notes: item.notes,
-                stationId: item.stationId,
-              );
-            }).toList();
-
-            final List<Map<String, dynamic>> taxDetails =
-                calculatedTaxBreakdown.map((tax) => {
-                      'name': tax['name'],
-                      'calculated_amount': tax['calculated_amount'],
-                    }).toList();
-
-            final transaction = TransactionModel(
-              orderId: localOrder!.invoiceNo,
-              outletName: outletInfo['name'] ?? "Outlet",
-              outletAddress: outletInfo['address'] ?? "-",
-              cashierName: _currentUserName,
-              customerName: localOrder!.customerName,
-              tableNumber: localOrder!.tableNo,
-              items: itemsForPrinting,
-              discountAmount: localOrder!.discountAmount,
-              taxBreakdown: taxDetails,
-              totalDariHalaman:
-                  isEditMode ? currentTotalPrice : localOrder!.totalPrice,
-            );
-
-            // printerService.printToTerminal(transaction);
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Struk Pelanggan Berhasil Dicetak"),
-                backgroundColor: Colors.blue,
-              ),
-            );
-          },
-          icon: const Icon(Icons.print, size: 20, color: Colors.white),
-          label: const Text("Cetak",
-              style: TextStyle(color: Colors.white, fontSize: 16)),
+          onPressed: _isPrinting ? null : _executePrint, // ← UBAH INI
+          icon: _isPrinting // ← UBAH INI
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(Icons.print, size: 20, color: Colors.white),
+          label: Text( // ← UBAH INI
+            _isPrinting ? "Mencetak..." : "Cetak",
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+          ),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF4285F4),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

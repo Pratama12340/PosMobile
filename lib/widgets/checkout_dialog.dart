@@ -872,14 +872,14 @@ if (d.scope == 'products' && d.productIds.isNotEmpty) {
                     ),
                   ),
                 ] else ...[
-                  Text(
-                    "Tambah",
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppStyle.primaryBlue,
-                    ),
-                  ),
+                  const Text(
+  "Tambah",
+  style: TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.bold,
+    color: AppStyle.primaryBlue,
+  ),
+),
                 ],
               ],
             ),

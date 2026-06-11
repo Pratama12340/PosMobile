@@ -144,7 +144,7 @@ class PendingOrderPanel extends StatelessWidget {
                               ),
                             ),
                           ),
-                          trailing: (order.paymentMethod?.toLowerCase() == 'qris' && order.status?.toLowerCase() != 'paid')
+                          trailing: (order.paymentMethod?.toLowerCase() == 'qris' && order.status.toLowerCase() != 'paid')
                               // JIKA MIDTRANS BELUM LUNAS -> Tampilkan status menunggu warna oren
                               ? Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -217,7 +217,7 @@ class PendingOrderPanel extends StatelessWidget {
                                     ),
 
                           // Kunci interaksi seluruh baris jika belum dibayar
-                          onTap: (order.paymentMethod?.toLowerCase() == 'qris' && order.status?.toLowerCase() != 'paid')
+                          onTap: (order.paymentMethod?.toLowerCase() == 'qris' && order.status.toLowerCase() != 'paid')
                               ? null 
                               : order.paymentMethod?.toLowerCase() == 'cash' 
                                   ? () => onOrderSelected(order) 

@@ -137,7 +137,7 @@ class HomeScreenState extends State<HomeScreen> {
         final List<Discount> discountsData = results[2] as List<Discount>;
         final List<Order> pendingData = results[3] as List<Order>;
         final List<String> topProductNames = results[4] as List<String>;
-        final List<dynamic> stationsData = results[5] as List<dynamic>;
+        final List<dynamic> stationsData = results[5] ;
         
         debugPrint("=== STATIONS RAW: $stationsData");
 
@@ -1026,7 +1026,7 @@ Future<void> updatePendingPanelIfOpen() async {
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       itemCount: allItems.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const Divider(height: 1, color: Color(0xFFF5F5F5)),
                       itemBuilder: (context, index) {
                         final item = allItems[index];

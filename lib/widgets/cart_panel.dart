@@ -153,25 +153,22 @@ void _syncNoteControllers() {
       _noteFocusNodes[id] = node;
       node.addListener(() {
   if (node.hasFocus) {
-  Future.delayed(const Duration(milliseconds: 350), () {
-    if (!mounted) return;
-    final screenHeight = MediaQuery.sizeOf(context).height; // ← pindah ke sini
-    final ctx = _itemKeys[id]?.currentContext;
-    if (ctx != null) {
-      final box = ctx.findRenderObject() as RenderBox?;
-        if (box == null) return;
-        final itemOffset = box.localToGlobal(Offset.zero).dy;
-        final keyboardHeight = 320.0; 
-        final visibleBottom = screenHeight - keyboardHeight;
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      final screenHeight = MediaQuery.sizeOf(context).height;
+      final box = _itemKeys[id]?.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null) return;
+      final itemOffset = box.localToGlobal(Offset.zero).dy;
+      const keyboardHeight = 320.0;
+      final visibleBottom = screenHeight - keyboardHeight;
 
-        if (itemOffset + box.size.height > visibleBottom) {
-          _listScrollController.animateTo(
-            _listScrollController.offset +
-                (itemOffset + box.size.height - visibleBottom) + 20,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        }
+      if (itemOffset + box.size.height > visibleBottom) {
+        _listScrollController.animateTo(
+          _listScrollController.offset +
+              (itemOffset + box.size.height - visibleBottom) + 20,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
       }
     });
   }

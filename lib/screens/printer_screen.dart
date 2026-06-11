@@ -1,7 +1,5 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../constants/style.dart';
-import '../models/printer_profile_model.dart';
 import '../widgets/printer_config_modal.dart';
 import '../services/storage_service.dart';
 import '../services/printer_service.dart';
@@ -85,85 +83,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
             backgroundColor: Colors.red,
           ),
         );
-      }
-    }
-  }
-
-  Future<void> _scanAllNetworkDevicesPing() async {
-    if (mounted) {
-      setState(() {
-        _isScanningNetwork = true;
-        _scanProgress = 0;
-        _scanTotal = 0;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Memulai PING scan... mendeteksi SEMUA perangkat aktif.")),
-      );
-    }
-
-    try {
-      final results = await NetworkScannerService.scanAllDevicesPing(
-        onProgress: (scanned, total) {
-          if (mounted) {
-            setState(() {
-              _scanProgress = scanned;
-              _scanTotal = total;
-            });
-          }
-        },
-      );
-      if (mounted) {
-        setState(() {
-          _isScanningNetwork = false;
-        });
-        
-        if (results.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Tidak ada perangkat yang membalas ping.")),
-          );
-        } else {
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: Text("Perangkat Aktif (Ping) - Total: ${results.length}"),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: results.length,
-                  itemBuilder: (ctx, i) {
-                    return ListTile(
-                      leading: Icon(Icons.devices, color: Colors.purple.shade500),
-                      title: Text(results[i], style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text("Ping sukses"),
-                      trailing: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppStyle.primaryBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: const Text("TAMBAH"),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _showConfigModal(defaultIp: results[i], defaultPort: 9100);
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("TUTUP"))
-              ],
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isScanningNetwork = false;
-        });
       }
     }
   }
@@ -633,36 +552,6 @@ class _PrinterScreenState extends State<PrinterScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSoftTopButton({
-    required String label,
-    required IconData icon,
-    required Color bgColor,
-    required Color textColor,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: textColor, size: 20),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

@@ -6,8 +6,6 @@ import '../models/product_model.dart';
 import '../models/order_model.dart';
 import '../models/discount_model.dart';
 import '../models/rekap_model.dart';
-import 'printer_service.dart';
-import '../models/print_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 

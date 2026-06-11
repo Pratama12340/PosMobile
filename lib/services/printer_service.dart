@@ -59,6 +59,7 @@ class NetworkPrinterService {
       bytes += generator.text("Tgl   : $fullDate");
       bytes += generator.text("Meja  : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}");
       bytes += generator.text("Kasir : ${transaction.cashierName}");
+      bytes += generator.text("Pelanggan : ${transaction.customerName.isEmpty ? "-" : transaction.customerName}");
       bytes += generator.hr();
 
       // --- DAFTAR ITEM BELANJA ---

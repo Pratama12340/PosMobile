@@ -139,6 +139,8 @@ class HomeScreenState extends State<HomeScreen> {
         final List<String> topProductNames = results[4] as List<String>;
         final List<dynamic> stationsData = results[5] as List<dynamic>;
         
+        debugPrint("=== STATIONS RAW: $stationsData");
+
         final Map<String, String> stationMap = {};
         for (var s in stationsData) {
           if (s is Map) {
@@ -149,6 +151,7 @@ class HomeScreenState extends State<HomeScreen> {
             }
           }
         }
+        debugPrint("=== stationMap: $stationMap");
         
          for (var product in productsData) {
           debugPrint("PRODUCT: ${product.name} -> stationId='${product.stationId}' stationName='${product.stationName}'");

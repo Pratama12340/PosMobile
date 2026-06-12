@@ -31,8 +31,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   List<dynamic> _masterTaxes = [];
   bool _isPrinting = false;
 
-  SharedPreferences? _prefs;
   double _totalBeforeEdit = 0;
+  SharedPreferences? _prefs;
   bool _prefsReady = false;
 
   @override

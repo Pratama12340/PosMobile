@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../utils/currency_formatter.dart' as currency;
 
 class AppStyle {
   static const Color primaryBlue = Color(0xFF4285F4);

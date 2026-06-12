@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sistem_pos/features/home/providers/product_provider.dart';
 import 'package:sistem_pos/features/cart_checkout/providers/cart_provider.dart';
-import 'package:sistem_pos/features/auth/providers/auth_provider.dart';
 import 'package:sistem_pos/features/home/widgets/product_card.dart';
 import 'package:sistem_pos/features/home/providers/home_controller.dart';
 

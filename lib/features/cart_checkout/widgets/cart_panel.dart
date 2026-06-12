@@ -62,6 +62,7 @@ class _CartPanelState extends State<CartPanel> {
 
   final Map<int, TextEditingController> _noteControllers = {};
   final Map<int, TextEditingController> _qtyControllers = {};
+  final Map<int, FocusNode> _qtyFocusNodes = {};
   final Map<int, GlobalKey> _itemKeys = {};       
   final Map<int, FocusNode> _noteFocusNodes = {}; 
   final ScrollController _listScrollController = ScrollController(); 
@@ -136,12 +137,19 @@ void _syncNoteControllers() {
     if (!_qtyControllers.containsKey(id)) {
       _qtyControllers[id] = TextEditingController(text: "${item.quantity}");
     } else {
-      if (_qtyControllers[id]!.text != "${item.quantity}") {
+      // Hanya update jika field tidak sedang difokus (user tidak sedang mengetik)
+      final qtyFocus = _qtyFocusNodes[id];
+      final bool isQtyFocused = qtyFocus?.hasFocus ?? false;
+      if (!isQtyFocused && _qtyControllers[id]!.text != "${item.quantity}") {
         _qtyControllers[id]!.text = "${item.quantity}";
         _qtyControllers[id]!.selection = TextSelection.collapsed(
           offset: "${item.quantity}".length,
         );
       }
+    }
+
+    if (!_qtyFocusNodes.containsKey(id)) {
+      _qtyFocusNodes[id] = FocusNode();
     }
 
     if (!_itemKeys.containsKey(id)) {
@@ -181,6 +189,10 @@ void _syncNoteControllers() {
     if (!widget.cart.containsKey(id)) { c.dispose(); return true; }
     return false;
   });
+  _qtyFocusNodes.removeWhere((id, node) {
+    if (!widget.cart.containsKey(id)) { node.dispose(); return true; }
+    return false;
+  });
   _itemKeys.removeWhere((id, _) => !widget.cart.containsKey(id));
   _noteFocusNodes.removeWhere((id, node) {
     if (!widget.cart.containsKey(id)) {
@@ -210,8 +222,11 @@ void dispose() {
   for (var controller in _noteControllers.values) {
     controller.dispose();
   }
-   for (var controller in _qtyControllers.values) { // ← TAMBAH INI
+   for (var controller in _qtyControllers.values) {
     controller.dispose();
+  }
+  for (var node in _qtyFocusNodes.values) {
+    node.dispose();
   }
   for (var node in _noteFocusNodes.values) {
     node.dispose();
@@ -598,6 +613,7 @@ const SizedBox(height: 15),
   fillColor: AppStyle.primaryBlue.withValues(alpha: 0.05),
 ),
       controller: _qtyControllers[id] ?? TextEditingController(text: "${item.quantity}"),
+      focusNode: _qtyFocusNodes[id],
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       onTap: () => KeyboardUtil.show(),
       onSubmitted: (val) {

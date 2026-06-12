@@ -1,5 +1,4 @@
 import 'dart:convert';
-// Removed http import
 import 'package:flutter/foundation.dart';
 import 'package:sistem_pos/core/models/discount_model.dart';
 import 'package:sistem_pos/core/network/api_client.dart';

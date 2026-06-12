@@ -112,8 +112,6 @@ class HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final style = AppStyle();
-    
     final query = widget.searchController.text.toLowerCase();
     final String todayStr = DateFormat('yyyyMMdd').format(DateTime.now());
 

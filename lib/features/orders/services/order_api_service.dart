@@ -12,14 +12,13 @@ class _PendingPageResult {
 }
 
 class OrderApiService {
-  static Map<int, List<Order>> _pendingCache = {};
-  static Map<int, DateTime> _pendingCacheTime = {};
+  static final Map<int, List<Order>> _pendingCache = {};
+  static final Map<int, DateTime> _pendingCacheTime = {};
   static const _cacheDuration = Duration(seconds: 30);
 
   static Future<Map<String, dynamic>> submitOrder(Map<String, dynamic> orderData) async {
     // debugPrint("\n[API REQUEST] --> CHECKOUT ORDER");
     try {
-      final headers = await ApiClient.getHeaders();
       if (!orderData.containsKey('outlet_id')) {
         orderData['outlet_id'] = await StorageService.getOutletId();
       }
@@ -55,7 +54,6 @@ class OrderApiService {
   ) async {
     // debugPrint("\n[API REQUEST] --> UPDATE PENDING ORDER (ID: $orderId)");
     try {
-      final headers = await ApiClient.getHeaders();
 
       if (!orderData.containsKey('outlet_id')) {
         final int? outletId = await StorageService.getOutletId();
@@ -163,10 +161,8 @@ class OrderApiService {
     }
 
     try {
-      final headers = await ApiClient.getHeaders();
 
       final firstPage = await _fetchPendingPage(
-        headers: headers,
         outletId: outletId,
         page: 1,
       );
@@ -190,7 +186,6 @@ class OrderApiService {
 
         final batchResults = await Future.wait(
           batch.map((page) => _fetchPendingPage(
-                headers: headers,
                 outletId: outletId,
                 page: page,
               ).catchError((_) => _PendingPageResult(orders: [], lastPage: 1))),
@@ -212,7 +207,6 @@ class OrderApiService {
   }
 
   static Future<_PendingPageResult> _fetchPendingPage({
-    required Map<String, String> headers,
     required int? outletId,
     required int page,
   }) async {
@@ -252,7 +246,6 @@ class OrderApiService {
 
   static Future<bool> acceptOrder(int orderId) async {
     try {
-      final headers = await ApiClient.getHeaders();
       final body = jsonEncode({'scope': 'cashier'});
 
       // debugPrint('=== ACCEPT ORDER ===');
@@ -279,7 +272,6 @@ class OrderApiService {
 
   static Future<List<Order>> getPaidOrders() async {
     try {
-      final headers = await ApiClient.getHeaders();
       final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/orders?status=paid'),
       );
@@ -307,7 +299,6 @@ class OrderApiService {
 
   static Future<List<Order>> fetchHistory() async {
     try {
-      final headers = await ApiClient.getHeaders();
       final int? outletId = await StorageService.getOutletId();
       final String? shiftId = await StorageService.getCurrentShiftId();
 
@@ -355,7 +346,6 @@ class OrderApiService {
 
   static Future<List<Order>> fetchHistoryPage({required int page, int perPage = 20}) async {
     try {
-      final headers = await ApiClient.getHeaders();
       final int? outletId = await StorageService.getOutletId();
       final String? shiftId = await StorageService.getCurrentShiftId();
 
@@ -379,7 +369,6 @@ class OrderApiService {
 
   static Future<Order?> fetchHistoryDetail(int id) async {
     try {
-      final headers = await ApiClient.getHeaders();
       final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/history-transactions/$id'),
       );
@@ -402,7 +391,6 @@ class OrderApiService {
     required double totalPrice,
   }) async {
     try {
-      final headers = await ApiClient.getHeaders();
       final Map<String, dynamic> bodyData = {
         'reason': reason,
         'items': items.map((item) => item.toJson()).toList(),

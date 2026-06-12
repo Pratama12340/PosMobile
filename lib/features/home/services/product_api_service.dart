@@ -1,16 +1,13 @@
 import 'dart:convert';
-// Removed http import
 import 'package:flutter/foundation.dart';
 import 'package:sistem_pos/features/home/models/product_model.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sistem_pos/core/network/api_client.dart';
 
 class ProductApiService {
   static Future<List<Product>> getProducts() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final int outletId = prefs.getInt('outlet_id') ?? 1;
+      final int outletId = await StorageService.getOutletId() ?? 1;
 
       final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/products?outlet_id=$outletId&per_page=100'),
@@ -31,8 +28,7 @@ class ProductApiService {
 
   static Future<List<dynamic>> getCategories() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final int outletId = prefs.getInt('outlet_id') ?? 1;
+      final int outletId = await StorageService.getOutletId() ?? 1;
 
       final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/categories?outlet_id=$outletId&per_page=100'),
@@ -51,8 +47,7 @@ class ProductApiService {
 
   static Future<List<String>> getTopProducts() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final int outletId = prefs.getInt('outlet_id') ?? 1;
+      final int outletId = await StorageService.getOutletId() ?? 1;
 
       final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/public/top-products?outlet_id=$outletId'),
@@ -60,7 +55,6 @@ class ProductApiService {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-// debugPrint("🏆 [CEK API BESTSELLER - OUTLET $outletId]: $result");
 
         List<dynamic> rawData = [];
         if (result['top_products'] != null) {

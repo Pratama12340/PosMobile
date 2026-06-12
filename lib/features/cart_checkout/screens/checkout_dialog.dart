@@ -9,7 +9,6 @@ import 'package:sistem_pos/core/constants/style.dart';
 import 'package:sistem_pos/features/auth/services/auth_api_service.dart';
 import 'package:sistem_pos/core/network/master_api_service.dart';
 import 'package:sistem_pos/features/orders/services/order_api_service.dart';
-import 'package:sistem_pos/core/utils/tax_calculator.dart' as tax_calc;
 import 'package:sistem_pos/features/cart_checkout/widgets/checkout_calculator.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/discount_panel.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/payment_selector.dart';

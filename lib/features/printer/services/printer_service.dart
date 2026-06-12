@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:sistem_pos/features/printer/models/print_model.dart'; // Pastikan path model Anda sudah benar
 
 class NetworkPrinterService {

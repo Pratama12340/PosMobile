@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:sistem_pos/core/constants/style.dart';
 import 'package:sistem_pos/features/orders/models/order_model.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/cart_panel.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/draft_panel.dart';
 import 'package:sistem_pos/core/utils/currency_formatter.dart';
-import 'package:sistem_pos/features/printer/utils/print_helper.dart';
-import 'package:sistem_pos/core/services/storage_service.dart';
 import 'package:sistem_pos/features/home/providers/product_provider.dart';
 import 'package:sistem_pos/features/cart_checkout/providers/cart_provider.dart';
 import 'package:sistem_pos/features/orders/providers/order_provider.dart';

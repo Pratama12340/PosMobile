@@ -22,20 +22,19 @@ class ProductGrid extends StatelessWidget {
         }
 
         return LayoutBuilder(
-          builder: (context, constraints) {
-            double containerWidth = constraints.maxWidth;
-            double spacing = 15;
-            double itemWidth = (containerWidth - (spacing * 3)) / 4;
-            double itemHeight = 115;
+  builder: (context, constraints) {
+    double spacing = 18.0;
+    double itemHeight = (constraints.maxHeight - (spacing * 2)) / 3;
+    double itemWidth = (constraints.maxWidth - (spacing * 3)) / 4;
 
-            return GridView.builder(
-              padding: EdgeInsets.zero,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                childAspectRatio: itemWidth / itemHeight,
-                crossAxisSpacing: spacing,
-                mainAxisSpacing: spacing,
-              ),
+    return GridView.builder(
+      padding: EdgeInsets.zero,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: itemWidth / itemHeight,
+        crossAxisSpacing: spacing,
+        mainAxisSpacing: spacing,
+      ),
               itemCount: productProvider.products.length,
               itemBuilder: (context, index) {
                 final p = productProvider.products[index];

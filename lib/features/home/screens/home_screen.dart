@@ -258,8 +258,7 @@ class HomeScreenState extends State<HomeScreen> {
                         widget.onCartToggled?.call(true);
                       },
                       onDelete: (index) {
-                        // TODO: implement delete draft
-                        // we need to add removeDraft(index) to CartProvider
+                        cartProvider.removeDraft(index);
                       },
                     )
                   else

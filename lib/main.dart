@@ -1,8 +1,15 @@
+import 'package:provider/provider.dart';
+import 'package:sistem_pos/features/auth/providers/auth_provider.dart';
+import 'package:sistem_pos/features/shift/providers/shift_provider.dart';
+import 'package:sistem_pos/features/home/providers/product_provider.dart';
+import 'package:sistem_pos/features/cart_checkout/providers/cart_provider.dart';
+import 'package:sistem_pos/features/orders/providers/order_provider.dart';
+import 'package:sistem_pos/features/home/providers/home_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'screens/splash_screen.dart';
+import 'package:sistem_pos/features/auth/screens/splash_screen.dart';
 import 'package:flutter/services.dart';  
-import 'utils/app_keys.dart'; // Import file yang baru dibuat
+import 'package:sistem_pos/core/utils/app_keys.dart'; // Import file yang baru dibuat
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,21 +24,32 @@ void main() async {
   runApp(const MyApp());
 }
 
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      scaffoldMessengerKey: snackbarKey, // <--- PASANG KEY DI SINI
-      debugShowCheckedModeBanner: false,
-      title: 'Aranus POS',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4285F4)),
-        useMaterial3: true,
-        fontFamily: 'Poppins',
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ShiftProvider()),
+        ChangeNotifierProvider(create: (_) => ProductProvider()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProvider(create: (_) => HomeController()),
+      ],
+      child: MaterialApp(
+        scaffoldMessengerKey: snackbarKey,
+        debugShowCheckedModeBanner: false,
+        title: 'Aranus POS',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4285F4)),
+          useMaterial3: true,
+          fontFamily: 'Poppins',
+        ),
+        home: const SplashScreen(),
       ),
-      home: const SplashScreen(),
     );
   }
 }

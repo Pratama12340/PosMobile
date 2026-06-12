@@ -174,6 +174,42 @@ class OrderItem {
     'id': id,
     'cancelled_qty': originalQty - activeQty,
   };
+
+  Map<String, dynamic> toDraftJson() => {
+    'id': id,
+    'product_id': productId,
+    'original_qty': originalQty,
+    'active_qty': activeQty,
+    'item_name': itemName,
+    'unit_price': unitPrice,
+    'original_price': originalPrice,
+    'discount_id': discountId,
+    'shift_id': shiftId,
+    'category_id': categoryId,
+    'is_voided': isVoided,
+    'notes': notes,
+    'station_id': stationId,
+    'station_name': stationName,
+  };
+
+  factory OrderItem.fromDraftJson(Map<String, dynamic> json) {
+    return OrderItem(
+      id: json['id'] as int? ?? 0,
+      productId: json['product_id'] as int? ?? 0,
+      originalQty: json['original_qty'] as int? ?? 1,
+      activeQty: json['active_qty'] as int? ?? 1,
+      itemName: json['item_name'] as String? ?? 'Tanpa Nama',
+      unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0.0,
+      originalPrice: (json['original_price'] as num?)?.toDouble() ?? 0.0,
+      discountId: json['discount_id'] as int?,
+      shiftId: json['shift_id'] as int?,
+      categoryId: json['category_id'] as int?,
+      isVoided: json['is_voided'] as bool? ?? false,
+      notes: json['notes'] as String? ?? '',
+      stationId: json['station_id'] as String? ?? '',
+      stationName: json['station_name'] as String? ?? '',
+    );
+  }
 }
 
 // ============================================================

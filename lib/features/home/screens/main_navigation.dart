@@ -1,3 +1,4 @@
+import 'package:just_audio/just_audio.dart';
 import 'package:sistem_pos/features/shift/providers/shift_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:sistem_pos/features/orders/providers/order_provider.dart';
@@ -77,12 +78,12 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   // ─────────────────────────────────────────────────────────────
   // Kirim notifikasi ke overlay — beda judul untuk QRIS vs Cash
   // ─────────────────────────────────────────────────────────────
-  void _fireNotification({
+  Future<void> _fireNotification({
     required String paymentMethod,
     required String customerName,
     double? totalPrice,
     String? invoiceNo,
-  }) {
+  }) async {
 // debugPrint('🔥 [_fireNotification] method=$paymentMethod customer=$customerName');
 
     final method = paymentMethod.toLowerCase().trim();
@@ -106,6 +107,19 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         totalPrice: totalPrice,
       ),
     );
+
+    try {
+      final player = AudioPlayer();
+      await player.setAsset('assets/audio/universfield-new-notification-021-370045.mp3');
+      player.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed) {
+          player.dispose();
+        }
+      });
+      await player.play();
+    } catch (e) {
+      debugPrint("Error playing custom notification: $e");
+    }
   }
 
 // ─────────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sistem_pos/features/orders/models/order_model.dart';
 import 'package:sistem_pos/features/home/models/product_model.dart';
 import 'package:sistem_pos/core/models/discount_model.dart';
@@ -7,6 +9,64 @@ class CartProvider extends ChangeNotifier {
   final Map<int, OrderItem> _cart = {};
   final List<Map<String, dynamic>> _drafts = [];
   final Map<int, Discount> _productDiscounts = {};
+
+  CartProvider() {
+    loadDraftsFromStorage();
+  }
+
+  Future<void> _saveDraftsToStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<Map<String, dynamic>> serializedDrafts = _drafts.map((draft) {
+        final cartMap = draft['cart'] as Map<int, OrderItem>;
+        final serializedCart = cartMap.map((key, value) => MapEntry(key.toString(), value.toDraftJson()));
+        return {
+          'cart': serializedCart,
+          'customerName': draft['customerName'],
+          'tableNumber': draft['tableNumber'],
+          'tableId': draft['tableId'],
+        };
+      }).toList();
+      
+      final jsonString = jsonEncode(serializedDrafts);
+      await prefs.setString('offline_draft_orders', jsonString);
+    } catch (e) {
+      debugPrint("Error saving drafts to storage: $e");
+    }
+  }
+
+  Future<void> loadDraftsFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString('offline_draft_orders');
+      if (jsonString != null && jsonString.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(jsonString);
+        _drafts.clear();
+        for (var item in decoded) {
+          final Map<String, dynamic> draftMap = item as Map<String, dynamic>;
+          final serializedCart = draftMap['cart'] as Map<String, dynamic>;
+          final Map<int, OrderItem> cartMap = {};
+          
+          serializedCart.forEach((key, value) {
+            final productId = int.tryParse(key);
+            if (productId != null) {
+              cartMap[productId] = OrderItem.fromDraftJson(value as Map<String, dynamic>);
+            }
+          });
+          
+          _drafts.add({
+            'cart': cartMap,
+            'customerName': draftMap['customerName'],
+            'tableNumber': draftMap['tableNumber'],
+            'tableId': draftMap['tableId'],
+          });
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Error loading drafts from storage: $e");
+    }
+  }
 
   String? _currentCustomerName;
   String? _currentTableNumber;
@@ -144,6 +204,7 @@ class CartProvider extends ChangeNotifier {
         'tableId': tableId,
       });
       clearCart();
+      _saveDraftsToStorage();
     }
   }
 
@@ -156,6 +217,7 @@ class CartProvider extends ChangeNotifier {
     _currentTableId = draft['tableId'];
     _drafts.remove(draft);
     notifyListeners();
+    _saveDraftsToStorage();
   }
 
   void loadPendingOrderToCart(Order order, List<Product> allProducts) {
@@ -207,6 +269,7 @@ class CartProvider extends ChangeNotifier {
     if (index >= 0 && index < _drafts.length) {
       _drafts.removeAt(index);
       notifyListeners();
+      _saveDraftsToStorage();
     }
   }
 }

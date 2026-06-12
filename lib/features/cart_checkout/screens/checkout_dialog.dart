@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:intl/intl.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -9,6 +10,7 @@ import 'package:sistem_pos/features/auth/services/auth_api_service.dart';
 import 'package:sistem_pos/core/network/master_api_service.dart';
 import 'package:sistem_pos/features/orders/services/order_api_service.dart';
 import 'package:sistem_pos/core/utils/tax_calculator.dart' as tax_calc;
+import 'package:sistem_pos/features/cart_checkout/widgets/checkout_calculator.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/discount_panel.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/payment_selector.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/checkout_summary.dart';
@@ -84,12 +86,12 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   void _toggleDiscount(Discount d) {
     setState(() {
       // Reset exact change saat diskon berubah agar user konfirmasi ulang
-      //if (_isExactChange) {
-      //_isExactChange = false;
-      //_selectedQuickAmount = null;
-      //_amountTendered = 0;
-      //_manualTenderController.clear();
-      //}
+      if (_isExactChange) {
+        _isExactChange = false;
+        _selectedQuickAmount = null;
+        _amountTendered = 0;
+        _manualTenderController.clear();
+      }
 
       if (_isDiscountSelected(d)) {
         _selectedDiscounts.removeWhere((s) => s.id == d.id);
@@ -169,15 +171,17 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   final discounts = await MasterApiService.getDiscounts();
   if (!mounted) return;
 
-  for (var d in discounts) {
-debugPrint("=== DISKON: ${d.name}");
-debugPrint("    scope: ${d.scope}");
-debugPrint("    type: ${d.type}");
-debugPrint("    value: ${d.value}");
-debugPrint("    productIds: ${d.productIds}");
-debugPrint("    categoryIds: ${d.categoryIds}");
-debugPrint("    minPurchase: ${d.minPurchase}");
-  }
+    if (kDebugMode) {
+      for (var d in discounts) {
+        print("=== DISKON: ${d.name}");
+        print("    scope: ${d.scope}");
+        print("    type: ${d.type}");
+        print("    value: ${d.value}");
+        print("    productIds: ${d.productIds}");
+        print("    categoryIds: ${d.categoryIds}");
+        print("    minPurchase: ${d.minPurchase}");
+      }
+    }
     setState(() {
       _availableDiscounts = discounts;
 
@@ -230,56 +234,7 @@ debugPrint("    minPurchase: ${d.minPurchase}");
     });
   }
 
-  // ??? Hitung total diskon dari semua diskon yang dipilih ???????????????????
-  double _calculateDiscountValue(double subTotal) {
-    if (_selectedDiscounts.isEmpty) return 0;
-
-    double total = 0;
-
-    for (var d in _selectedDiscounts) {
-      double dAmt = 0;
-
-      // Jika punya productIds atau categoryIds ? hitung per item   qty
-      // (berlaku untuk scope apapun: global, products, categories)
-      if (d.productIds.isNotEmpty || d.categoryIds.isNotEmpty) {
-        for (var item in widget.cart.values) {
-          if (item.isVoided || item.activeQty == 0) continue;
-
-          bool matched = false;
-          if (d.productIds.isNotEmpty) {
-            matched = d.productIds.contains(item.productId);
-          } else if (d.categoryIds.isNotEmpty) {
-            matched =
-                item.categoryId != null &&
-                d.categoryIds.contains(item.categoryId);
-          }
-
-          if (!matched) continue;
-
-          double discPerItem = d.type == 'percentage'
-              ? (item.originalPrice * d.value / 100)
-              : d.value;
-
-          dAmt += discPerItem * item.activeQty;
-        }
-      } else {
-        // Tidak ada filter produk/kategori ? berlaku seluruh transaksi
-        dAmt = d.type == 'percentage' ? (subTotal * d.value / 100) : d.value;
-      }
-
-      if (d.maxDiscount != null && dAmt > d.maxDiscount!) {
-        dAmt = d.maxDiscount!;
-      }
-
-      total += dAmt;
-    }
-
-    return total;
-  }
-
-  Map<String, dynamic> _calculateTaxesAndGrandTotal(double baseAmount) {
-    return tax_calc.calculateTaxesAndGrandTotal(baseAmount, _availableTaxes);
-  }
+  // _calculateDiscountValue dan _calculateTaxesAndGrandTotal dipindah ke CheckoutCalculator
 
 
   @override
@@ -289,35 +244,23 @@ debugPrint("    minPurchase: ${d.minPurchase}");
         ? widget.originalTotalAmount
         : widget.totalAmount;
 
-        for (var item in widget.cart.values) {
-debugPrint("=== CART ITEM: ${item.itemName}");
-debugPrint("    productId: ${item.productId}");
-debugPrint("    categoryId: ${item.categoryId}");
-debugPrint("    discountId: ${item.discountId}");
-  }
+    if (kDebugMode) {
+      for (var item in widget.cart.values) {
+        print("=== CART ITEM: ${item.itemName}");
+        print("    productId: ${item.productId}");
+        print("    categoryId: ${item.categoryId}");
+        print("    discountId: ${item.discountId}");
+      }
+    }
 
-    double discountAmount = _calculateDiscountValue(subTotal);
+    double discountAmount = CheckoutCalculator.calculateDiscountValue(subTotal, _selectedDiscounts, widget.cart);
     double baseAmount = subTotal - discountAmount;
     if (baseAmount < 0) baseAmount = 0;
 
-    var taxData = _calculateTaxesAndGrandTotal(baseAmount);
+    var taxData = CheckoutCalculator.calculateTaxesAndGrandTotal(baseAmount, _availableTaxes);
     List<Map<String, dynamic>> taxBreakdown = taxData['tax_breakdown'];
     double grandTotal = taxData['grand_total'];
     if (grandTotal < 0) grandTotal = 0;
-
-    if (_isExactChange) {
-      final formatted = NumberFormat.decimalPattern(
-        'id',
-      ).format(grandTotal.toInt());
-      if (_manualTenderController.text != formatted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _manualTenderController.text = formatted;
-          // Update _amountTendered tanpa setState agar tidak rebuild loop
-          _amountTendered = grandTotal;
-        });
-      }
-    }
 
     int tagihanInt = grandTotal.toInt();
     int uangMasukInt = _amountTendered.toInt();
@@ -681,7 +624,7 @@ debugPrint("    discountId: ${item.discountId}");
 
     try {
       final outletData = await AuthApiService.fetchOutletInfoLive();
-      final String currentOutletName = outletData['name']!;
+      final String currentOutletName = outletData['name'] ?? "Outlet";
       final String currentOutletAddress = outletData['address_outlet'] ?? "-";
 
       final savedOutletId = await StorageService.getOutletId();
@@ -693,16 +636,18 @@ debugPrint("    discountId: ${item.discountId}");
           ? widget.originalTotalAmount
           : widget.totalAmount;
 
-          for (var item in widget.cart.values) {
-debugPrint("=== CART ITEM: ${item.itemName}");
-debugPrint("    productId: ${item.productId}");
-debugPrint("    categoryId: ${item.categoryId}");
-debugPrint("    discountId: ${item.discountId}");
-  }
-      double discountAmount = _calculateDiscountValue(subTotal);
+      if (kDebugMode) {
+        for (var item in widget.cart.values) {
+          print("=== CART ITEM: ${item.itemName}");
+          print("    productId: ${item.productId}");
+          print("    categoryId: ${item.categoryId}");
+          print("    discountId: ${item.discountId}");
+        }
+      }
+      double discountAmount = CheckoutCalculator.calculateDiscountValue(subTotal, _selectedDiscounts, widget.cart);
       double baseAmount = subTotal - discountAmount;
 
-      var taxData = _calculateTaxesAndGrandTotal(baseAmount);
+      var taxData = CheckoutCalculator.calculateTaxesAndGrandTotal(baseAmount, _availableTaxes);
       double taxAmountFinal = taxData['tax_amount'];
       double grandTotal = taxData['grand_total'];
 
@@ -763,18 +708,19 @@ debugPrint("    discountId: ${item.discountId}");
           'discount_id': _selectedDiscounts.first.id,
       };
 
-debugPrint("=== DEBUG CHECKOUT ===");
-debugPrint("isUpdatingOrder: ${widget.isUpdatingOrder}");
-debugPrint("pendingDiscountId: ${widget.pendingDiscountId}");
-debugPrint(
-        "selectedDiscounts: ${_selectedDiscounts.map((d) => '${d.name}(${d.scope})').join(', ')}",
-      );
-debugPrint("subTotal: $subTotal");
-debugPrint("discountAmount: $discountAmount");
-debugPrint("grandTotal: $grandTotal");
-debugPrint("======================");
-
-debugPrint("[API REQUEST] --> CHECKOUT ORDER. Payload: $payload");
+      if (kDebugMode) {
+        print("=== DEBUG CHECKOUT ===");
+        print("isUpdatingOrder: ${widget.isUpdatingOrder}");
+        print("pendingDiscountId: ${widget.pendingDiscountId}");
+        print(
+          "selectedDiscounts: ${_selectedDiscounts.map((d) => '${d.name}(${d.scope})').join(', ')}",
+        );
+        print("subTotal: $subTotal");
+        print("discountAmount: $discountAmount");
+        print("grandTotal: $grandTotal");
+        print("======================");
+        print("[API REQUEST] --> CHECKOUT ORDER. Payload: $payload");
+      }
       dynamic res;
       if (widget.isUpdatingOrder) {
         res = await OrderApiService.updatePendingOrder(widget.orderId, payload);

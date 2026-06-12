@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+// Removed http import
 import 'package:flutter/foundation.dart';
 import 'package:sistem_pos/features/home/models/product_model.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
@@ -9,11 +9,11 @@ import 'package:sistem_pos/core/network/api_client.dart';
 class ProductApiService {
   static Future<List<Product>> getProducts() async {
     try {
-      final headers = await ApiClient.getHeaders();
-      final int? outletId = await StorageService.getOutletId();
-      final response = await http.get(
+      final prefs = await SharedPreferences.getInstance();
+      final int outletId = prefs.getInt('outlet_id') ?? 1;
+
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/products?outlet_id=$outletId&per_page=100'),
-        headers: headers,
       );
       final result = jsonDecode(response.body);
       if (result['data'] != null) {
@@ -24,17 +24,18 @@ class ProductApiService {
       }
       return [];
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] getProducts: $e");
       return [];
     }
   }
 
   static Future<List<dynamic>> getCategories() async {
     try {
-      final headers = await ApiClient.getHeaders();
-      final int? outletId = await StorageService.getOutletId();
-      final response = await http.get(
+      final prefs = await SharedPreferences.getInstance();
+      final int outletId = prefs.getInt('outlet_id') ?? 1;
+
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/categories?outlet_id=$outletId&per_page=100'),
-        headers: headers,
       );
       final result = jsonDecode(response.body);
       if (result['data'] != null) {
@@ -43,6 +44,7 @@ class ProductApiService {
       }
       return [];
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] getCategories: $e");
       return [];
     }
   }
@@ -52,12 +54,8 @@ class ProductApiService {
       final prefs = await SharedPreferences.getInstance();
       final int outletId = prefs.getInt('outlet_id') ?? 1;
 
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/public/top-products?outlet_id=$outletId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
       );
 
       if (response.statusCode == 200) {
@@ -80,22 +78,22 @@ class ProductApiService {
       }
       return [];
     } catch (e) {
-// debugPrint("💥 [API ERROR] getTopProducts: $e");
+      if (kDebugMode) print("💥 [API ERROR] getTopProducts: $e");
       return [];
     }
   }
 
   static Future<List<dynamic>> getStations() async {
     try {
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/stations'),
-        headers: await ApiClient.getHeaders(),
       );
       final result = jsonDecode(response.body);
       return response.statusCode == 200
           ? (result['data'] is List ? result['data'] : result['data']['data'] ?? [])
           : [];
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] getStations: $e");
       return [];
     }
   }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:sistem_pos/features/orders/models/order_model.dart';
 import 'package:sistem_pos/features/home/models/product_model.dart';
+import 'package:sistem_pos/core/models/discount_model.dart';
 
 class CartProvider extends ChangeNotifier {
   final Map<int, OrderItem> _cart = {};
   final List<Map<String, dynamic>> _drafts = [];
+  final Map<int, Discount> _productDiscounts = {};
 
   String? _currentCustomerName;
   String? _currentTableNumber;
@@ -39,19 +41,15 @@ class CartProvider extends ChangeNotifier {
   });
 
   void addToCart(Product p) {
+    if (p.discount != null) {
+      _productDiscounts[p.id] = p.discount!;
+    }
+
     if (_cart.containsKey(p.id)) {
       _cart[p.id]!.quantity += 1;
+      _recalculateDiscount(p.id);
     } else {
       double unitPrice = p.price.toDouble();
-      double discountedPrice = unitPrice;
-
-      if (p.discount != null) {
-        if (p.discount!.type == 'percentage') {
-          discountedPrice = unitPrice * (1 - (p.discount!.value / 100));
-        } else {
-          discountedPrice = unitPrice - p.discount!.value;
-        }
-      }
 
       _cart[p.id] = OrderItem(
         id: 0,
@@ -60,19 +58,44 @@ class CartProvider extends ChangeNotifier {
         itemName: p.name,
         originalQty: 1,
         activeQty: 1,
-        unitPrice: discountedPrice,
+        unitPrice: unitPrice,
         originalPrice: unitPrice,
         discountId: p.discount?.id,
         stationId: p.stationId,
         stationName: p.stationName,
       );
+      _recalculateDiscount(p.id);
     }
     notifyListeners();
+  }
+
+  void _recalculateDiscount(int productId) {
+    final item = _cart[productId];
+    if (item == null) return;
+
+    final discount = _productDiscounts[productId];
+    if (discount != null) {
+      double totalDiscount = 0;
+      if (discount.type == 'percentage') {
+        totalDiscount = (item.originalPrice * (discount.value / 100)) * item.activeQty;
+      } else {
+        totalDiscount = discount.value * item.activeQty;
+      }
+
+      if (discount.maxDiscount != null && totalDiscount > discount.maxDiscount!) {
+        totalDiscount = discount.maxDiscount!.toDouble();
+      }
+
+      item.unitPrice = item.originalPrice - (totalDiscount / item.activeQty);
+    } else {
+      item.unitPrice = item.originalPrice;
+    }
   }
 
   void increaseQty(int productId) {
     if (_cart.containsKey(productId)) {
       _cart[productId]!.quantity += 1;
+      _recalculateDiscount(productId);
       notifyListeners();
     }
   }
@@ -81,6 +104,7 @@ class CartProvider extends ChangeNotifier {
     if (_cart.containsKey(productId)) {
       if (_cart[productId]!.quantity > 1) {
         _cart[productId]!.quantity -= 1;
+        _recalculateDiscount(productId);
       } else {
         _cart.remove(productId);
       }
@@ -148,13 +172,8 @@ class CartProvider extends ChangeNotifier {
         unitPrice = (item.price > 0) ? item.price : product.price.toDouble();
       }
 
-      double discountedPrice = unitPrice;
       if (product?.discount != null) {
-        if (product!.discount!.type == 'percentage') {
-          discountedPrice = unitPrice * (1 - (product.discount!.value / 100));
-        } else {
-          discountedPrice = unitPrice - product.discount!.value;
-        }
+        _productDiscounts[item.productId] = product!.discount!;
       }
 
       _cart[item.productId] = OrderItem(
@@ -164,12 +183,13 @@ class CartProvider extends ChangeNotifier {
         itemName: itemName,
         originalQty: item.quantity,
         activeQty: item.quantity,
-        unitPrice: discountedPrice,
+        unitPrice: unitPrice, // _recalculateDiscount will handle this
         originalPrice: unitPrice,
         discountId: product?.discount?.id,
         stationId: item.stationId,
         stationName: item.stationName,
       );
+      _recalculateDiscount(item.productId);
     }
 
     _currentCustomerName = order.customerName;

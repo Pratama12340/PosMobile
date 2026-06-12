@@ -600,15 +600,17 @@ const SizedBox(height: 15),
       controller: _qtyControllers[id] ?? TextEditingController(text: "${item.quantity}"),
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       onTap: () => KeyboardUtil.show(),
-      onChanged: (val) {
+      onSubmitted: (val) {
         final parsed = int.tryParse(val);
         if (parsed != null && parsed > 0) {
           final diff = parsed - item.quantity;
           if (diff > 0) {
             for (int i = 0; i < diff; i++) { widget.onIncrease(id); }
-    } else if (diff < 0) {
-      for (int i = 0; i < diff.abs(); i++) { widget.onDecrease(id); }
+          } else if (diff < 0) {
+            for (int i = 0; i < diff.abs(); i++) { widget.onDecrease(id); }
           }
+        } else {
+          _qtyControllers[id]?.text = "${item.quantity}";
         }
       },
     ),

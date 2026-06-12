@@ -8,7 +8,6 @@ class Discount {
   final List<int> categoryIds;
   final double minPurchase;
   final double? maxDiscount;
-  final int? maxUsage;
 
   Discount({
     required this.id,
@@ -20,7 +19,6 @@ class Discount {
     this.categoryIds = const [],
     required this.minPurchase,
     this.maxDiscount,
-    this.maxUsage,
   });
 
   factory Discount.fromJson(Map<String, dynamic> json) {
@@ -36,7 +34,6 @@ class Discount {
       maxDiscount: json['max_discount'] != null
           ? _toDouble(json['max_discount'])
           : null,
-      maxUsage: json['max_usage'] != null ? _toInt(json['max_usage']) : null,
     );
   }
 

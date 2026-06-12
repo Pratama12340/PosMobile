@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+// Removed http import
 import 'package:sistem_pos/core/network/api_client.dart';
+import 'package:flutter/foundation.dart';
 
 class PaymentApiService {
   static Future<Map<String, dynamic>> getMidtransToken(
@@ -9,15 +10,13 @@ class PaymentApiService {
     int amount,
   ) async {
     try {
-      final headers = await ApiClient.getHeaders();
       final requestBody = jsonEncode({
         "payments": [
           {"method": paymentMethod, "amount_paid": amount},
         ],
       });
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/orders/$orderId/payments'),
-        headers: headers,
         body: requestBody,
       );
       final result = jsonDecode(response.body);
@@ -26,14 +25,14 @@ class PaymentApiService {
       }
       return {'success': false, 'message': result['message'] ?? 'Gagal mendapatkan token'};
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] getMidtransToken: $e");
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 
   static Future<Map<String, dynamic>> getMidtransConfig() async {
     try {
-      final headers = await ApiClient.getHeaders();
-      final response = await http.get(Uri.parse('${ApiClient.baseUrl}/midtrans-config'), headers: headers);
+      final response = await ApiClient.get(Uri.parse('${ApiClient.baseUrl}/midtrans-config'));
       final result = jsonDecode(response.body);
       return response.statusCode == 200
           ? {
@@ -43,6 +42,7 @@ class PaymentApiService {
             }
           : {'success': false, 'message': 'Gagal memuat konfigurasi'};
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] getMidtransConfig: $e");
       return {'success': false, 'message': e.toString()};
     }
   }

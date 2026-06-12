@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sistem_pos/features/printer/models/printer_profile_model.dart';
 import 'package:sistem_pos/features/printer/models/printer_device.dart';
 
 class StorageService {
+  static const _secureStorage = FlutterSecureStorage();
   static const String _keyToken = 'token';
   static const String _keyOutletId = 'outlet_id';
   static const String _keyCashierName = 'cashier_name';
@@ -24,18 +26,15 @@ class StorageService {
 
   // --- 1. FUNGSI TOKEN ---
   static Future<void> saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyToken, token);
+    await _secureStorage.write(key: _keyToken, value: token);
   }
 
   static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyToken);
+    return await _secureStorage.read(key: _keyToken);
   }
 
   static Future<void> removeToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyToken);
+    await _secureStorage.delete(key: _keyToken);
   }
 
   // --- 2. FUNGSI OUTLET DATA ---
@@ -190,7 +189,7 @@ class StorageService {
 
   static Future<void> logoutKasir() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyToken);
+    await _secureStorage.delete(key: _keyToken);
     await prefs.remove(_keyCashierName);
     await prefs.remove(_keyUserRole);
     await prefs.remove(_keyProfilePhoto);

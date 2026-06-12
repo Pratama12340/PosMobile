@@ -89,7 +89,7 @@ class OrderItem {
   int originalQty;
   int activeQty;
   final String itemName;
-  final double unitPrice;       // harga setelah diskon (untuk display/kalkulasi)
+  double unitPrice;       // harga setelah diskon (untuk display/kalkulasi)
   final double originalPrice;   // harga sebelum diskon (selalu harga asli)
   final int? discountId;
   final int? shiftId; 
@@ -106,7 +106,9 @@ class OrderItem {
 
   set quantity(int val) {
     activeQty = val;
-    if (activeQty > originalQty) originalQty = activeQty;
+    if (id == 0) {
+      originalQty = activeQty;
+    }
   }
 
   OrderItem({

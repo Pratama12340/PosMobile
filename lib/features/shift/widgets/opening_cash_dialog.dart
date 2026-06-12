@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -244,8 +245,10 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                     ? null
                     : () async {
                         if (_cashController.text.isNotEmpty) {
-debugPrint("\n[DIALOG] Memulai proses Buka Kasir...");
-debugPrint("[DIALOG] Nominal Kas Awal: $_rawAmount");
+                        if (kDebugMode) {
+                          print("\n[DIALOG] Memulai proses Buka Kasir...");
+                          print("[DIALOG] Nominal Kas Awal: $_rawAmount");
+                        }
 
                           setState(() {
                             _isSaving = true;
@@ -265,28 +268,12 @@ debugPrint("[DIALOG] Nominal Kas Awal: $_rawAmount");
                             if (!mounted) return;
 
                             if (apiResponse['success'] == true) {
-debugPrint(
-                                "✔ Berhasil menyimpan Kas Awal ke Server Database.",
-                              );
-
-                              await StorageService.saveOpeningCash(
-                                _rawAmount.toDouble(),
-                              );
-                              await StorageService.saveShiftStatus(true);
-
-                              DateTime now = DateTime.now();
-                              String exactStartTime =
-                                  "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-                              await StorageService.saveLoginTime(
-                                exactStartTime,
-                              );
-
-debugPrint(
-                                "✔ Berhasil menandai status Shift Lokal: AKTIF mulai jam $exactStartTime.",
-                              );
-debugPrint(
-                                "[DIALOG] Proses Selesai. Menutup dialog...\n",
-                              );
+                              if (kDebugMode) {
+                                final exactStartTime = DateFormat('HH:mm:ss').format(DateTime.now());
+                                print("✔ Berhasil menyimpan Kas Awal ke Server Database.");
+                                print("✔ Berhasil menandai status Shift Lokal: AKTIF mulai jam $exactStartTime.");
+                                print("[DIALOG] Proses Selesai. Menutup dialog...\n");
+                              }
 
                               if (!mounted) return;
                               navigator.pop();
@@ -297,7 +284,7 @@ debugPrint(
                                     apiResponse['message'] ??
                                     "Gagal menyimpan kas awal di server.";
                               });
-debugPrint("❌ GAGAL: ${apiResponse['message']}");
+                              if (kDebugMode) print("❌ GAGAL: ${apiResponse['message']}");
                             }
                           } catch (e) {
                             if (mounted) {
@@ -307,10 +294,10 @@ debugPrint("❌ GAGAL: ${apiResponse['message']}");
                                     "Terjadi kesalahan koneksi jaringan.";
                               });
                             }
-debugPrint("❌ ERROR pada OpeningCashDialog: $e");
+                            if (kDebugMode) print("❌ ERROR pada OpeningCashDialog: $e");
                           }
                         } else {
-debugPrint("⚠️ WARNING: Form Kas Awal masih kosong.");
+                          if (kDebugMode) print("⚠️ WARNING: Form Kas Awal masih kosong.");
                           setState(() {
                             _errorMessage = "Harap masukkan nominal kas awal.";
                           });

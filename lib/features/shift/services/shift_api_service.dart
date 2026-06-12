@@ -1,32 +1,30 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+// Removed http import
 import 'package:sistem_pos/core/models/rekap_model.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
 import 'package:sistem_pos/core/network/api_client.dart';
+import 'package:flutter/foundation.dart';
 
 class ShiftApiService {
   static Future<Map<String, dynamic>> checkShiftStatus(int outletId) async {
     try {
-      final headers = await ApiClient.getHeaders();
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/shift-karyawans/check-status?outlet_id=$outletId'),
-        headers: headers,
       );
       final data = jsonDecode(response.body);
       return response.statusCode == 200
           ? {'success': data['success'] ?? true, 'message': data['message'], 'data': data['data']}
           : {'success': false, 'message': data['message'] ?? 'Gagal'};
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] checkShiftStatus: $e");
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 
   static Future<Map<String, dynamic>> startShift(int nominal, int outletId) async {
     try {
-      final headers = await ApiClient.getHeaders();
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/shift-karyawans/start'),
-        headers: headers,
         body: jsonEncode({'outlet_id': outletId, 'opening_balance': nominal}),
       );
       final data = jsonDecode(response.body);
@@ -39,16 +37,15 @@ class ShiftApiService {
       }
       return {'success': false, 'message': data['message'] ?? 'Gagal memulai shift'};
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] startShift: $e");
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 
   static Future<Map<String, dynamic>> endShift(int totalFisik, String notes) async {
     try {
-      final headers = await ApiClient.getHeaders();
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/shift-karyawans/end'),
-        headers: headers,
         body: jsonEncode({'actual_closing_balance': totalFisik, 'notes': notes}),
       );
       final data = jsonDecode(response.body);
@@ -63,15 +60,15 @@ class ShiftApiService {
       }
       return {'success': false, 'message': data['message'] ?? 'Gagal'};
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] endShift: $e");
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
 
   static Future<List<RekapShift>> getShiftHistory() async {
     try {
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/shift-karyawans'),
-        headers: await ApiClient.getHeaders(),
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -80,15 +77,15 @@ class ShiftApiService {
       }
       return [];
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] getShiftHistory: $e");
       return [];
     }
   }
 
   static Future<List<ShiftMaster>> getMasterShifts() async {
     try {
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/shifts'),
-        headers: await ApiClient.getHeaders(),
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -97,6 +94,7 @@ class ShiftApiService {
       }
       return [];
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] getMasterShifts: $e");
       return [];
     }
   }

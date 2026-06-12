@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sistem_pos/core/models/discount_model.dart';
+import 'package:sistem_pos/core/utils/discount_eligibility_helper.dart';
 
 class DiscountPanel extends StatelessWidget {
   final double subTotal;
@@ -117,42 +118,26 @@ class DiscountPanel extends StatelessWidget {
                     itemBuilder: (context, index) {
                       var d = availableDiscounts[index];
 
-                      bool isMinPurchaseMet = subTotal >= d.minPurchase;
-                      bool isProductEligible = true;
+                      bool isSelected = _isDiscountSelected(d);
+                      
+                      bool eligible = DiscountEligibilityHelper.isEligible(
+                        discount: d,
+                        subTotal: subTotal,
+                        cartProductIds: cartProductIds,
+                        cartCategoryIds: cartCategoryIds,
+                        hasGlobalDiscount: hasGlobalDiscount,
+                        selectedProductCount: selectedProductCount,
+                        isSelected: isSelected,
+                      );
 
-                      if (d.scope == 'products' && d.productIds.isNotEmpty) {
-                        isProductEligible = cartProductIds.any(
-                          (cartId) => d.productIds.contains(cartId),
-                        );
-                      } else if (d.scope == 'categories' && d.categoryIds.isNotEmpty) {
-                        isProductEligible = cartCategoryIds.any(
-                          (catId) => d.categoryIds.contains(catId),
-                        );
-                      }
-
-                      // Diskon produk max 2: disabled jika sudah 2 dan ini belum dipilih
-                      bool isMaxProductReached =
-                          d.scope == 'products' &&
-                          selectedProductCount >= 2 &&
-                          !_isDiscountSelected(d);
-
-                      // Diskon produk disabled jika ada global aktif, dan sebaliknya
-                      bool isBlockedByGlobal =
-                          d.scope == 'products' && hasGlobalDiscount;
-
-
-                      bool eligible =
-                          isMinPurchaseMet &&
-                          isProductEligible &&
-                          !isMaxProductReached &&
-                          !isBlockedByGlobal;
-
-                      bool canTap =
-                          _isDiscountSelected(d) ||
-                          (isMinPurchaseMet &&
-                              isProductEligible &&
-                              !isMaxProductReached) ||
-                          d.scope == 'global'; // transaksi selalu bisa diklik
+                      bool canTap = DiscountEligibilityHelper.canTap(
+                        discount: d,
+                        subTotal: subTotal,
+                        cartProductIds: cartProductIds,
+                        cartCategoryIds: cartCategoryIds,
+                        selectedProductCount: selectedProductCount,
+                        isSelected: isSelected,
+                      );
 
                       return Opacity(
                         opacity: canTap ? 1.0 : 0.45,
@@ -180,15 +165,12 @@ class DiscountPanel extends StatelessWidget {
     final bool isProduct = d.scope == 'products';
     final bool isSelected = _isDiscountSelected(d);
 
-    // Label khusus untuk kondisi terblokir
-    String? blockedReason;
-    if (!isSelected) {
-      if (isProduct && hasGlobalDiscount) {
-        blockedReason = "Hapus diskon transaksi dulu";
-      } else if (isProduct && selectedProductCount >= 2) {
-        blockedReason = "Maks. 2 diskon produk";
-      }
-    }
+    String? blockedReason = DiscountEligibilityHelper.getBlockedReason(
+      discount: d,
+      isSelected: isSelected,
+      hasGlobalDiscount: hasGlobalDiscount,
+      selectedProductCount: selectedProductCount,
+    );
 
     return GestureDetector(
       onTap: (canTap || isSelected) ? () => onToggleDiscount(d) : null,

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+// Removed http import
 import 'package:flutter/foundation.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
 import 'package:sistem_pos/core/network/api_client.dart';
@@ -11,12 +11,8 @@ class AuthApiService {
 // debugPrint("Payload: {'pin': '***', 'outlet_id': $outletId}");
 
     try {
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/login-pin'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
         body: jsonEncode({'pin': pin, 'outlet_id': outletId}),
       );
 
@@ -74,6 +70,9 @@ class AuthApiService {
         return {'success': false, 'message': data['message'] ?? 'PIN Salah!'};
       }
     } catch (e) {
+      if (kDebugMode) {
+        print("💥 [API ERROR] loginPin: $e");
+      }
       return {'success': false, 'message': 'Koneksi error: $e'};
     }
   }
@@ -95,8 +94,7 @@ class AuthApiService {
         };
       }
 
-      final headers = await ApiClient.getHeaders();
-      final response = await http.get(Uri.parse('${ApiClient.baseUrl}/outlets'), headers: headers);
+      final response = await ApiClient.get(Uri.parse('${ApiClient.baseUrl}/outlets'));
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -115,7 +113,7 @@ class AuthApiService {
 // debugPrint("🚨 [DEBUG Laporan Backend] MULAI CEK AKSES /users");
 // debugPrint("🚨 [DEBUG Laporan Backend] Mencari owner_id : ${outlet['owner_id']}");
 
-                final userResponse = await http.get(Uri.parse('${ApiClient.baseUrl}/users'), headers: headers);
+                final userResponse = await ApiClient.get(Uri.parse('${ApiClient.baseUrl}/users'));
 
 // debugPrint("🚨 [DEBUG Laporan Backend] Status HTTP   : ${userResponse.statusCode}");
 // debugPrint("🚨 [DEBUG Laporan Backend] Body Response : ${userResponse.body}");
@@ -139,7 +137,9 @@ class AuthApiService {
                   }
                 }
               } catch (e) {
-// debugPrint("💥 [API ERROR] Gagal fetch data user: $e");
+                if (kDebugMode) {
+                  print("💥 [API ERROR] Gagal fetch data user: $e");
+                }
               }
             }
 
@@ -164,7 +164,9 @@ class AuthApiService {
         'owner_email': "-",
       };
     } catch (e) {
-// debugPrint("💥 [API ERROR] fetchOutletInfoLive: $e");
+      if (kDebugMode) {
+        print("💥 [API ERROR] fetchOutletInfoLive: $e");
+      }
       return {
         'name': "Error Jaringan",
         'address_outlet': "-",

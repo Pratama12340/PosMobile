@@ -12,8 +12,8 @@ class _PendingPageResult {
 }
 
 class OrderApiService {
-  static List<Order>? _pendingCache;
-  static DateTime? _pendingCacheTime;
+  static Map<int, List<Order>> _pendingCache = {};
+  static Map<int, DateTime> _pendingCacheTime = {};
   static const _cacheDuration = Duration(seconds: 30);
 
   static Future<Map<String, dynamic>> submitOrder(Map<String, dynamic> orderData) async {
@@ -26,9 +26,8 @@ class OrderApiService {
 
       // debugPrint("Payload: ${jsonEncode(orderData)}");
 
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/orders/checkout'),
-        headers: headers,
         body: jsonEncode(orderData),
       );
 
@@ -45,6 +44,7 @@ class OrderApiService {
         return {'success': false, 'message': result['message'] ?? 'Gagal Simpan'};
       }
     } catch (e) {
+      if (kDebugMode) print("💥 [API ERROR] submitOrder: $e");
       return {'success': false, 'message': 'Kesalahan Sistem: $e'};
     }
   }
@@ -72,9 +72,8 @@ class OrderApiService {
 
       // debugPrint("Step 1A - Update Existing Items: ${jsonEncode({'items': existingItems})}");
 
-      final itemsResponse = await http.put(
+      final itemsResponse = await ApiClient.put(
         Uri.parse('${ApiClient.baseUrl}/orders/$orderId/items'),
-        headers: headers,
         body: jsonEncode({'items': existingItems}),
       );
 
@@ -95,9 +94,8 @@ class OrderApiService {
 
           // debugPrint("Step 1B - Add New Item: ${jsonEncode(singlePayload)}");
 
-          final resp = await http.post(
+          final resp = await ApiClient.post(
             Uri.parse('${ApiClient.baseUrl}/orders/$orderId/items'),
-            headers: headers,
             body: jsonEncode(singlePayload),
           );
 
@@ -127,9 +125,8 @@ class OrderApiService {
 
       // debugPrint("Step 2 - Process Payment: ${jsonEncode(paymentPayload)}");
 
-      final paymentResponse = await http.post(
+      final paymentResponse = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/orders/$orderId/payments'),
-        headers: headers,
         body: jsonEncode(paymentPayload),
       );
 
@@ -146,7 +143,7 @@ class OrderApiService {
         return {'success': false, 'message': result['message'] ?? 'Gagal proses pembayaran'};
       }
     } catch (e) {
-      // debugPrint("💥 [API ERROR] updatePendingOrder: $e");
+      if (kDebugMode) print("💥 [API ERROR] updatePendingOrder: $e");
       return {'success': false, 'message': 'Kesalahan Sistem: $e'};
     }
   }
@@ -154,17 +151,19 @@ class OrderApiService {
   static Future<List<Order>> getPendingOrders({
     bool forceRefresh = false,
   }) async {
+    final int? outletId = await StorageService.getOutletId();
+    final currentOutletId = outletId ?? 0;
+
     if (!forceRefresh &&
-        _pendingCache != null &&
-        _pendingCacheTime != null &&
-        DateTime.now().difference(_pendingCacheTime!) < _cacheDuration) {
-      // debugPrint('✅ [PENDING] Pakai cache (${_pendingCache!.length} orders)');
-      return List.from(_pendingCache!);
+        _pendingCache.containsKey(currentOutletId) &&
+        _pendingCacheTime.containsKey(currentOutletId) &&
+        DateTime.now().difference(_pendingCacheTime[currentOutletId]!) < _cacheDuration) {
+      // debugPrint('✅ [PENDING] Pakai cache (${_pendingCache[currentOutletId]!.length} orders)');
+      return List.from(_pendingCache[currentOutletId]!);
     }
 
     try {
       final headers = await ApiClient.getHeaders();
-      final int? outletId = await StorageService.getOutletId();
 
       final firstPage = await _fetchPendingPage(
         headers: headers,
@@ -178,8 +177,8 @@ class OrderApiService {
       // debugPrint('📦 [PENDING] Page 1: ${result.length} orders, total $totalPages hal.');
 
       if (totalPages <= 1) {
-        _pendingCache = result;
-        _pendingCacheTime = DateTime.now();
+        _pendingCache[currentOutletId] = result;
+        _pendingCacheTime[currentOutletId] = DateTime.now();
         return result;
       }
 
@@ -202,13 +201,13 @@ class OrderApiService {
         }
       }
 
-      _pendingCache = result;
-      _pendingCacheTime = DateTime.now();
+      _pendingCache[currentOutletId] = result;
+      _pendingCacheTime[currentOutletId] = DateTime.now();
       // debugPrint('✅ [PENDING] Total ${result.length} orders dari $totalPages halaman');
       return result;
     } catch (e) {
-      // debugPrint('💥 getPendingOrders error: $e');
-      return _pendingCache ?? [];
+      if (kDebugMode) print('💥 getPendingOrders error: $e');
+      return _pendingCache[currentOutletId] ?? [];
     }
   }
 
@@ -217,11 +216,10 @@ class OrderApiService {
     required int? outletId,
     required int page,
   }) async {
-    final response = await http.get(
+    final response = await ApiClient.get(
       Uri.parse(
         '${ApiClient.baseUrl}/orders?status=pending&outlet_id=$outletId&per_page=20&page=$page',
       ),
-      headers: headers,
     ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
@@ -247,8 +245,8 @@ class OrderApiService {
   }
 
   static void invalidatePendingCache() {
-    _pendingCache = null;
-    _pendingCacheTime = null;
+    _pendingCache.clear();
+    _pendingCacheTime.clear();
     // debugPrint('🗑️ [PENDING] Cache diinvalidasi');
   }
 
@@ -261,9 +259,8 @@ class OrderApiService {
       // debugPrint('URL: ${ApiClient.baseUrl}/orders/$orderId/accept');
       // debugPrint('Body: $body');
 
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/orders/$orderId/accept'),
-        headers: headers,
         body: body,
       );
 
@@ -275,7 +272,7 @@ class OrderApiService {
       // debugPrint('acceptOrder failed: ${response.statusCode} - ${response.body}');
       return false;
     } catch (e) {
-      // debugPrint('acceptOrder error: $e');
+      if (kDebugMode) print('💥 acceptOrder error: $e');
       return false;
     }
   }
@@ -283,9 +280,8 @@ class OrderApiService {
   static Future<List<Order>> getPaidOrders() async {
     try {
       final headers = await ApiClient.getHeaders();
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/orders?status=paid'),
-        headers: headers,
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -304,6 +300,7 @@ class OrderApiService {
       }
       return [];
     } catch (e) {
+      if (kDebugMode) print('💥 getPaidOrders error: $e');
       return [];
     }
   }
@@ -325,11 +322,10 @@ class OrderApiService {
 
         while (attempt < maxRetry) {
           try {
-            response = await http.get(
+            response = await ApiClient.get(
               Uri.parse(
                 '${ApiClient.baseUrl}/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=100&page=$currentPage',
               ),
-              headers: headers,
             ).timeout(const Duration(seconds: 15));
             break;
           } catch (e) {
@@ -352,7 +348,7 @@ class OrderApiService {
 
       return allOrders;
     } catch (e) {
-      // debugPrint("💥 fetchHistory: $e");
+      if (kDebugMode) print("💥 fetchHistory: $e");
       return [];
     }
   }
@@ -363,9 +359,8 @@ class OrderApiService {
       final int? outletId = await StorageService.getOutletId();
       final String? shiftId = await StorageService.getCurrentShiftId();
 
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=$perPage&page=$page'),
-        headers: headers,
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
@@ -377,7 +372,7 @@ class OrderApiService {
       }
       return [];
     } catch (e) {
-      // debugPrint("💥 fetchHistoryPage error: $e");
+      if (kDebugMode) print("💥 fetchHistoryPage error: $e");
       return [];
     }
   }
@@ -385,9 +380,8 @@ class OrderApiService {
   static Future<Order?> fetchHistoryDetail(int id) async {
     try {
       final headers = await ApiClient.getHeaders();
-      final response = await http.get(
+      final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/history-transactions/$id'),
-        headers: headers,
       );
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -395,7 +389,7 @@ class OrderApiService {
         return Order.fromJson(data);
       }
     } catch (e) {
-      // debugPrint("💥 fetchHistoryDetail: $e");
+      if (kDebugMode) print("💥 fetchHistoryDetail: $e");
     }
     return null;
   }
@@ -415,13 +409,13 @@ class OrderApiService {
         'tax_amount': taxAmount,
         'total_price': totalPrice,
       };
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/orders/$orderId/void-items'),
-        headers: headers,
         body: jsonEncode(bodyData),
       );
       return (response.statusCode == 200 || response.statusCode == 201);
     } catch (e) {
+      if (kDebugMode) print("💥 updateOrder error: $e");
       return false;
     }
   }
@@ -433,28 +427,28 @@ class OrderApiService {
     required String reason,
   }) async {
     try {
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/order-items/$itemId/void-items'),
-        headers: await ApiClient.getHeaders(),
         body: jsonEncode({'order_id': orderId, 'qty': newQty, 'notes': reason}),
       );
       return (response.statusCode == 200 || response.statusCode == 201)
           ? {'success': true}
           : {'success': false, 'message': json.decode(response.body)['message'] ?? 'Gagal'};
     } catch (e) {
+      if (kDebugMode) print("💥 voidOrEditItem error: $e");
       return {'success': false, 'message': 'Terjadi kesalahan: $e'};
     }
   }
 
   static Future<Map<String, dynamic>> updateItemStatus(int itemId, String status) async {
     try {
-      final response = await http.patch(
+      final response = await ApiClient.patch(
         Uri.parse('${ApiClient.baseUrl}/order-items/$itemId/status'),
-        headers: await ApiClient.getHeaders(),
         body: jsonEncode({'status': status}),
       );
       return response.statusCode == 200 ? {'success': true} : {'success': false};
     } catch (e) {
+      if (kDebugMode) print("💥 updateItemStatus error: $e");
       return {'success': false};
     }
   }

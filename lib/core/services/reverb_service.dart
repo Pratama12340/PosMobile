@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pusher_client_fixed/pusher_client_fixed.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
+import 'package:sistem_pos/core/network/api_client.dart';
 
 class ReverbService {
   static final ReverbService _instance = ReverbService._internal();
@@ -17,10 +18,10 @@ class ReverbService {
 
   final List<Map<String, dynamic>> _pendingSubscriptions = [];
 
-  final String reverbAppKey = "r3gcjhwwanzthldyihry";
-  final String reverbHost   = "ws.etres.my.id";
-  final int reverbPort      = 443;
-  final String authUrl      = "https://api.etres.my.id/api/v1/broadcasting/auth";
+  final String reverbAppKey = const String.fromEnvironment('REVERB_APP_KEY', defaultValue: 'r3gcjhwwanzthldyihry');
+  final String reverbHost   = const String.fromEnvironment('REVERB_HOST', defaultValue: 'ws.etres.my.id');
+  final int reverbPort      = const int.fromEnvironment('REVERB_PORT', defaultValue: 443);
+  String get authUrl      => "${ApiClient.baseUrl}/broadcasting/auth";
 
   List<String> get activeChannels => _channels.keys.toList();
 
@@ -53,6 +54,12 @@ class ReverbService {
       }
 
       _isConnecting = true;
+      Future.delayed(const Duration(seconds: 10), () {
+        if (_isConnecting && !_isConnected) {
+          if (kDebugMode) print("⏳ [REVERB] Timeout connecting, resetting state.");
+          _isConnecting = false;
+        }
+      });
 
       if (_pusher != null) {
 // debugPrint("🔄 [REVERB] Reset pusher lama...");
@@ -72,8 +79,8 @@ class ReverbService {
   Future<void> _initPusher(String token) async {
     PusherOptions options = PusherOptions(
       host: reverbHost,
-      wsPort: 443,
-      wssPort: 443,
+      wsPort: reverbPort,
+      wssPort: reverbPort,
       encrypted: true,
       auth: PusherAuth(
         authUrl,

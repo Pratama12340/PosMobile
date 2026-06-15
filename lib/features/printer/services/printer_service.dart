@@ -55,10 +55,10 @@ class NetworkPrinterService {
       bytes += generator.hr();
 
       // --- INFO TRANSAKSI ---
-      bytes += generator.text("Tgl   : $fullDate");
-      bytes += generator.text("Meja  : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}");
-      bytes += generator.text("Kasir : ${transaction.cashierName}");
-      bytes += generator.text("Pelanggan  : ${transaction.customerName.isEmpty ? "-" : transaction.customerName}");
+      bytes += generator.text("Tgl      : $fullDate");
+      bytes += generator.text("Meja     : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}");
+      bytes += generator.text("Kasir    : ${transaction.cashierName}");
+      bytes += generator.text("Nama     : ${transaction.customerName.isEmpty ? "-" : transaction.customerName}");
       bytes += generator.hr();
 
       // --- DAFTAR ITEM BELANJA ---
@@ -146,10 +146,10 @@ class NetworkPrinterService {
       final fullDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(now);
 
       bytes += generator.text("======= PESANAN DAPUR =======", styles: const PosStyles(align: PosAlign.center, bold: true));
-      bytes += generator.text("INV   : ${transaction.orderId}");
-      bytes += generator.text("Tgl   : $fullDate");
-      bytes += generator.text("Meja  : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}");
-      bytes += generator.text("Pelanggan  : ${transaction.customerName.isEmpty ? "-" : transaction.customerName}");
+      bytes += generator.text("INV      : ${transaction.orderId}");
+      bytes += generator.text("Tgl      : $fullDate");
+      bytes += generator.text("Meja     : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}");
+      bytes += generator.text("Pelanggan: ${transaction.customerName.isEmpty ? "-" : transaction.customerName}");
       bytes += generator.hr();
 
       for (var item in transaction.items) {

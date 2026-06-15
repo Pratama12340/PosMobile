@@ -63,6 +63,19 @@ Map<String, dynamic> calculateTaxesAndGrandTotal(
     taxBreakdown.add(taxData);
   }
 
+  // Urutkan agar pajak non-PPN (Service) muncul lebih dulu di atas PPN
+  taxBreakdown.sort((a, b) {
+    final String nameA = (a['name'] ?? '').toString().toLowerCase();
+    final String nameB = (b['name'] ?? '').toString().toLowerCase();
+
+    final bool isPpnA = nameA.contains('ppn') || nameA.contains('vat') || nameA.contains('tax');
+    final bool isPpnB = nameB.contains('ppn') || nameB.contains('vat') || nameB.contains('tax');
+
+    if (isPpnA && !isPpnB) return 1;
+    if (!isPpnA && isPpnB) return -1;
+    return 0;
+  });
+
   return {
     'tax_amount': totalTaxAmount,
     'tax_breakdown': taxBreakdown,

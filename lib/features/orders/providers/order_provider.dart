@@ -18,7 +18,7 @@ class OrderProvider extends ChangeNotifier {
     return order.invoiceNo.contains(todayStr);
   }
 
-  Future<void> fetchPendingOrders({int? currentShiftId}) async {
+  Future<void> fetchPendingOrders() async {
     _isLoadingPendingOrders = true;
     notifyListeners();
 
@@ -27,7 +27,6 @@ class OrderProvider extends ChangeNotifier {
       _pendingOrders = orders.where((o) {
         if (_dismissedOrderIds.contains(o.id)) return false;
         if (!_isToday(o)) return false;
-        if (currentShiftId != null && o.shiftId != null && o.shiftId != currentShiftId) return false;
         return true;
       }).toList();
     } catch (e) {
@@ -38,13 +37,10 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchPaidOrders({int? currentShiftId}) async {
+  Future<void> fetchPaidOrders() async {
     try {
       final orders = await OrderApiService.getPaidOrders();
-      _paidOrders = orders.where((o) {
-        if (currentShiftId != null && o.shiftId != null && o.shiftId != currentShiftId) return false;
-        return true;
-      }).toList();
+      _paidOrders = orders;
       notifyListeners();
     } catch (e) {
 // debugPrint("Error fetching paid orders: $e");

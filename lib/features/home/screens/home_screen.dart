@@ -12,6 +12,8 @@ import 'package:sistem_pos/features/home/widgets/category_filter.dart';
 import 'package:sistem_pos/features/orders/widgets/pending_order_panel.dart';
 import 'package:sistem_pos/features/home/widgets/product_grid.dart';
 import 'package:sistem_pos/features/home/providers/home_controller.dart';
+import 'package:sistem_pos/features/printer/utils/print_helper.dart';
+import 'package:sistem_pos/core/services/storage_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -91,7 +93,52 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _printAcceptedOrder(Order order) async {
-    // Implement Print logic
+    try {
+      final outletName = await StorageService.getOutletName();
+      final cashierName = await StorageService.getCashierName();
+
+      final itemsForPrinting = PrintHelper.orderItemsToCartItems(
+        order.items,
+        filterVoided: false,
+      );
+
+      final transaction = PrintHelper.buildTransaction(
+        orderId: order.invoiceNo,
+        outletName: outletName,
+        outletAddress: "-",
+        cashierName: cashierName,
+        customerName: order.customerName,
+        tableNumber: order.tableNumber?.toString(),
+        items: itemsForPrinting,
+        taxBreakdown: List<Map<String, dynamic>>.from(order.taxBreakdown ?? []),
+        discountAmount: order.discountAmount,
+        totalPrice: order.totalPrice,
+      );
+
+      await PrintHelper.printToAllPrinters(
+        transaction: transaction,
+        onSuccess: (name) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("✓ $name berhasil mencetak struk."),
+              backgroundColor: Colors.green,
+            ),
+          );
+        },
+        onError: (name, e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Gagal cetak ke $name: $e"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint("Error printing accepted order: $e");
+    }
   }
 
   Widget _buildDraftButton() {

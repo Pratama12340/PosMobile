@@ -285,16 +285,45 @@ class _PrinterScreenState extends State<PrinterScreen> {
     return Scaffold(
       backgroundColor: AppStyle.bgLightBlue,
       appBar: AppBar(
+        toolbarHeight: 80,
+        backgroundColor: AppStyle.bgLightBlue,
+        elevation: 0,
+        leadingWidth: 80,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 32.0),
+          child: Center(
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppStyle.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppStyle.primaryBlue,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ),
         title: Text(
           "Koneksi Printer",
           style: AppStyle.menuText.copyWith(
-            color: Colors.white,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: AppStyle.primaryBlue,
-        iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
@@ -303,12 +332,25 @@ class _PrinterScreenState extends State<PrinterScreen> {
           children: [
             const SizedBox(height: 10),
 
-            Text(
-              "Daftar Perangkat Terhubung",
-              style: AppStyle.menuText.copyWith(
-                fontSize: 16,
-                color: Colors.grey.shade700,
-              ),
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: AppStyle.primaryBlue,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  "Daftar Perangkat Terhubung",
+                  style: AppStyle.menuText.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
 
@@ -352,11 +394,11 @@ class _PrinterScreenState extends State<PrinterScreen> {
     return Container(
       width: 320,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppStyle.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -369,39 +411,69 @@ class _PrinterScreenState extends State<PrinterScreen> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    data.name, 
-                    style: AppStyle.menuText.copyWith(
-                      fontWeight: FontWeight.bold,
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.print_outlined,
+                      color: AppStyle.primaryBlue,
+                      size: 22,
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      data.name,
+                      style: AppStyle.menuText.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
+                      horizontal: 14,
+                      vertical: 5,
                     ),
                     decoration: BoxDecoration(
                       color: isOnline ? Colors.green.shade50 : Colors.red.shade50,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isOnline ? Colors.green.shade200 : Colors.red.shade200,
-                      ),
                     ),
-                    child: Text(
-                      data.status,
-                      style: TextStyle(
-                        color: isOnline ? Colors.green.shade700 : Colors.red.shade700,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isOnline ? Colors.green.shade600 : Colors.red.shade600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          data.status,
+                          style: AppStyle.subTitleText.copyWith(
+                            color: isOnline ? Colors.green.shade700 : Colors.red.shade700,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: AppStyle.primaryBlue.withValues(alpha: 0.07)),
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -540,12 +612,23 @@ class _PrinterScreenState extends State<PrinterScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        Text(
+          label,
+          style: AppStyle.subTitleText.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            style: AppStyle.menuText.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppStyle.textMain,
+            ),
             textAlign: TextAlign.right,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -568,16 +651,28 @@ class _PrinterScreenState extends State<PrinterScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Printer Terdeteksi di Jaringan WiFi",
-                  style: AppStyle.menuText.copyWith(
-                    fontSize: 16,
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: AppStyle.primaryBlue,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Printer Terdeteksi di Jaringan WiFi",
+                      style: AppStyle.menuText.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
                 if (_localIp != null) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
                   Text(
                     "IP Tablet: $_localIp | Subnet: ${_localIp!.split('.').take(3).join('.')}.x",
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
@@ -684,14 +779,13 @@ class _PrinterScreenState extends State<PrinterScreen> {
     return Container(
       width: 320,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppStyle.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blue.shade100, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -703,12 +797,19 @@ class _PrinterScreenState extends State<PrinterScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.print_rounded, color: Colors.blue.shade700, size: 20),
+                  child: const Center(
+                    child: Icon(
+                      Icons.print_outlined,
+                      color: AppStyle.primaryBlue,
+                      size: 22,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -718,15 +819,14 @@ class _PrinterScreenState extends State<PrinterScreen> {
                       Text(
                         "Printer Terdeteksi",
                         style: AppStyle.menuText.copyWith(
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
                         scanned.hostname ?? "Printer Thermal (Port ${scanned.port})",
-                        style: TextStyle(
+                        style: AppStyle.subTitleText.copyWith(
                           fontSize: 11,
-                          color: Colors.grey.shade500,
                         ),
                       ),
                     ],

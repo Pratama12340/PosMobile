@@ -1,5 +1,5 @@
 import 'package:just_audio/just_audio.dart';
-import 'package:sistem_pos/features/shift/providers/shift_provider.dart';
+
 import 'package:provider/provider.dart';
 import 'package:sistem_pos/features/orders/providers/order_provider.dart';
 import 'package:flutter/material.dart';
@@ -168,7 +168,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       orderData['invoice_no']?.toString();
 
   OrderApiService.invalidatePendingCache();              // ← TAMBAH: buang cache dulu
-  if (mounted) context.read<OrderProvider>().fetchPendingOrders(currentShiftId: context.read<ShiftProvider>().shiftId);
+  if (mounted) context.read<OrderProvider>().fetchPendingOrders();
    // ← TAMBAH: update panel jika terbuka
   _historyKey.currentState?.loadHistory();
   _shiftKey.currentState?.refreshShift();
@@ -191,20 +191,23 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
 
         // Refresh UI dulu
         OrderApiService.invalidatePendingCache();               
-        if (mounted) context.read<OrderProvider>().fetchPendingOrders(currentShiftId: context.read<ShiftProvider>().shiftId);
+        if (mounted) context.read<OrderProvider>().fetchPendingOrders();
         
         _historyKey.currentState?.loadHistory();
         _shiftKey.currentState?.refreshShift();
 
         final orderData = _parseOrderData(data);
         final String status = orderData['status']?.toString() ?? '';
+        final String paymentMethod = orderData['payment_method']?.toString() ?? '';
+        final String methodLower = paymentMethod.toLowerCase().trim();
+        final bool isQris = ['qris', 'midtrans', 'gopay', 'other_qris'].contains(methodLower);
 
 // debugPrint('⚡ [ORDER UPDATED] status=$status');
 
-        // Hanya tembak notifikasi overlay jika status = paid
-        if (status == 'paid') {
+        // Hanya tembak notifikasi overlay jika status = paid DAN pembayaran via QRIS
+        if (status == 'paid' && isQris) {
           _fireNotification(
-            paymentMethod: orderData['payment_method']?.toString() ?? '',
+            paymentMethod: paymentMethod,
             customerName:
                 orderData['customer_name']?.toString() ?? 'Pelanggan',
             totalPrice: orderData['total_price'] != null

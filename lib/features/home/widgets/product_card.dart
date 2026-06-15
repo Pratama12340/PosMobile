@@ -162,23 +162,30 @@ class ProductCard extends StatelessWidget {
                             CurrencyFormatter.format(product.price.toDouble()),
                             style: const TextStyle(
                               color: Colors.white70,
-                              fontSize: 10,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                               decoration: TextDecoration.lineThrough,
-                              decorationColor: Colors.white70,
-                              decorationThickness: 1.5,
+                              decorationColor: Colors.redAccent,
+                              decorationThickness: 2.0,
                             ),
                           ),
+                          const SizedBox(height: 1),
                           Text(
                             CurrencyFormatter.format(priceAfterDiscount),
                             style: const TextStyle(
                               color: Colors.white,
+                              fontSize: 14,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ] else
                           Text(
                             CurrencyFormatter.format(product.price.toDouble()),
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                       ],
                     ),

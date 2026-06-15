@@ -268,14 +268,12 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     String currentTime = DateFormat('HH:mm').format(DateTime.now());
     String currentDate = DateFormat('dd MMM yyyy').format(DateTime.now());
 
-    return MediaQuery(
-      data: MediaQuery.of(context).copyWith(viewInsets: EdgeInsets.zero),
-      child: Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        insetPadding: const EdgeInsets.all(24),
-        child: Container(
-          width: 1000,
-          constraints: const BoxConstraints(maxHeight: 680),
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      insetPadding: const EdgeInsets.all(24),
+      child: Container(
+        width: 1000,
+        constraints: const BoxConstraints(maxHeight: 680),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -610,7 +608,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
               ),
           ],
         ),
-      ),
       ),
     );
   }

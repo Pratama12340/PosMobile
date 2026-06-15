@@ -157,9 +157,7 @@ class _NotifCardState extends State<_NotifCard>
 
   Timer? _dismiss;
   Timer? _countdown;
-  Timer? _pulse;
   int _rem = 12;
-  bool _isPulsing = false;
 
   @override
   void initState() {
@@ -181,12 +179,7 @@ class _NotifCardState extends State<_NotifCard>
 
     _ctrl.forward();
 
-    // Pulse hanya untuk QRIS agar kasir langsung tahu
-    if (widget.notif.isQris) {
-      _pulse = Timer.periodic(const Duration(milliseconds: 700), (_) {
-        if (mounted) setState(() => _isPulsing = !_isPulsing);
-      });
-    }
+    // Pulse dihapus (disembunyikan) sesuai request
 
     _countdown = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -200,7 +193,6 @@ class _NotifCardState extends State<_NotifCard>
   void _doDismiss() {
     _dismiss?.cancel();
     _countdown?.cancel();
-    _pulse?.cancel();
     if (!mounted) return;
     _ctrl.reverse().then((_) => widget.onDismiss());
   }
@@ -210,7 +202,6 @@ class _NotifCardState extends State<_NotifCard>
     _ctrl.dispose();
     _dismiss?.cancel();
     _countdown?.cancel();
-    _pulse?.cancel();
     super.dispose();
   }
 
@@ -246,14 +237,14 @@ class _NotifCardState extends State<_NotifCard>
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: _isPulsing ? accent : accent.withValues(alpha: 0.25),
-                  width: _isPulsing ? 2.5 : 1.5,
+                  color: accent.withValues(alpha: 0.25),
+                  width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: accent.withValues(alpha: _isPulsing ? 0.22 : 0.08),
-                    blurRadius: _isPulsing ? 22 : 10,
-                    spreadRadius: _isPulsing ? 2 : 0,
+                    color: accent.withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    spreadRadius: 0,
                     offset: const Offset(0, 4),
                   ),
                 ],
@@ -274,7 +265,7 @@ class _NotifCardState extends State<_NotifCard>
                       children: [
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 350),
-                          padding: EdgeInsets.all(_isPulsing ? 9 : 7),
+                          padding: const EdgeInsets.all(7),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.18),
                             shape: BoxShape.circle,

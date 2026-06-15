@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:sistem_pos/core/constants/style.dart';
 
 class PaymentSelector extends StatelessWidget {
@@ -17,6 +18,8 @@ class PaymentSelector extends StatelessWidget {
   final int tagihanInt;
   final int uangMasukInt;
   final int change;
+  final String? qrUrl;
+  final String? redirectUrl;
   final WebViewController? webViewController;
   final String Function(double) formatCurrency;
   
@@ -39,6 +42,8 @@ class PaymentSelector extends StatelessWidget {
     required this.tagihanInt,
     required this.uangMasukInt,
     required this.change,
+    this.qrUrl,
+    this.redirectUrl,
     this.webViewController,
     required this.formatCurrency,
     required this.onPaymentMethodChanged,
@@ -49,130 +54,85 @@ class PaymentSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: Column(
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              isUpdatingOrder ? "Bayar Pesanan (Update)" : "Payment Method",
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Poppins',
+              ),
+            ),
+            const SizedBox(height: 30),
+            Row(
               children: [
-                Text(
-                  isUpdatingOrder ? "Bayar Pesanan (Update)" : "Payment Method",
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-                const SizedBox(height: 30),
-                Row(
-                  children: [
-                    _payBtn('Cash', Icons.payments_outlined),
-                    const SizedBox(width: 15),
-                    _payBtn('Card', Icons.credit_card_outlined),
-                    const SizedBox(width: 15),
-                    _payBtn('Qris', Icons.qr_code_scanner),
-                  ],
-                ),
-                const SizedBox(height: 40),
-
-                if (paymentMethod == 'Cash') ...[
-                  TextField(
-                    controller: manualTenderController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      CurrencyInputFormatter(),
-                    ],
-                    style: AppStyle.numPadText.copyWith(
-                      fontSize: 35,
-                      color: AppStyle.primaryBlue,
-                    ),
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      labelText: "Isi Uang Manual",
-                      filled: true,
-                      fillColor: const Color(0xFFF8F9FA),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: onManualAmountChanged,
-                  ),
-                  const SizedBox(height: 25),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      _quickBtn(grandTotal, label: "Bayar Pas", isExact: true),
-                      ...[
-                        20000.0,
-                        50000.0,
-                        100000.0,
-                        150000.0,
-                        200000.0,
-                      ].map((v) => _quickBtn(v)),
-                    ],
-                  ),
-                  const Spacer(),
-                  const SizedBox(height: 20),
-                  if (change >= 0) _buildChangeDisplay(change.toDouble()),
-                ] else if (paymentMethod == 'Card' || paymentMethod == 'Qris') ...[
-                  Expanded(
-                    child: webViewController != null
-                        ? Container(
-                            margin: const EdgeInsets.only(top: 10),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(
-                                color: AppStyle.primaryBlue.withValues(alpha: 0.3),
-                                width: 2,
-                              ),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: WebViewWidget(controller: webViewController!),
-                          )
-                        : Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const CircularProgressIndicator(
-                                  color: AppStyle.primaryBlue,
-                                ),
-                                const SizedBox(height: 16),
-                                if (errorMessage != null)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                                    child: Text(
-                                      errorMessage!,
-                                      style: const TextStyle(
-                                        color: Colors.red,
-                                        fontSize: 13,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  )
-                                else
-                                  const Text(
-                                    "Memuat halaman pembayaran...",
-                                    style: TextStyle(
-                                      color: Colors.black45,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                  ),
-                ],
+                _payBtn('Cash', Icons.payments_outlined),
+                const SizedBox(width: 15),
+                _payBtn('Card', Icons.credit_card_outlined),
+                const SizedBox(width: 15),
+                _payBtn('Qris', Icons.qr_code_scanner),
               ],
             ),
-          ),
+            const SizedBox(height: 40),
+
+            if (paymentMethod == 'Cash') ...[
+              TextField(
+                controller: manualTenderController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  CurrencyInputFormatter(),
+                ],
+                style: AppStyle.numPadText.copyWith(
+                  fontSize: 35,
+                  color: AppStyle.primaryBlue,
+                ),
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  hintText: "Isi Uang Manual",
+                  hintStyle: const TextStyle(
+                    fontSize: 20,
+                    color: Colors.black38,
+                    fontWeight: FontWeight.normal,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF8F9FA),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: onManualAmountChanged,
+              ),
+              const SizedBox(height: 25),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: [
+                  _quickBtn(grandTotal, label: "Bayar Pas", isExact: true),
+                  ...[
+                    20000.0,
+                    50000.0,
+                    100000.0,
+                    150000.0,
+                    200000.0,
+                  ].map((v) => _quickBtn(v)),
+                ],
+              ),
+              const SizedBox(height: 50),
+              if (change >= 0) _buildChangeDisplay(change.toDouble()),
+            ] else if (paymentMethod == 'Card' || paymentMethod == 'Qris') ...[
+              _buildCashlessView(),
+            ],
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -303,6 +263,150 @@ class PaymentSelector extends StatelessWidget {
           ],
         ),
       );
+
+  Widget _buildCashlessView() {
+    if (errorMessage != null) {
+      return SizedBox(
+        height: 360,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              errorMessage!,
+              style: const TextStyle(color: Colors.red, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (isLoadingPayment) {
+      return const SizedBox(
+        height: 360,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppStyle.primaryBlue),
+            SizedBox(height: 16),
+            Text(
+              "Memuat halaman pembayaran...",
+              style: TextStyle(color: Colors.black45, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (paymentMethod == 'Qris') {
+      if (qrUrl == null && redirectUrl == null) {
+        return const SizedBox(
+          height: 360,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: AppStyle.primaryBlue),
+              SizedBox(height: 16),
+              Text(
+                "Memuat QR Code...",
+                style: TextStyle(color: Colors.black45, fontSize: 13),
+              ),
+            ],
+          ),
+        );
+      }
+
+      bool isHttpImage = qrUrl != null && qrUrl!.startsWith('http');
+      String? qrData = isHttpImage ? null : (qrUrl ?? redirectUrl);
+
+      return Container(
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: isHttpImage
+                  ? Image.network(
+                      qrUrl!,
+                      width: 280,
+                      height: 280,
+                      fit: BoxFit.contain,
+                      errorBuilder: (ctx, err, stack) => const SizedBox(
+                        width: 280,
+                        height: 280,
+                        child: Center(child: Text("Gagal memuat QR Code")),
+                      ),
+                    )
+                  : (qrData != null && qrData.isNotEmpty
+                      ? QrImageView(
+                          data: qrData,
+                          version: QrVersions.auto,
+                          size: 280.0,
+                          backgroundColor: Colors.white,
+                        )
+                      : const SizedBox(
+                          width: 280,
+                          height: 280,
+                          child: Center(child: Text("Data QR tidak tersedia")),
+                        )),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Silakan scan QR Code di atas\nuntuk menyelesaikan pembayaran.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (paymentMethod == 'Card') {
+      if (webViewController != null) {
+        return Container(
+          height: 360,
+          margin: const EdgeInsets.only(top: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: AppStyle.primaryBlue.withValues(alpha: 0.3),
+              width: 2,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: WebViewWidget(controller: webViewController!),
+        );
+      }
+
+      return SizedBox(
+        height: 360,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isLoading) ...[
+              const CircularProgressIndicator(color: AppStyle.primaryBlue),
+              const SizedBox(height: 10),
+              const Text("Memproses...", style: TextStyle(color: Colors.black45, fontSize: 12)),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox(height: 360);
+  }
 }
 
 class CurrencyInputFormatter extends TextInputFormatter {

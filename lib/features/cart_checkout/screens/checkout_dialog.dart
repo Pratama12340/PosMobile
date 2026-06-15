@@ -60,6 +60,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   String? _errorMessage;
   bool _isExactChange = false;
   double? _selectedQuickAmount;
+  bool _needsExactUpdate = false; // flag: update bayar pas di render berikutnya
 
   bool _isLoadingPayment = false;
 
@@ -84,12 +85,9 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   /// - Diskon TRANSAKSI (global): hapus semua diskon produk, hanya 1 aktif
   void _toggleDiscount(Discount d) {
     setState(() {
-      // Reset exact change saat diskon berubah agar user konfirmasi ulang
+      // Jika Bayar Pas aktif, set flag untuk auto-update ke grand total baru
       if (_isExactChange) {
-        _isExactChange = false;
-        _selectedQuickAmount = null;
-        _amountTendered = 0;
-        _manualTenderController.clear();
+        _needsExactUpdate = true;
       }
 
       if (_isDiscountSelected(d)) {
@@ -115,6 +113,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   List<dynamic> _availableTaxes = [];
 
   WebViewController? _webViewController;
+  String? _qrUrl;
+  String? _redirectUrl;
 
   late AnimationController _slideController;
   late Animation<Offset> _slideOutAnimation;
@@ -262,7 +262,21 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     if (grandTotal < 0) grandTotal = 0;
 
     int tagihanInt = grandTotal.toInt();
-    int uangMasukInt = _amountTendered.toInt();
+
+    // Auto-update tender jika Bayar Pas aktif dan diskon baru dipilih
+    if (_needsExactUpdate) {
+      _needsExactUpdate = false;
+      _amountTendered = grandTotal;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _manualTenderController.text = NumberFormat.decimalPattern('id').format(grandTotal.toInt());
+          });
+        }
+      });
+    }
+
+    int uangMasukInt = _isExactChange ? tagihanInt : _amountTendered.toInt();
     int change = uangMasukInt - tagihanInt;
 
     String currentTime = DateFormat('HH:mm').format(DateTime.now());
@@ -273,7 +287,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       insetPadding: const EdgeInsets.all(24),
       child: Container(
         width: 1000,
-        constraints: const BoxConstraints(maxHeight: 680),
+        height: 680,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -282,6 +296,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         child: Stack(
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // ??? LEFT PANEL ????????????????????????????????????????????
                 Expanded(
@@ -307,6 +322,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                 tagihanInt: tagihanInt,
                                 uangMasukInt: uangMasukInt,
                                 change: change,
+                                qrUrl: _qrUrl,
+                                redirectUrl: _redirectUrl,
                                 webViewController: _webViewController,
                                 formatCurrency: widget.formatCurrency,
                                 onPaymentMethodChanged: (method) {
@@ -314,6 +331,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                     if (_errorMessage != null) _errorMessage = null;
                                     _paymentMethod = method;
                                     _webViewController = null;
+                                    _qrUrl = null;
+                                    _redirectUrl = null;
                                   });
                                 },
                                 onManualAmountChanged: (v) {
@@ -687,6 +706,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
       var mappedItems = [...existingItems, ...newItems];
 
+      final String payloadMethod = _paymentMethod == 'Qris' ? 'Midtrans' : _paymentMethod;
+
       // payload tetap sama, hanya harga item yang berubah ke originalPrice
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
@@ -697,7 +718,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         'total_price': grandTotal.toInt(),
         'tax_amount': taxAmountFinal.toInt(),
         'tax_breakdown': simplifiedTaxBreakdown,
-        'payment_method': _paymentMethod.toLowerCase(),
+        'payment_method': payloadMethod.toLowerCase(),
         'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
         'items': mappedItems,
         if (_selectedDiscounts.length == 1)
@@ -731,7 +752,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
             res['data']?['order']?['invoice_number'] ?? widget.orderId;
         final cartSnapshot = Map<int, OrderItem>.from(widget.cart);
 
-        if (_paymentMethod == 'Cash') {
+        if (_paymentMethod == 'Cash' || widget.isUpdatingOrder) {
           Navigator.of(context).pop({'status': 'success'});
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -755,63 +776,69 @@ class _CheckoutDialogState extends State<CheckoutDialog>
           );
         } else {
           String? redirectUrl = res['data']?['redirect_url'];
-          if (redirectUrl != null && redirectUrl.isNotEmpty) {
-debugPrint("[REDIRECT URL] --> ${res['data']?['redirect_url']}");
+          String? qrUrl = res['data']?['qr_url'];
+          if ((redirectUrl != null && redirectUrl.isNotEmpty) || (qrUrl != null && qrUrl.isNotEmpty)) {
+debugPrint("[REDIRECT URL] --> $redirectUrl");
+debugPrint("[QR URL] --> $qrUrl");
 debugPrint("[FULL RESPONSE] --> ${res['data']}");
             setState(() {
                 _isLoadingPayment = false;
-                _webViewController = WebViewController()
-                  ..setUserAgent(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                  )
-                  ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                  ..setBackgroundColor(const Color(0x00000000))
-                  ..setNavigationDelegate(
-                    NavigationDelegate(
-                      onPageFinished: (_) =>
-                          _webViewController
-                          // Sedikit memperkecil zoom jika QR code terpotong di layar POS Anda
-                          ?.runJavaScript("document.body.style.zoom = '0.85';"),
-                      onNavigationRequest: (request) {
-                        // 2. Cegah error jika WebView mencoba membuka deeplink aplikasi (gojek://, shopeeid://, intent://)
-                        if (!request.url.startsWith('http')) {
-                          return NavigationDecision.prevent;
-                        }
+                _qrUrl = qrUrl;
+                _redirectUrl = redirectUrl;
+                
+                if (redirectUrl != null && redirectUrl.isNotEmpty && _paymentMethod != 'Qris') {
+                  _webViewController = WebViewController()
+                    ..setUserAgent(
+                      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    )
+                    ..setJavaScriptMode(JavaScriptMode.unrestricted)
+                    ..setBackgroundColor(const Color(0x00000000))
+                    ..setNavigationDelegate(
+                      NavigationDelegate(
+                        onPageFinished: (_) =>
+                            _webViewController
+                            ?.runJavaScript("document.body.style.zoom = '0.85';"),
+                        onNavigationRequest: (request) {
+                          if (!request.url.startsWith('http')) {
+                            return NavigationDecision.prevent;
+                          }
 
-                        if (request.url.contains('status_code=200') ||
-                            request.url.contains(
-                              'transaction_status=settlement',
-                            )) {
-                          Navigator.pop(context, {'status': 'success'});
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (c) => SuccessPaymentPage(
-                                orderId: realOrderId,
-                                outletName: currentOutletName,
-                                outletAddress: currentOutletAddress,
-                                paymentMethod: _paymentMethod,
-                                grandTotal: grandTotal,
-                                amountPaid:
-                                    grandTotal, // Karena cashless, uang masuk = tagihan
-                                change: 0,
-                                cart: cartSnapshot,
-                                tableNumber: widget.tableNumber,
-                                customerName: widget.customerName,
-                                cashierName: widget.cashierName,
-                                formatCurrency: widget.formatCurrency,
-                                discountAmount: discountAmount,
-                                taxBreakdown: simplifiedTaxBreakdown,
+                          if (request.url.contains('status_code=200') ||
+                              request.url.contains(
+                                'transaction_status=settlement',
+                              )) {
+                            Navigator.pop(context, {'status': 'success'});
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (c) => SuccessPaymentPage(
+                                  orderId: realOrderId,
+                                  outletName: currentOutletName,
+                                  outletAddress: currentOutletAddress,
+                                  paymentMethod: _paymentMethod,
+                                  grandTotal: grandTotal,
+                                  amountPaid: grandTotal,
+                                  change: 0,
+                                  cart: cartSnapshot,
+                                  tableNumber: widget.tableNumber,
+                                  customerName: widget.customerName,
+                                  cashierName: widget.cashierName,
+                                  formatCurrency: widget.formatCurrency,
+                                  discountAmount: discountAmount,
+                                  taxBreakdown: simplifiedTaxBreakdown,
+                                ),
                               ),
-                            ),
-                          );
-                          return NavigationDecision.prevent;
-                        }
-                        return NavigationDecision.navigate;
-                      },
-                    ),
-                  )
-                  ..loadRequest(Uri.parse(redirectUrl));
+                            );
+                            return NavigationDecision.prevent;
+                          }
+                          return NavigationDecision.navigate;
+                        },
+                      ),
+                    )
+                    ..loadRequest(Uri.parse(redirectUrl));
+                } else {
+                  _webViewController = null;
+                }
               });
 
           }

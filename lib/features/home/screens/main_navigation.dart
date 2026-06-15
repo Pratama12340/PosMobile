@@ -3,6 +3,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:sistem_pos/features/orders/providers/order_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:sistem_pos/features/cart_checkout/providers/cart_provider.dart';
 import 'package:sistem_pos/features/auth/screens/login_screen.dart';
 import 'package:sistem_pos/features/home/screens/home_screen.dart';
 import 'package:sistem_pos/features/orders/screens/history_screen.dart';
@@ -24,7 +25,8 @@ class MainNavigationScaffold extends StatefulWidget {
   State<MainNavigationScaffold> createState() => _MainNavigationScaffoldState();
 }
 
-class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
+class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -44,6 +46,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadInitialData();
     _connectReverb();
 
@@ -55,6 +58,29 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
           builder: (context) => const OpeningCashDialog(),
         );
       });
+    }
+  }
+
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.inactive) {
+      _autoSaveCartToDraft();
+    }
+  }
+
+  void _autoSaveCartToDraft() {
+    if (!mounted) return;
+    final cartProvider = context.read<CartProvider>();
+    // Hanya simpan jika ada item di cart dan bukan pending order
+    if (cartProvider.cart.isNotEmpty && !cartProvider.isPendingOrderLoaded) {
+      cartProvider.saveToDraft(
+        cartProvider.currentCustomerName ?? "-",
+        cartProvider.currentTableNumber ?? "-",
+        cartProvider.currentTableId,
+      );
     }
   }
 
@@ -242,6 +268,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _globalSearchController.dispose();
     _reverbService.disconnect();
     super.dispose();

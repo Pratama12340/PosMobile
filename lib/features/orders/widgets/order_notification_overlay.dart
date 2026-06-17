@@ -115,9 +115,8 @@ class _OrderNotificationLayerState extends State<OrderNotificationLayer> {
           left: 0,
           right: 0,
           child: Center(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+            child: Stack(
+              alignment: Alignment.topCenter,
               children: _active
                   .map((a) => _NotifCard(
                         key: a.key,

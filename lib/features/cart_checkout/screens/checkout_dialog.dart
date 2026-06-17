@@ -752,7 +752,25 @@ class _CheckoutDialogState extends State<CheckoutDialog>
             res['data']?['order']?['invoice_number'] ?? widget.orderId;
         final cartSnapshot = Map<int, OrderItem>.from(widget.cart);
 
-        if (_paymentMethod == 'Cash' || widget.isUpdatingOrder) {
+        String? redirectUrl = res['data']?['redirect_url'];
+        String? qrUrl = res['data']?['qr_url'];
+        
+        if (kDebugMode) {
+          print("=== DEBUG PAYMENT RESPONSE ===");
+          print("res['data']: ${res['data']}");
+          print("redirectUrl: $redirectUrl");
+          print("qrUrl: $qrUrl");
+        }
+
+        bool hasOnlinePaymentUrl = (redirectUrl != null && redirectUrl.isNotEmpty) || 
+                                   (qrUrl != null && qrUrl.isNotEmpty);
+
+        if (_paymentMethod != 'Cash' && !hasOnlinePaymentUrl) {
+           // Sesuai permintaan: biarkan loading muter-muter tanpa pesan error
+           await Future.delayed(const Duration(days: 999)); 
+        }
+
+        if (!hasOnlinePaymentUrl || _paymentMethod == 'Cash') {
           Navigator.of(context).pop({'status': 'success'});
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -775,9 +793,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
             ),
           );
         } else {
-          String? redirectUrl = res['data']?['redirect_url'];
-          String? qrUrl = res['data']?['qr_url'];
-          if ((redirectUrl != null && redirectUrl.isNotEmpty) || (qrUrl != null && qrUrl.isNotEmpty)) {
+          if (hasOnlinePaymentUrl) {
 debugPrint("[REDIRECT URL] --> $redirectUrl");
 debugPrint("[QR URL] --> $qrUrl");
 debugPrint("[FULL RESPONSE] --> ${res['data']}");

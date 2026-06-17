@@ -5,6 +5,7 @@ import 'package:sistem_pos/core/constants/style.dart';
 import 'package:sistem_pos/features/orders/models/order_model.dart';
 import 'package:sistem_pos/features/orders/services/order_api_service.dart';
 import 'package:sistem_pos/features/orders/widgets/edit_dialog.dart';
+import 'package:sistem_pos/core/services/storage_service.dart';
 
 class HistoryScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -20,15 +21,13 @@ class HistoryScreenState extends State<HistoryScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<Order> _orders = [];
   
-  int _currentPage = 1;
+  String? _currentShiftId;
+  String? _cashierName;
   bool _isLoading = false;
-  bool _hasMore = true;
 
   @override
   void initState() {
     super.initState();
-    // 🔥 2. TAMBAHKAN LISTENER UNTUK MENDETEKSI SCROLL
-    _scrollController.addListener(_onScroll);
     widget.searchController.addListener(_onSearchChanged);
     
     // 🔥 3. PANGGIL DATA AWAL LANGSUNG DI SINI
@@ -49,56 +48,28 @@ class HistoryScreenState extends State<HistoryScreen> {
     setState(() {});
   }
 
-  // 🔥 6. FUNGSI UNTUK MENDETEKSI SAAT PENGGUNA SCROLL KE PALING BAWAH
-  void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 100) {
-      if (!_isLoading && _hasMore) {
-        _fetchMoreData();
-      }
-    }
-  }
-
   void loadHistory() {
     _loadInitialData();
   }
 
-  // 🔥 7. FUNGSI LOAD HALAMAN PERTAMA (Pengganti loadHistory)
+  // 🔥 7. FUNGSI LOAD SELURUH DATA SHIFT
   Future<void> _loadInitialData() async {
+    final shiftId = await StorageService.getCurrentShiftId();
+    final cashierName = await StorageService.getCashierName();
+
     setState(() {
+      _currentShiftId = shiftId;
+      _cashierName = cashierName;
       _isLoading = true;
-      _currentPage = 1;
       _orders.clear();
-      _hasMore = true;
     });
 
-    // PASTIKAN ANDA SUDAH MENAMBAHKAN fetchHistoryPage() DI api_service.dart 
-    // SEPERTI PADA PENJELASAN SEBELUMNYA
-    final data = await OrderApiService.fetchHistoryPage(page: _currentPage);
+    // Menggunakan fetchHistory() untuk mengambil semua data dalam shift sekaligus
+    final data = await OrderApiService.fetchHistory();
     
     setState(() {
       _orders.addAll(data);
       _isLoading = false;
-      if (data.length < 20) { // Jika data kurang dari per_page, berarti sudah habis
-        _hasMore = false;
-      }
-    });
-  }
-
-  // 🔥 8. FUNGSI LOAD HALAMAN BERIKUTNYA (Page 2, 3, dst)
-  Future<void> _fetchMoreData() async {
-    setState(() {
-      _isLoading = true;
-      _currentPage++;
-    });
-
-    final data = await OrderApiService.fetchHistoryPage(page: _currentPage);
-    
-    setState(() {
-      _orders.addAll(data);
-      _isLoading = false;
-      if (data.isEmpty || data.length < 20) {
-        _hasMore = false;
-      }
     });
   }
 
@@ -117,12 +88,21 @@ class HistoryScreenState extends State<HistoryScreen> {
 
     // 🔥 9. FILTER DATA LANGSUNG DARI VARIABEL _orders (Bukan dari snapshot lagi)
     final filteredOrders = _orders.where((order) {
-      bool isCurrentShift = order.invoiceNo.contains(todayStr);
+      // Pastikan pesanan masuk dalam shift ini (atau jika shift_id null dari backend, fallback ke tanggal hari ini)
+      bool isCurrentShift = (_currentShiftId != null && order.shiftId?.toString() == _currentShiftId) || 
+                            order.invoiceNo.contains(todayStr);
+
+      // Opsi B: Hanya tampilkan pesanan kasir ini, ATAU pesanan otomatis dari sistem (Self Order meja)
+      // "Staff" adalah nilai fallback dari order_model jika cashier_name kosong.
+      bool isMyOrderOrSystem = order.cashierName == _cashierName || 
+                               order.cashierName == 'Staff' || 
+                               order.cashierName.toLowerCase() == 'system';
+
       bool matchesSearch =
           order.invoiceNo.toLowerCase().contains(query) ||
           order.customerName.toLowerCase().contains(query);
 
-      return isCurrentShift && matchesSearch;
+      return isCurrentShift && isMyOrderOrSystem && matchesSearch;
     }).toList();
 
     return Scaffold(
@@ -315,12 +295,6 @@ class HistoryScreenState extends State<HistoryScreen> {
                           },
                         ),
                       ),
-                      // 🔥 12. INDIKATOR LOADING KECIL DI BAWAH SAAT LOAD PAGE BERIKUTNYA
-                      if (_isLoading && _orders.isNotEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16.0),
-                          child: CircularProgressIndicator(),
-                        ),
                     ],
                   ),
                 )),

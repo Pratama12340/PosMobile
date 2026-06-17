@@ -26,16 +26,17 @@ class ShiftScreenState extends State<ShiftScreen> {
   }
 
   void _loadInitialData() {
-  setState(() {           // ← bungkus dengan setState
-    shiftDataFuture = Future.wait([
-      StorageService.getCashierName(),
-      ShiftApiService.getShiftHistory(),
-      OrderApiService.fetchHistory(),
-      ShiftApiService.getMasterShifts(),
-      StorageService.getOpeningBalance(),
-    ]);
-  });
-}
+    setState(() {           // ← bungkus dengan setState
+      shiftDataFuture = Future.wait([
+        StorageService.getCashierName(),
+        ShiftApiService.getShiftHistory(),
+        OrderApiService.fetchHistory(),
+        ShiftApiService.getMasterShifts(),
+        StorageService.getOpeningBalance(),
+        StorageService.getCurrentShiftId(),
+      ]);
+    });
+  }
 
 void refreshShift() { 
   _loadInitialData();  // ← tidak perlu setState dobel lagi
@@ -211,6 +212,7 @@ void refreshShift() {
           List<RekapShift> shiftList = snapshot.data?[1] ?? [];
           final List<Order> allOrders = snapshot.data?[2] ?? [];
           final int localOpeningBalance = _parseToInt(snapshot.data?[4]);
+          final String? currentShiftId = snapshot.data?[5];
 
           if (shiftList.isNotEmpty) {
             shiftList.sort(
@@ -233,7 +235,12 @@ void refreshShift() {
           }
 
           final RekapShift activeShift = shiftList.firstWhere(
-            (s) => s.status == 'active',
+            (s) {
+              if (currentShiftId != null) {
+                return s.id.toString() == currentShiftId;
+              }
+              return s.status == 'active';
+            },
             orElse: () => shiftList.isNotEmpty
                 ? shiftList.first
                 : RekapShift(id: 0, shiftId: 0, status: 'none'),
@@ -254,6 +261,11 @@ void refreshShift() {
 
             for (var order in allOrders) {
               try {
+                bool isMyOrderOrSystem = order.cashierName == cashierName || 
+                                         order.cashierName == 'Staff' || 
+                                         order.cashierName.toLowerCase() == 'system';
+                if (!isMyOrderOrSystem) continue;
+
                 DateTime orderTime = df.parse(order.date);
                 if (orderTime.isAfter(startShiftWIB)) {
                   int orderTotal = order.totalPrice.round();

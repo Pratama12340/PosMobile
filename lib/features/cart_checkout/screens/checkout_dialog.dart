@@ -15,6 +15,8 @@ import 'package:sistem_pos/features/cart_checkout/widgets/payment_selector.dart'
 import 'package:sistem_pos/features/cart_checkout/widgets/checkout_summary.dart';
 import 'package:sistem_pos/features/cart_checkout/screens/success_payment_screen.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
+import 'package:sistem_pos/features/orders/widgets/order_notification_overlay.dart';
+import 'dart:async';
 
 class CheckoutDialog extends StatefulWidget {
   final Map<int, OrderItem> cart;
@@ -80,11 +82,22 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   bool get _hasProductDiscount =>
       _selectedDiscounts.any((d) => d.scope == 'products');
 
+  void _resetPaymentState() {
+    _qrUrl = null;
+    _webViewController = null;
+    _redirectUrl = null;
+    _currentInvoiceNumber = null;
+    OrderNotificationController().activeQrisInvoice = null;
+    _isLoadingPayment = false;
+  }
+
   /// Toggle diskon dengan aturan:
   /// - Diskon PRODUK: bisa 2 sekaligus, otomatis hapus diskon global
   /// - Diskon TRANSAKSI (global): hapus semua diskon produk, hanya 1 aktif
   void _toggleDiscount(Discount d) {
     setState(() {
+      _resetPaymentState();
+
       // Jika Bayar Pas aktif, set flag untuk auto-update ke grand total baru
       if (_isExactChange) {
         _needsExactUpdate = true;
@@ -116,16 +129,24 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   String? _qrUrl;
   String? _redirectUrl;
 
+  StreamSubscription? _notifSub;
+  String? _currentInvoiceNumber;
+  Map<String, dynamic>? _successPaymentData;
+
   late AnimationController _slideController;
   late Animation<Offset> _slideOutAnimation;
   late Animation<Offset> _slideInAnimation;
   late Animation<double> _fadeAnimation;
+
+  String _currentOutletName = "Outlet";
+  String _currentOutletAddress = "-";
 
   @override
   void initState() {
     super.initState();
     _loadDiscounts();
     _loadTaxes();
+    _loadOutletInfo();
 
     _slideController = AnimationController(
       vsync: this,
@@ -146,13 +167,57 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeIn));
+
+    _notifSub = OrderNotificationController().stream.listen((notif) {
+      if (!mounted) return;
+      if (notif.isQris && _currentInvoiceNumber != null && _successPaymentData != null) {
+        if (notif.subtitle.contains(_currentInvoiceNumber!)) {
+          // Pembayaran berhasil dari Reverb!
+          Navigator.of(context).pop({'status': 'success'});
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (c) => SuccessPaymentPage(
+                orderId: _successPaymentData!['orderId'],
+                outletName: _successPaymentData!['outletName'],
+                outletAddress: _successPaymentData!['outletAddress'],
+                paymentMethod: _successPaymentData!['paymentMethod'],
+                grandTotal: _successPaymentData!['grandTotal'],
+                amountPaid: _successPaymentData!['amountPaid'],
+                change: _successPaymentData!['change'],
+                cart: _successPaymentData!['cart'],
+                tableNumber: _successPaymentData!['tableNumber'],
+                customerName: _successPaymentData!['customerName'],
+                cashierName: _successPaymentData!['cashierName'],
+                formatCurrency: widget.formatCurrency,
+                discountAmount: _successPaymentData!['discountAmount'],
+                taxBreakdown: _successPaymentData!['taxBreakdown'],
+              ),
+            ),
+          );
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
+    if (_currentInvoiceNumber != null &&
+        OrderNotificationController().activeQrisInvoice == _currentInvoiceNumber) {
+      OrderNotificationController().activeQrisInvoice = null;
+    }
+    _notifSub?.cancel();
     _manualTenderController.dispose();
     _slideController.dispose();
     super.dispose();
+  }
+
+  void _loadOutletInfo() async {
+    final outletData = await AuthApiService.fetchOutletInfoLive();
+    if (!mounted) return;
+    setState(() {
+      _currentOutletName = outletData['name'] ?? "Outlet";
+      _currentOutletAddress = outletData['address_outlet'] ?? "-";
+    });
   }
 
   void _openDiscountList() {
@@ -528,7 +593,10 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                               hasDiscountedItem: widget.hasDiscountedItem,
                               formatCurrency: widget.formatCurrency,
                               onOpenDiscountList: _openDiscountList,
-                              onClearDiscounts: () => setState(() => _selectedDiscounts.clear()),
+                              onClearDiscounts: () => setState(() {
+                                _selectedDiscounts.clear();
+                                _resetPaymentState();
+                              }),
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -638,9 +706,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     });
 
     try {
-      final outletData = await AuthApiService.fetchOutletInfoLive();
-      final String currentOutletName = outletData['name'] ?? "Outlet";
-      final String currentOutletAddress = outletData['address_outlet'] ?? "-";
+      final String currentOutletName = _currentOutletName;
+      final String currentOutletAddress = _currentOutletAddress;
 
       final savedOutletId = await StorageService.getOutletId();
       if (savedOutletId == null || savedOutletId == 0) {
@@ -764,6 +831,24 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
         bool hasOnlinePaymentUrl = (redirectUrl != null && redirectUrl.isNotEmpty) || 
                                    (qrUrl != null && qrUrl.isNotEmpty);
+
+        _currentInvoiceNumber = realOrderId;
+        OrderNotificationController().activeQrisInvoice = realOrderId;
+        _successPaymentData = {
+          'orderId': realOrderId,
+          'outletName': currentOutletName,
+          'outletAddress': currentOutletAddress,
+          'paymentMethod': _paymentMethod,
+          'grandTotal': grandTotal,
+          'amountPaid': _amountTendered,
+          'change': change.toDouble(),
+          'cart': cartSnapshot,
+          'tableNumber': widget.tableNumber,
+          'customerName': widget.customerName,
+          'cashierName': widget.cashierName,
+          'discountAmount': discountAmount,
+          'taxBreakdown': simplifiedTaxBreakdown,
+        };
 
         if (_paymentMethod != 'Cash' && !hasOnlinePaymentUrl) {
            // Sesuai permintaan: biarkan loading muter-muter tanpa pesan error

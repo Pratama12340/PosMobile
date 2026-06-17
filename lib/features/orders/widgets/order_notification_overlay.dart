@@ -9,6 +9,7 @@ class OrderNotification {
   final String customerName;
   final double? totalPrice;
   final DateTime arrivedAt;
+  final bool showUi;
 
   OrderNotification({
     required this.id,
@@ -17,6 +18,7 @@ class OrderNotification {
     required this.paymentMethod,
     required this.customerName,
     this.totalPrice,
+    this.showUi = true,
   }) : arrivedAt = DateTime.now();
 
   bool get isQris =>
@@ -54,6 +56,8 @@ class OrderNotificationController {
   factory OrderNotificationController() => _instance;
   OrderNotificationController._internal();
 
+  String? activeQrisInvoice;
+
   final StreamController<OrderNotification> _stream =
       StreamController<OrderNotification>.broadcast();
 
@@ -90,7 +94,9 @@ class _OrderNotificationLayerState extends State<OrderNotificationLayer> {
   void _onNew(OrderNotification notif) {
 // debugPrint('🎯 [OrderNotificationLayer] notif diterima: ${notif.title}');
     if (!mounted) return;
-    setState(() => _active.add(_ActiveNotif(notif: notif, key: UniqueKey())));
+    if (notif.showUi) {
+      setState(() => _active.add(_ActiveNotif(notif: notif, key: UniqueKey())));
+    }
   }
 
   void _dismiss(Key key) {

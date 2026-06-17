@@ -109,6 +109,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
     required String customerName,
     double? totalPrice,
     String? invoiceNo,
+    bool showUi = true,
   }) async {
 // debugPrint('🔥 [_fireNotification] method=$paymentMethod customer=$customerName');
 
@@ -131,10 +132,12 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
         paymentMethod: paymentMethod,
         customerName: customerName,
         totalPrice: totalPrice,
+        showUi: showUi,
       ),
     );
 
-    try {
+    if (showUi) {
+      try {
       final player = AudioPlayer();
       await player.setAsset('assets/audio/universfield-new-notification-021-370045.mp3');
       player.playerStateStream.listen((state) {
@@ -144,9 +147,10 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
       });
       await player.play();
     } catch (e) {
-      debugPrint("Error playing custom notification: $e");
+      debugPrint("Error playing audio: $e");
     }
   }
+}
 
 // ─────────────────────────────────────────────────────────────
   // Helper parse data dari Reverb event — KINI LEBIH SEDERHANA
@@ -199,11 +203,18 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
   _historyKey.currentState?.loadHistory();
   _shiftKey.currentState?.refreshShift();
 
+  final String? orderCashierName = orderData['cashier_name']?.toString() ?? 
+                                   orderData['user']?['name']?.toString();
+  final bool isCurrentlyViewingQris = invoiceNo != null && 
+                                      invoiceNo == OrderNotificationController().activeQrisInvoice;
+  final bool shouldShowUi = (orderCashierName == null || orderCashierName.isEmpty) && !isCurrentlyViewingQris;
+
   _fireNotification(
     paymentMethod: paymentMethod,
     customerName: customerName,
     totalPrice: totalPrice,
     invoiceNo: invoiceNo,
+    showUi: shouldShowUi,
   );
 },
     );
@@ -230,6 +241,14 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
 
 // debugPrint('⚡ [ORDER UPDATED] status=$status');
 
+        final String? orderCashierName = orderData['cashier_name']?.toString() ?? 
+                                         orderData['user']?['name']?.toString();
+        final String? invoiceNo = orderData['invoice_number']?.toString() ??
+                                  orderData['invoice_no']?.toString();
+        final bool isCurrentlyViewingQris = invoiceNo != null && 
+                                            invoiceNo == OrderNotificationController().activeQrisInvoice;
+        final bool shouldShowUi = (orderCashierName == null || orderCashierName.isEmpty) && !isCurrentlyViewingQris;
+
         // Hanya tembak notifikasi overlay jika status = paid DAN pembayaran via QRIS
         if (status == 'paid' && isQris) {
           _fireNotification(
@@ -239,8 +258,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
             totalPrice: orderData['total_price'] != null
                 ? double.tryParse(orderData['total_price'].toString())
                 : null,
-            invoiceNo: orderData['invoice_number']?.toString() ??
-                orderData['invoice_no']?.toString(),
+            invoiceNo: invoiceNo,
+            showUi: shouldShowUi,
           );
         } else {
           // Status lain (pending, accepted, dll) cukup SnackBar saja

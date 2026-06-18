@@ -352,7 +352,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       insetPadding: const EdgeInsets.all(24),
       child: Container(
         width: 1000,
-        height: 680,
+        constraints: const BoxConstraints(maxHeight: 680),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -460,10 +460,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                     decoration: const BoxDecoration(color: Color(0xFFFBFBFB)),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(30, 25, 30, 25),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Column(
@@ -511,10 +512,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                             ],
                           ),
                           const Divider(height: 30),
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: widget.cart.length,
-                              itemBuilder: (context, index) {
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: widget.cart.length,
+                            itemBuilder: (context, index) {
                                 var item = widget.cart.values.elementAt(index);
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 14),
@@ -572,7 +574,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                 );
                               },
                             ),
-                          ),
                           const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.all(15),
@@ -633,11 +634,12 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                       ),
                                     ),
                             ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                        ],      // tutup children: [] Column
+                        ),      // tutup Column
+                      ),        // tutup SingleChildScrollView
+                    ),          // tutup Padding
+                  ),            // tutup Container
+                ),              // tutup Expanded
               ],
             ),
 
@@ -856,6 +858,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         }
 
         if (!hasOnlinePaymentUrl || _paymentMethod == 'Cash') {
+          if (!mounted) return;
           Navigator.of(context).pop({'status': 'success'});
           Navigator.of(context).push(
             MaterialPageRoute(

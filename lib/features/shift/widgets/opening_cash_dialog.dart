@@ -39,9 +39,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isTablet = screenWidth > 600;
 
-  return MediaQuery(
-      data: MediaQuery.of(context).copyWith(viewInsets: EdgeInsets.zero),
-      child: Dialog(
+  return Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,
         insetPadding: const EdgeInsets.all(24),
@@ -325,7 +323,6 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
       ),
     ),  // tutup Container
   ),
-       ), // tutup SingleChildScrollView
-);
+       ); // tutup SingleChildScrollView
 }
 }

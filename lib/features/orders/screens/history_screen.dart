@@ -21,7 +21,6 @@ class HistoryScreenState extends State<HistoryScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<Order> _orders = [];
   
-  String? _currentShiftId;
   String? _cashierName;
   bool _isLoading = false;
 
@@ -54,11 +53,9 @@ class HistoryScreenState extends State<HistoryScreen> {
 
   // 🔥 7. FUNGSI LOAD SELURUH DATA SHIFT
   Future<void> _loadInitialData() async {
-    final shiftId = await StorageService.getCurrentShiftId();
     final cashierName = await StorageService.getCashierName();
 
     setState(() {
-      _currentShiftId = shiftId;
       _cashierName = cashierName;
       _isLoading = true;
       _orders.clear();
@@ -88,9 +85,8 @@ class HistoryScreenState extends State<HistoryScreen> {
 
     // 🔥 9. FILTER DATA LANGSUNG DARI VARIABEL _orders (Bukan dari snapshot lagi)
     final filteredOrders = _orders.where((order) {
-      // Pastikan pesanan masuk dalam shift ini (atau jika shift_id null dari backend, fallback ke tanggal hari ini)
-      bool isCurrentShift = (_currentShiftId != null && order.shiftId?.toString() == _currentShiftId) || 
-                            order.invoiceNo.contains(todayStr);
+      // Pastikan pesanan adalah transaksi hari ini (mengandung string tanggal hari ini)
+      bool isCurrentShift = order.invoiceNo.contains(todayStr);
 
       // Opsi B: Hanya tampilkan pesanan kasir ini, ATAU pesanan otomatis dari sistem (Self Order meja)
       // "Staff" adalah nilai fallback dari order_model jika cashier_name kosong.

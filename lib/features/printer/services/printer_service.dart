@@ -130,11 +130,12 @@ class NetworkPrinterService {
   }
 
   // =========================================================================
-  // 2. STRUK KHUSUS DAPUR (KITCHEN BILL)
+  // 2. STRUK KHUSUS STASIUN (KITCHEN/BAR BILL)
   // =========================================================================
-  Future<void> printKitchenReceipt({
+  Future<void> printStationReceipt({
     required String ipAddress,
     required TransactionModel transaction,
+    required String stationName,
     int port = 9100,
   }) async {
     try {
@@ -145,7 +146,7 @@ class NetworkPrinterService {
       final now = DateTime.now();
       final fullDate = DateFormat('dd-MM-yyyy HH:mm:ss').format(now);
 
-      bytes += generator.text("======= PESANAN DAPUR =======", styles: const PosStyles(align: PosAlign.center, bold: true));
+      bytes += generator.text("======= PESANAN ${stationName.toUpperCase()} =======", styles: const PosStyles(align: PosAlign.center, bold: true));
       bytes += generator.text("INV      : ${transaction.orderId}");
       bytes += generator.text("Tgl      : $fullDate");
       bytes += generator.text("Meja     : ${transaction.tableNumber.isEmpty ? "-" : transaction.tableNumber}");
@@ -153,10 +154,14 @@ class NetworkPrinterService {
       bytes += generator.hr();
 
       for (var item in transaction.items) {
-        bytes += generator.row([
-          PosColumn(text: item.itemName.toUpperCase(), width: 9, styles: const PosStyles(bold: true, height: PosTextSize.size2, width: PosTextSize.size2)),
-          PosColumn(text: "x${item.quantity}", width: 3, styles: const PosStyles(align: PosAlign.right, bold: true, height: PosTextSize.size2, width: PosTextSize.size2)),
-        ]);
+        bytes += generator.text(
+          "${item.quantity}x ${item.itemName.toUpperCase()}",
+          styles: const PosStyles(
+            bold: true,
+            height: PosTextSize.size2,
+            width: PosTextSize.size2,
+          ),
+        );
 
         if (item.notes.trim().isNotEmpty) {
           bytes += generator.text("  * Catatan: ${item.notes}", styles: const PosStyles(bold: true, fontType: PosFontType.fontB));
@@ -164,7 +169,7 @@ class NetworkPrinterService {
         bytes += generator.feed(1);
       }
       bytes += generator.hr();
-      bytes += generator.text("ARANUS POS - KITCHEN", styles: const PosStyles(align: PosAlign.center));
+      bytes += generator.text("ARANUS POS - ${stationName.toUpperCase()}", styles: const PosStyles(align: PosAlign.center));
       
       bytes += generator.feed(3);
       bytes += generator.cut();
@@ -172,7 +177,7 @@ class NetworkPrinterService {
       await _sendToPrinter(ipAddress, port, bytes);
 
     } catch (e) {
-// debugPrint("💥 [PRINTER ERROR] Gagal cetak ke Dapur: $e");
+// debugPrint("💥 [PRINTER ERROR] Gagal cetak ke $stationName: $e");
       rethrow;
     }
   }

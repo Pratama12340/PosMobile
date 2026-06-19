@@ -97,9 +97,12 @@ class HomeScreenState extends State<HomeScreen> {
       final outletName = await StorageService.getOutletName();
       final cashierName = await StorageService.getCashierName();
 
+      final allProducts = context.read<ProductProvider>().products;
+
       final itemsForPrinting = PrintHelper.orderItemsToCartItems(
         order.items,
         filterVoided: false,
+        allProducts: allProducts,
       );
 
       final transaction = PrintHelper.buildTransaction(
@@ -117,6 +120,7 @@ class HomeScreenState extends State<HomeScreen> {
 
       await PrintHelper.printToAllPrinters(
         transaction: transaction,
+        skipCashier: true, // Jangan print struk kasir untuk pesanan QRIS POS QR
         onSuccess: (name) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(

@@ -56,7 +56,7 @@ class PaymentSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -68,7 +68,7 @@ class PaymentSelector extends StatelessWidget {
                 fontFamily: 'Poppins',
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
             Row(
               children: [
                 _payBtn('Cash', Icons.payments_outlined),
@@ -78,7 +78,7 @@ class PaymentSelector extends StatelessWidget {
                 _payBtn('Qris', Icons.qr_code_scanner),
               ],
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 25),
 
             if (paymentMethod == 'Cash') ...[
               TextField(
@@ -109,7 +109,7 @@ class PaymentSelector extends StatelessWidget {
                 ),
                 onChanged: onManualAmountChanged,
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 20),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -125,7 +125,7 @@ class PaymentSelector extends StatelessWidget {
                   ].map((v) => _quickBtn(v)),
                 ],
               ),
-              const SizedBox(height: 50),
+              const SizedBox(height: 30),
               if (change >= 0) _buildChangeDisplay(change.toDouble()),
             ] else if (paymentMethod == 'Card' || paymentMethod == 'Qris') ...[
               _buildCashlessView(),
@@ -151,7 +151,7 @@ class PaymentSelector extends StatelessWidget {
         child: Opacity(
           opacity: isEnabled ? 1.0 : 0.4,
           child: Container(
-            height: 100,
+            height: 85,
             decoration: BoxDecoration(
               color: s ? AppStyle.primaryBlue : Colors.white,
               borderRadius: BorderRadius.circular(18),

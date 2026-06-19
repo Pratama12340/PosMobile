@@ -238,6 +238,14 @@ class CartProvider extends ChangeNotifier {
         _productDiscounts[item.productId] = product!.discount!;
       }
 
+      String stId = item.stationId;
+      String stName = item.stationName;
+
+      if ((stName.isEmpty || stName == 'Tanpa Nama') && product != null) {
+        stId = product.stationId;
+        stName = product.stationName;
+      }
+
       _cart[item.productId] = OrderItem(
         id: item.id,
         productId: item.productId,
@@ -248,8 +256,8 @@ class CartProvider extends ChangeNotifier {
         unitPrice: unitPrice, // _recalculateDiscount will handle this
         originalPrice: unitPrice,
         discountId: product?.discount?.id,
-        stationId: item.stationId,
-        stationName: item.stationName,
+        stationId: stId,
+        stationName: stName,
       );
       _recalculateDiscount(item.productId);
     }

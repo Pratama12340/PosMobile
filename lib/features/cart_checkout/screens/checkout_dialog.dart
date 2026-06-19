@@ -355,13 +355,16 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         constraints: const BoxConstraints(maxHeight: 680),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: Colors.white,
           borderRadius: BorderRadius.circular(28),
+          gradient: const LinearGradient(
+            colors: [Colors.white, Color(0xFFFBFBFB)],
+            stops: [5 / 9, 5 / 9],
+          ),
         ),
         child: Stack(
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ??? LEFT PANEL ????????????????????????????????????????????
                 Expanded(
@@ -457,7 +460,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                 Expanded(
                   flex: 4,
                   child: Container(
-                    decoration: const BoxDecoration(color: Color(0xFFFBFBFB)),
+                    decoration: const BoxDecoration(color: Colors.transparent),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(30, 25, 30, 25),
                       child: SingleChildScrollView(
@@ -642,7 +645,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                 ),              // tutup Expanded
               ],
             ),
-
             if (_errorMessage != null)
               Positioned(
                 top: 24,

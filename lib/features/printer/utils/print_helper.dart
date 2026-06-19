@@ -3,20 +3,32 @@ import 'package:sistem_pos/features/printer/models/print_model.dart';
 import 'package:sistem_pos/features/printer/models/printer_device.dart';
 import 'package:sistem_pos/features/printer/services/printer_service.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
+import 'package:sistem_pos/features/home/models/product_model.dart';
 
 class PrintHelper {
-  static List<CartItem> orderItemsToCartItems(List<dynamic> items, {bool filterVoided = true}) {
+  static List<CartItem> orderItemsToCartItems(List<dynamic> items, {bool filterVoided = true, List<Product>? allProducts}) {
     return items.where((item) {
       if (filterVoided && item is OrderItem && item.isVoided) return false;
       return true;
     }).map((item) {
+      String stId = item.stationId;
+      String stName = item.stationName;
+
+      if ((stName.isEmpty || stName == 'Tanpa Nama') && allProducts != null && item is OrderItem) {
+        try {
+          final p = allProducts.firstWhere((prod) => prod.id == item.productId);
+          stId = p.stationId;
+          stName = p.stationName;
+        } catch (_) {}
+      }
+
       return CartItem(
         itemName: item.itemName,
         quantity: item is OrderItem ? item.activeQty : item.quantity,
         unitPrice: item.unitPrice,
         notes: item.notes,
-        stationId: item.stationId,
-        stationName: item.stationName,
+        stationId: stId,
+        stationName: stName,
       );
     }).toList();
   }
@@ -53,6 +65,7 @@ class PrintHelper {
     Function(String name, dynamic error)? onError,
     Function()? onNoPrinter,
     bool isDoublePrint = false,
+    bool skipCashier = false,
   }) async {
     final List<PrinterDevice> allPrinters = await StorageService.getPrinterList();
     final List<PrinterDevice> activePrinters = allPrinters.where((p) => p.isActive).toList();
@@ -66,7 +79,7 @@ class PrintHelper {
 
     Map<String, List<CartItem>> groupedByStation = {};
     for (var item in transaction.items) {
-      String sName = item.stationName.isNotEmpty ? item.stationName : 'Kasir (Semua Item)';
+      String sName = item.stationName.isNotEmpty ? item.stationName.trim().toLowerCase() : 'kasir (semua item)';
       groupedByStation.putIfAbsent(sName, () => []).add(item);
     }
 
@@ -83,13 +96,15 @@ class PrintHelper {
 
         if (printer.stationName.toLowerCase().contains('kasir') ||
             printer.stationName.toLowerCase().contains('semua')) {
+          if (skipCashier) continue;
           await printerService.printReceipt(
             ipAddress: printer.ip,
             transaction: transaction,
             port: printer.port,
           );
         } else {
-          final stationItems = groupedByStation[printer.stationName] ?? [];
+          final stationKey = printer.stationName.trim().toLowerCase();
+          final stationItems = groupedByStation[stationKey] ?? [];
           if (stationItems.isEmpty) continue;
 
           final stationTransaction = TransactionModel(
@@ -105,10 +120,11 @@ class PrintHelper {
             totalDariHalaman: transaction.totalDariHalaman,
           );
 
-          await printerService.printKitchenReceipt(
+          await printerService.printStationReceipt(
             ipAddress: printer.ip,
             transaction: stationTransaction,
             port: printer.port,
+            stationName: printer.stationName,
           );
         }
 

@@ -134,7 +134,9 @@ class CartProvider extends ChangeNotifier {
     if (item == null) return;
 
     final discount = _productDiscounts[productId];
-    if (discount != null) {
+    // Hanya hitung diskon jika qty aktif > 0 agar tidak terjadi pembagian dengan nol
+    // (item yang dibatalkan penuh punya activeQty == 0).
+    if (discount != null && item.activeQty > 0) {
       double totalDiscount = 0;
       if (discount.type == 'percentage') {
         totalDiscount = (item.originalPrice * (discount.value / 100)) * item.activeQty;

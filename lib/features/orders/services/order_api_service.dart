@@ -8,7 +8,12 @@ import 'package:sistem_pos/core/network/api_client.dart';
 class _PendingPageResult {
   final List<Order> orders;
   final int lastPage;
-  _PendingPageResult({required this.orders, required this.lastPage});
+  final bool failed; // true jika halaman gagal dimuat (timeout / non-200 / error)
+  _PendingPageResult({
+    required this.orders,
+    required this.lastPage,
+    this.failed = false,
+  });
 }
 
 class OrderApiService {
@@ -162,43 +167,63 @@ class OrderApiService {
 
     try {
 
+      bool anyFailed = false;
+
       final firstPage = await _fetchPendingPage(
         outletId: outletId,
         page: 1,
       );
+      if (firstPage.failed) anyFailed = true;
 
       final List<Order> result = List.from(firstPage.orders);
       final int totalPages = firstPage.lastPage;
 
       // debugPrint('📦 [PENDING] Page 1: ${result.length} orders, total $totalPages hal.');
 
-      if (totalPages <= 1) {
-        _pendingCache[currentOutletId] = result;
-        _pendingCacheTime[currentOutletId] = DateTime.now();
-        return result;
-      }
+      if (totalPages > 1) {
+        final remainingPages = List.generate(totalPages - 1, (i) => i + 2);
+        const batchSize = 3;
 
-      final remainingPages = List.generate(totalPages - 1, (i) => i + 2);
-      const batchSize = 3;
+        for (int i = 0; i < remainingPages.length; i += batchSize) {
+          final batch = remainingPages.skip(i).take(batchSize).toList();
 
-      for (int i = 0; i < remainingPages.length; i += batchSize) {
-        final batch = remainingPages.skip(i).take(batchSize).toList();
+          final batchResults = await Future.wait(
+            batch.map((page) => _fetchPendingPage(
+                  outletId: outletId,
+                  page: page,
+                ).catchError((_) =>
+                    _PendingPageResult(orders: [], lastPage: 1, failed: true))),
+          );
 
-        final batchResults = await Future.wait(
-          batch.map((page) => _fetchPendingPage(
-                outletId: outletId,
-                page: page,
-              ).catchError((_) => _PendingPageResult(orders: [], lastPage: 1))),
-        );
-
-        for (final pageResult in batchResults) {
-          result.addAll(pageResult.orders);
+          for (final pageResult in batchResults) {
+            if (pageResult.failed) {
+              anyFailed = true;
+            } else {
+              result.addAll(pageResult.orders);
+            }
+          }
         }
       }
 
-      _pendingCache[currentOutletId] = result;
-      _pendingCacheTime[currentOutletId] = DateTime.now();
-      // debugPrint('✅ [PENDING] Total ${result.length} orders dari $totalPages halaman');
+      // Hanya simpan ke cache jika SEMUA halaman berhasil dimuat. Jika tidak,
+      // daftar tak lengkap akan tersimpan & disajikan selama masa cache,
+      // membuat sebagian pesanan "hilang".
+      if (!anyFailed) {
+        _pendingCache[currentOutletId] = result;
+        _pendingCacheTime[currentOutletId] = DateTime.now();
+        // debugPrint('✅ [PENDING] Total ${result.length} orders dari $totalPages halaman');
+        return result;
+      }
+
+      // Ada halaman yang gagal → jangan cache hasil parsial.
+      // Pakai cache lama bila masih ada agar tidak ada pesanan yang hilang;
+      // jika tidak ada, kembalikan hasil parsial apa adanya (tanpa di-cache).
+      if (kDebugMode) {
+        print('⚠️ [PENDING] Sebagian halaman gagal dimuat — hasil tidak di-cache.');
+      }
+      if (_pendingCache.containsKey(currentOutletId)) {
+        return List.from(_pendingCache[currentOutletId]!);
+      }
       return result;
     } catch (e) {
       if (kDebugMode) print('💥 getPendingOrders error: $e');
@@ -217,7 +242,7 @@ class OrderApiService {
     ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
-      return _PendingPageResult(orders: [], lastPage: 1);
+      return _PendingPageResult(orders: [], lastPage: 1, failed: true);
     }
 
     final result = jsonDecode(response.body);

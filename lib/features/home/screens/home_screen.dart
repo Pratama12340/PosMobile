@@ -94,10 +94,12 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<void> _printAcceptedOrder(Order order) async {
     try {
+      // Baca dari context SEBELUM ada await agar tidak memakai BuildContext
+      // melintasi async gap.
+      final allProducts = context.read<ProductProvider>().products;
+
       final outletName = await StorageService.getOutletName();
       final cashierName = await StorageService.getCashierName();
-
-      final allProducts = context.read<ProductProvider>().products;
 
       final itemsForPrinting = PrintHelper.orderItemsToCartItems(
         order.items,

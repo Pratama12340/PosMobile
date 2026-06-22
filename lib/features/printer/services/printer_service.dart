@@ -83,7 +83,7 @@ class NetworkPrinterService {
       // --- PERHITUNGAN FINANSIAL ---
       bytes += generator.row([
         PosColumn(text: "Sub Total", width: 6),
-        PosColumn(text: _fMoney(transaction.items.fold(0, (sum, item) => sum + (item.quantity * item.unitPrice.toInt()))), width: 6, styles: const PosStyles(align: PosAlign.right)),
+        PosColumn(text: _fMoney(transaction.items.fold(0.0, (sum, item) => sum + (item.quantity * item.unitPrice))), width: 6, styles: const PosStyles(align: PosAlign.right)),
       ]);
 
       if (transaction.discountAmount > 0) {

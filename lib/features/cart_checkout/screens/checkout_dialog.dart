@@ -855,8 +855,16 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         };
 
         if (_paymentMethod != 'Cash' && !hasOnlinePaymentUrl) {
-           // Sesuai permintaan: biarkan loading muter-muter tanpa pesan error
-           await Future.delayed(const Duration(days: 999)); 
+          // Pembayaran non-tunai tapi server tidak mengembalikan URL/QR pembayaran.
+          // Jangan menggantung loading — tampilkan error agar kasir bisa mencoba lagi.
+          if (mounted) {
+            setState(() {
+              _resetPaymentState();
+              _errorMessage =
+                  "Gagal memuat halaman pembayaran. Silakan coba lagi.";
+            });
+          }
+          return;
         }
 
         if (!hasOnlinePaymentUrl || _paymentMethod == 'Cash') {

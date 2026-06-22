@@ -32,6 +32,9 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   bool _isPrinting = false;
 
   double _totalBeforeEdit = 0;
+  // Snapshot activeQty tiap item saat masuk mode edit, untuk di-rollback bila
+  // user menekan "Batal" (qty dimutasi langsung di localOrder.items).
+  List<int>? _qtyBeforeEdit;
   SharedPreferences? _prefs;
   bool _prefsReady = false;
 
@@ -965,7 +968,21 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return OutlinedButton.icon(
       onPressed: () => setState(() {
         if (!isEditMode) {
+          // Masuk mode edit: simpan total & snapshot qty untuk rollback.
           _totalBeforeEdit = localOrder!.totalPrice;
+          _qtyBeforeEdit =
+              localOrder!.items.map((it) => it.activeQty).toList();
+        } else {
+          // Tekan "Batal": kembalikan qty ke nilai sebelum edit.
+          final snapshot = _qtyBeforeEdit;
+          if (snapshot != null) {
+            for (int i = 0;
+                i < localOrder!.items.length && i < snapshot.length;
+                i++) {
+              localOrder!.items[i].activeQty = snapshot[i];
+            }
+          }
+          _qtyBeforeEdit = null;
         }
         isEditMode = !isEditMode;
       }),
@@ -1072,6 +1089,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
             localOrder = newOrder;
             _detailFuture = Future.value(newOrder);
             isEditMode = false;
+            _qtyBeforeEdit = null; // snapshot lama tidak relevan utk order baru
             _noteController.clear();
           });
         }

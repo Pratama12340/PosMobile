@@ -22,12 +22,12 @@ class ApiClient {
     return headers;
   }
 
-  static void _handleResponse(http.Response response) {
+  static Future<void> _handleResponse(http.Response response) async {
     if (response.statusCode == 401) {
       if (kDebugMode) {
         print('Token expired or unauthorized: 401');
       }
-      StorageService.removeToken();
+      await StorageService.removeToken();
       throw UnauthorizedException();
     }
   }
@@ -36,7 +36,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.get(url, headers: requestHeaders);
-    _handleResponse(response);
+    await _handleResponse(response);
     return response;
   }
 
@@ -44,7 +44,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.post(url, headers: requestHeaders, body: body);
-    _handleResponse(response);
+    await _handleResponse(response);
     return response;
   }
 
@@ -52,7 +52,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.put(url, headers: requestHeaders, body: body);
-    _handleResponse(response);
+    await _handleResponse(response);
     return response;
   }
 
@@ -60,7 +60,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.delete(url, headers: requestHeaders);
-    _handleResponse(response);
+    await _handleResponse(response);
     return response;
   }
 
@@ -68,7 +68,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.patch(url, headers: requestHeaders, body: body);
-    _handleResponse(response);
+    await _handleResponse(response);
     return response;
   }
 }

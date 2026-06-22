@@ -1,3 +1,37 @@
+/// Menentukan apakah sebuah pajak tergolong PPN/VAT (dihitung DI ATAS service
+/// charge), bukan biaya layanan / service charge.
+///
+/// Prioritas penentuan:
+/// 1. Penanda eksplisit dari backend (`is_ppn` / `is_vat` / `category`).
+/// 2. Fallback ke nama: mengandung "ppn" atau "vat", atau mengandung "tax"
+///    SELAMA bukan biaya layanan (service / charge / layanan).
+///
+/// Catatan: pencocokan kata "tax" sengaja dikecualikan untuk nama yang juga
+/// mengandung "service"/"charge"/"layanan" agar "Service Tax" tidak salah
+/// dianggap PPN.
+bool isPpnTax(dynamic tax) {
+  // 1. Penanda eksplisit dari backend (paling andal)
+  final flag = tax['is_ppn'] ?? tax['is_vat'];
+  if (flag is bool) return flag;
+  if (flag != null) {
+    final s = flag.toString().toLowerCase();
+    if (s == '1' || s == 'true') return true;
+    if (s == '0' || s == 'false') return false;
+  }
+  final category =
+      (tax['category'] ?? tax['tax_category'] ?? '').toString().toLowerCase();
+  if (category.contains('ppn') || category.contains('vat')) return true;
+  if (category.contains('service') || category.contains('layanan')) return false;
+
+  // 2. Fallback ke nama
+  final name = (tax['name'] ?? '').toString().toLowerCase();
+  if (name.contains('ppn') || name.contains('vat')) return true;
+  final isServiceCharge = name.contains('service') ||
+      name.contains('charge') ||
+      name.contains('layanan');
+  return name.contains('tax') && !isServiceCharge;
+}
+
 /// Kalkulasi pajak bertingkat untuk checkout dan edit dialog.
 ///
 /// Urutan kalkulasi:
@@ -13,12 +47,7 @@ Map<String, dynamic> calculateTaxesAndGrandTotal(
 
   // Langkah 1: Hitung service charge terlebih dahulu
   for (var tax in availableTaxes) {
-    final String taxName = (tax['name'] ?? '').toString().toLowerCase();
-    final bool isPpn = taxName.contains('ppn') ||
-        taxName.contains('vat') ||
-        taxName.contains('tax');
-
-    if (isPpn) continue; // PPN dihitung setelah service charge
+    if (isPpnTax(tax)) continue; // PPN dihitung setelah service charge
 
     final double rate =
         double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
@@ -35,12 +64,9 @@ Map<String, dynamic> calculateTaxesAndGrandTotal(
   final double afterService = baseAmount + serviceAmount;
 
   for (var tax in availableTaxes) {
-    final String taxName = (tax['name'] ?? '').toString().toLowerCase();
     final double rate =
         double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
-    final bool isPpn = taxName.contains('ppn') ||
-        taxName.contains('vat') ||
-        taxName.contains('tax');
+    final bool isPpn = isPpnTax(tax);
 
     double amt;
     if (isPpn) {
@@ -65,11 +91,8 @@ Map<String, dynamic> calculateTaxesAndGrandTotal(
 
   // Urutkan agar pajak non-PPN (Service) muncul lebih dulu di atas PPN
   taxBreakdown.sort((a, b) {
-    final String nameA = (a['name'] ?? '').toString().toLowerCase();
-    final String nameB = (b['name'] ?? '').toString().toLowerCase();
-
-    final bool isPpnA = nameA.contains('ppn') || nameA.contains('vat') || nameA.contains('tax');
-    final bool isPpnB = nameB.contains('ppn') || nameB.contains('vat') || nameB.contains('tax');
+    final bool isPpnA = isPpnTax(a);
+    final bool isPpnB = isPpnTax(b);
 
     if (isPpnA && !isPpnB) return 1;
     if (!isPpnA && isPpnB) return -1;

@@ -257,8 +257,17 @@ class OrderApiService {
       lastPage = result['data']['last_page'] ?? 1;
     }
 
+    // Filter: Hanya tampilkan pesanan QR POS (tidak punya nama kasir)
+    final qrOrdersOnly = rawData.where((json) {
+      final hasCashierName = json['cashier_name'] != null && json['cashier_name'].toString().isNotEmpty;
+      final hasCashierObj = json['cashier'] != null;
+      final hasUserObj = json['user'] != null;
+      
+      return !(hasCashierName || hasCashierObj || hasUserObj);
+    }).toList();
+
     return _PendingPageResult(
-      orders: rawData.map((json) => Order.fromJson(json)).toList(),
+      orders: qrOrdersOnly.map((json) => Order.fromJson(json)).toList(),
       lastPage: lastPage,
     );
   }

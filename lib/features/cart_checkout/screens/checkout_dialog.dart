@@ -463,9 +463,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                     decoration: const BoxDecoration(color: Colors.transparent),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(30, 25, 30, 25),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -515,11 +514,10 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                             ],
                           ),
                           const Divider(height: 30),
-                          ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: widget.cart.length,
-                            itemBuilder: (context, index) {
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: widget.cart.length,
+                              itemBuilder: (context, index) {
                                 var item = widget.cart.values.elementAt(index);
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 14),
@@ -577,6 +575,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                 );
                               },
                             ),
+                          ),
                           const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.all(15),
@@ -638,8 +637,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                     ),
                             ),
                         ],      // tutup children: [] Column
-                        ),      // tutup Column
-                      ),        // tutup SingleChildScrollView
+                      ),        // tutup Column
                     ),          // tutup Padding
                   ),            // tutup Container
                 ),              // tutup Expanded

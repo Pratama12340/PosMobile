@@ -246,8 +246,11 @@ void dispose() {
                   (sum, item) => sum + item.subtotal,
                 ));
 
+    double screenWidth = MediaQuery.of(context).size.width;
+    double panelWidth = screenWidth < 600 ? screenWidth * 0.85 : 340;
+
     return Container(
-      width: 340,
+      width: panelWidth,
       margin: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -290,19 +293,17 @@ void dispose() {
                           ),
 
                           if (widget.isPendingMode)
-  GestureDetector(
-    onTap: () => widget.onCancelPendingMode?.call(),
-    child: Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.08),
+  IconButton(
+    onPressed: () => widget.onCancelPendingMode?.call(),
+    icon: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 20),
+    style: IconButton.styleFrom(
+      backgroundColor: Colors.red.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
       ),
-      child: const Icon(
-        Icons.close_rounded,
-        color: Colors.redAccent,
-        size: 20,
-      ),
+      padding: const EdgeInsets.all(6),
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     ),
   )
 else
@@ -364,34 +365,65 @@ const SizedBox(height: 15),
                   color: Color(0xFFF5F5F5),
                 ),
                 Expanded(
-                  child: ListView.builder(
-                    controller: _listScrollController, 
-                    itemCount: widget.cart.length,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 10,
-                    ),
-                    itemBuilder: (context, index) {
-                      int id = widget.cart.keys.elementAt(index);
-                      OrderItem item = widget.cart[id]!;
+                  child: widget.cart.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.shopping_basket_outlined,
+                                size: 80,
+                                color: Colors.grey.shade300,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                "Keranjang masih kosong",
+                                style: TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                "Yuk, pilih menu di samping!",
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 13,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _listScrollController, 
+                          itemCount: widget.cart.length,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 15,
+                            vertical: 10,
+                          ),
+                          itemBuilder: (context, index) {
+                            int id = widget.cart.keys.elementAt(index);
+                            OrderItem item = widget.cart[id]!;
 
-                      if (!_noteControllers.containsKey(id)) {
-                        _noteControllers[id] = TextEditingController(
-                          text: item.notes,
-                        );
-                      }
+                            if (!_noteControllers.containsKey(id)) {
+                              _noteControllers[id] = TextEditingController(
+                                text: item.notes,
+                              );
+                            }
 
-                      return _buildCartItem(
-  id,
-  item,
-  _noteControllers[id]!,
-  itemKey: _itemKeys[id] ?? GlobalKey(),
-  focusNode: _noteFocusNodes[id],
-  key: ValueKey("cart_$id"),
-);
-
-                    },
-                  ),
+                            return _buildCartItem(
+                              id,
+                              item,
+                              _noteControllers[id]!,
+                              itemKey: _itemKeys[id] ?? GlobalKey(),
+                              focusNode: _noteFocusNodes[id],
+                              key: ValueKey("cart_$id"),
+                            );
+                          },
+                        ),
                 ),
                 _buildFooter(total),
               ],
@@ -431,9 +463,9 @@ const SizedBox(height: 15),
       height: 45,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC),
+        color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF4F6F8),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.1)),
+        border: Border.all(color: AppStyle.primaryBlue.withValues(alpha: 0.15)),
       ),
       child: Row(
         children: [
@@ -470,20 +502,23 @@ const SizedBox(height: 15),
   Widget _buildTableSelectorButton({bool isReadOnly = false}) {
     bool hasSelectedTable = _tableController.text.isNotEmpty;
 
-    return GestureDetector(
-      onTap: isReadOnly
-          ? null
-          : () => setState(() => _showTableSelection = true),
-      child: Container(
-        height: 45,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+    return Material(
+      color: isReadOnly ? Colors.grey.shade100 : const Color(0xFFF4F6F8),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: isReadOnly
+            ? null
+            : () => setState(() => _showTableSelection = true),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: 45,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: AppStyle.primaryBlue.withValues(alpha: 0.15),
+            ),
           ),
-        ),
         child: Row(
           children: [
             Icon(
@@ -514,8 +549,9 @@ const SizedBox(height: 15),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildCartItem(
     int id,
@@ -649,22 +685,40 @@ const SizedBox(height: 15),
                   controller: noteController,
                   onChanged: (v) => item.notes = v,
                   onTap: () => KeyboardUtil.show(),
-                  style: const TextStyle(fontSize: 11),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
                   decoration: InputDecoration(
-                    hintText: "Catatan (mis: Pedas)...",
+                    hintText: "Tambah catatan (opsional)...",
                     hintStyle: const TextStyle(
                       color: Colors.grey,
                       fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.edit_note_rounded,
+                      size: 16,
+                      color: Colors.black38,
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
                     ),
                     filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
+                    fillColor: const Color(0xFFF4F6F8),
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
+                      horizontal: 10,
                       vertical: 8,
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
+                      borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppStyle.primaryBlue, width: 1.5),
                     ),
                   ),
                 ),

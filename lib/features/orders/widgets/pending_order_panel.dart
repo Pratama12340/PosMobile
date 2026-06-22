@@ -31,8 +31,11 @@ class PendingOrderPanel extends StatelessWidget {
       return seenIds.add(o.id);
     }).toList();
 
+    double screenWidth = MediaQuery.of(context).size.width;
+    double panelWidth = screenWidth < 600 ? screenWidth * 0.85 : 340;
+
     return Container(
-      width: 340,
+      width: panelWidth,
       margin: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -56,13 +59,33 @@ class PendingOrderPanel extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppStyle.primaryBlue.withValues(alpha: 0.1),
+                      color: AppStyle.warningOrange.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(
-                      Icons.receipt_long,
-                      color: AppStyle.primaryBlue,
-                      size: 20,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Icon(
+                          Icons.shopping_cart_outlined,
+                          color: AppStyle.warningOrange,
+                          size: 20,
+                        ),
+                        Positioned(
+                          top: 8,
+                          left: 10,
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.access_time_filled,
+                              color: AppStyle.warningOrange,
+                              size: 10,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -116,10 +139,36 @@ class PendingOrderPanel extends StatelessWidget {
                       child: CircularProgressIndicator(color: AppStyle.primaryBlue),
                     )
                   : allItems.isEmpty
-                  ? const Center(
-                      child: Text(
-                        "Tidak ada pesanan.",
-                        style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.receipt_long_outlined,
+                            size: 70,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            "Belum Ada Pesanan",
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "Pesanan masuk dan pesanan\ntunda akan muncul di sini.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 13,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
                       ),
                     )
                   : ListView.separated(

@@ -138,6 +138,12 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                       ),
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(
+                        hintText: "0",
+                        hintStyle: AppStyle.numPadText.copyWith(
+                          fontSize: 34,
+                          color: AppStyle.primaryBlue.withValues(alpha: 0.3),
+                          letterSpacing: 2,
+                        ),
                         filled: true,
                         fillColor: AppStyle.bgLightBlue,
                         prefixIcon: const Padding(
@@ -166,19 +172,21 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                         ),
                       ),
                       onChanged: (value) {
-                        if (_errorMessage != null) {
-                          setState(() => _errorMessage = null);
-                        }
+                        setState(() {
+                          if (_errorMessage != null) {
+                            _errorMessage = null;
+                          }
 
-                        if (value.isNotEmpty) {
-                          String formatted = _formatNumber(value);
-                          _cashController.value = TextEditingValue(
-                            text: formatted,
-                            selection: TextSelection.collapsed(
-                              offset: formatted.length,
-                            ),
-                          );
-                        }
+                          if (value.isNotEmpty) {
+                            String formatted = _formatNumber(value);
+                            _cashController.value = TextEditingValue(
+                              text: formatted,
+                              selection: TextSelection.collapsed(
+                                offset: formatted.length,
+                              ),
+                            );
+                          }
+                        });
                       },
                     ),
                     const SizedBox(height: 25),
@@ -187,6 +195,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                       runSpacing: 12,
                       alignment: WrapAlignment.center,
                       children: _quickAmounts.map((amount) {
+                        bool isSelected = _cashController.text == _formatNumber(amount.toString());
                         return ActionChip(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 20,
@@ -196,12 +205,12 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                             "Rp ${_formatNumber(amount.toString())}",
                             style: AppStyle.numPadText.copyWith(
                               fontSize: 16,
-                              color: AppStyle.primaryBlue,
+                              color: isSelected ? Colors.white : AppStyle.primaryBlue,
                             ),
                           ),
-                          backgroundColor: AppStyle.white,
+                          backgroundColor: isSelected ? AppStyle.primaryBlue : AppStyle.white,
                           side: BorderSide(
-                            color: AppStyle.primaryBlue.withValues(alpha: 0.2),
+                            color: isSelected ? AppStyle.primaryBlue : AppStyle.primaryBlue.withValues(alpha: 0.2),
                             width: 1.5,
                           ),
                           shape: RoundedRectangleBorder(

@@ -95,6 +95,7 @@ class PaymentSelector extends StatelessWidget {
                   if (paymentMethod == 'Cash')
                     TextField(
                       controller: manualTenderController,
+                      textAlign: TextAlign.center,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,

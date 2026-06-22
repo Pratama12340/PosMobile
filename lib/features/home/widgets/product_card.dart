@@ -42,157 +42,169 @@ class ProductCard extends StatelessWidget {
       ),
     );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: isOutOfStock ? null : onAdd,
         borderRadius: BorderRadius.circular(20),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: imageUrl.isEmpty
-                  ? imagePlaceholder
-                  : Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, s) => imagePlaceholder,
-                    ),
-            ),
-            Positioned.fill(
-              child: Container(color: Colors.black.withValues(alpha: 0.2)),
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (isBestseller)
-                    Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFD32F2F),
-                        borderRadius: BorderRadius.only(
-                          bottomRight: Radius.circular(15),
-                        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: imageUrl.isEmpty
+                    ? imagePlaceholder
+                    : Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => imagePlaceholder,
                       ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      child: const Text(
-                        "BESTSELLER",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  if (isBestseller && isDiskon) const SizedBox(height: 2),
-                  if (isDiskon)
-                    Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF24707A),
-                        borderRadius: BorderRadius.only(
-                          bottomRight: Radius.circular(15),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      child: const Text(
-                        "DISKON",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                ],
               ),
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isOutOfStock ? Colors.red : AppStyle.primaryBlue,
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(15),
-                  ),
-                ),
-                child: Text(
-                  isOutOfStock ? "HABIS" : "STOK: ${product.stock}",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 15,
-              left: 15,
-              right: 15,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          product.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                        ),
-                        if (isDiskon) ...[
-                          Text(
-                            CurrencyFormatter.format(product.price.toDouble()),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              decoration: TextDecoration.lineThrough,
-                              decorationColor: Colors.redAccent,
-                              decorationThickness: 2.0,
-                            ),
-                          ),
-                          const SizedBox(height: 1),
-                          Text(
-                            CurrencyFormatter.format(priceAfterDiscount),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ] else
-                          Text(
-                            CurrencyFormatter.format(product.price.toDouble()),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.8),
                       ],
+                      stops: const [0.4, 1.0],
                     ),
                   ),
-                  GestureDetector(
-                    onTap: isOutOfStock ? null : onAdd,
-                    child: Container(
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isBestseller)
+                      Container(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFD32F2F),
+                          borderRadius: BorderRadius.only(
+                            bottomRight: Radius.circular(15),
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        child: const Text(
+                          "BESTSELLER",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    if (isBestseller && isDiskon) const SizedBox(height: 2),
+                    if (isDiskon)
+                      Container(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF24707A),
+                          borderRadius: BorderRadius.only(
+                            bottomRight: Radius.circular(15),
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        child: const Text(
+                          "DISKON",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isOutOfStock ? Colors.red : AppStyle.primaryBlue,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(15),
+                    ),
+                  ),
+                  child: Text(
+                    isOutOfStock ? "HABIS" : "STOK: ${product.stock}",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 15,
+                left: 15,
+                right: 15,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            product.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (isDiskon) ...[
+                            Text(
+                              CurrencyFormatter.format(product.price.toDouble()),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.lineThrough,
+                                decorationColor: Colors.redAccent,
+                                decorationThickness: 2.0,
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              CurrencyFormatter.format(priceAfterDiscount),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ] else
+                            Text(
+                              CurrencyFormatter.format(product.price.toDouble()),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Container(
                       padding: const EdgeInsets.all(8),
                       decoration: const BoxDecoration(
                         color: Colors.white,
@@ -203,11 +215,11 @@ class ProductCard extends StatelessWidget {
                         color: isOutOfStock ? Colors.grey : AppStyle.primaryBlue,
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -178,7 +178,7 @@ class HomeScreenState extends State<HomeScreen> {
             ],
           ),
           child: const Icon(
-            Icons.shopping_cart_outlined,
+            Icons.inventory_2_outlined,
             color: AppStyle.primaryBlue,
             size: 26,
           ),
@@ -262,10 +262,30 @@ class HomeScreenState extends State<HomeScreen> {
                                             ),
                                           ],
                                         ),
-                                        child: const Icon(
-                                          Icons.receipt_long,
-                                          color: Colors.orange,
-                                          size: 26,
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            const Icon(
+                                              Icons.shopping_cart_outlined,
+                                              color: AppStyle.warningOrange,
+                                              size: 26,
+                                            ),
+                                            Positioned(
+                                              top: 8,
+                                              left: 10,
+                                              child: Container(
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.white,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.access_time_filled,
+                                                  color: AppStyle.warningOrange,
+                                                  size: 13,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),

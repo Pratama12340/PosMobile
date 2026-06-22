@@ -17,8 +17,11 @@ class DraftPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    double panelWidth = screenWidth < 600 ? screenWidth * 0.85 : 340;
+
     return Container(
-      width: 340,
+      width: panelWidth,
       margin: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -50,7 +53,7 @@ class DraftPanel extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
-                      Icons.shopping_cart_outlined,
+                      Icons.inventory_2_outlined,
                       color: AppStyle.primaryBlue,
                       size: 20,
                     ),
@@ -80,10 +83,36 @@ class DraftPanel extends StatelessWidget {
             // --- BAGIAN LIST DRAFT ---
             Expanded(
               child: drafts.isEmpty
-                  ? const Center(
-                      child: Text(
-                        "Tidak ada draft pesanan.",
-                        style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.inventory_2_outlined,
+                            size: 70,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            "Belum Ada Draft",
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "Simpan pesanan ke draft\nuntuk diproses nanti.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 13,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
                       ),
                     )
                   : ListView.separated(

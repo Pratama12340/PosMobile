@@ -11,7 +11,7 @@ import 'package:sistem_pos/core/utils/app_keys.dart';
 import 'package:sistem_pos/features/printer/utils/print_helper.dart';
 import 'package:sistem_pos/core/utils/tax_calculator.dart' as tax_calc;
 import 'package:sistem_pos/core/utils/string_utils.dart';
-
+import 'package:sistem_pos/core/utils/snackbar_helper.dart';
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
   const ReceiptDialog({super.key, required this.orderId});
@@ -30,6 +30,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   String _currentUserName = "";
   List<dynamic> _masterTaxes = [];
   bool _isPrinting = false;
+  bool _isSaving = false;
 
   double _totalBeforeEdit = 0;
   // Snapshot activeQty tiap item saat masuk mode edit, untuk di-rollback bila
@@ -372,7 +373,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                                     CurrencyFormatter.format(displayTotal),
                                     style: const TextStyle(
                                         fontSize: 32,
-                                        color: Color(0xFF4CAF50),
+                                        color: AppStyle.successGreen,
                                         fontWeight: FontWeight.bold),
                                   ),
                                   Text(
@@ -950,15 +951,20 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   Widget _buildSummaryRow(String label, String value,
       {Color color = Colors.black87}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: const TextStyle(color: Colors.grey, fontSize: 16)),
+              style: const TextStyle(
+                  color: Colors.grey, 
+                  fontSize: 14, 
+                  fontWeight: FontWeight.w500)),
           Text(value,
               style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w600, color: color)),
+                  fontSize: 16, 
+                  fontWeight: FontWeight.w700, 
+                  color: color)),
         ],
       ),
     );
@@ -1041,21 +1047,26 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12)),
         ),
-        onPressed: _handleSaveButton,
-        child: const Text("Simpan Perubahan",
-            style:
-                TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        onPressed: _isSaving ? null : _handleSaveButton,
+        child: _isSaving
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Text("Simpan Perubahan",
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
   void _handleSaveButton() async {
     if (_formKey.currentState!.validate()) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
+      setState(() => _isSaving = true);
       try {
         final totalBefore = _totalBeforeEdit;
         final totalAfter = currentTotalPrice;
@@ -1069,7 +1080,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         );
 
         if (!mounted) return;
-        Navigator.pop(context);
+        setState(() => _isSaving = false);
 
         if (success) {
           final diff = totalBefore - totalAfter;
@@ -1092,10 +1103,14 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
             _qtyBeforeEdit = null; // snapshot lama tidak relevan utk order baru
             _noteController.clear();
           });
+          SnackbarHelper.showSuccess(context, "Pesanan berhasil diperbarui");
+        } else {
+          SnackbarHelper.showError(context, "Gagal memperbarui pesanan");
         }
       } catch (e) {
         if (!mounted) return;
-        Navigator.pop(context);
+        setState(() => _isSaving = false);
+        SnackbarHelper.showError(context, e);
       }
     }
   }

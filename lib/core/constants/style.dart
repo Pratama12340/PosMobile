@@ -7,6 +7,8 @@ class AppStyle {
   static const Color textMain = Color(0xFF1A1C1E);
   static const Color textGrey = Color(0xFF757575);
   static const Color white = Colors.white;
+  static const Color successGreen = Color(0xFF34A853);
+  static const Color warningOrange = Color(0xFFFBBC05);
 
   static const String fontPoppins = 'Poppins';
   static const String fontNumbers = 'JetBrains';

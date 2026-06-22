@@ -347,11 +347,14 @@ class _CheckoutDialogState extends State<CheckoutDialog>
     String currentTime = DateFormat('HH:mm').format(DateTime.now());
     String currentDate = DateFormat('dd MMM yyyy').format(DateTime.now());
 
+    double screenWidth = MediaQuery.of(context).size.width;
+    double dialogWidth = screenWidth < 1000 ? screenWidth * 0.95 : 1000;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       insetPadding: const EdgeInsets.all(24),
       child: Container(
-        width: 1000,
+        width: dialogWidth,
         constraints: const BoxConstraints(maxHeight: 680),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(

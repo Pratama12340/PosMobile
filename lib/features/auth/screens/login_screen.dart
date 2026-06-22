@@ -5,7 +5,7 @@ import 'package:sistem_pos/core/constants/style.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
 import 'package:sistem_pos/features/auth/services/auth_api_service.dart';
 import 'package:sistem_pos/features/auth/screens/outlet_selection_screen.dart';
-
+import 'package:sistem_pos/core/utils/snackbar_helper.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -165,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _handleLoginError(result['message'] ?? "PIN Salah");
       }
     } catch (e) {
-      _handleLoginError("Koneksi bermasalah: $e");
+      _handleLoginError(SnackbarHelper.getFriendlyErrorMessage(e));
     }
   }
 
@@ -297,9 +297,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: const Text(
                             "Ganti Outlet?",
                             style: TextStyle(
-                              color: Color.fromARGB(255, 20, 20, 20),
+                              color: AppStyle.primaryBlue,
                               fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                              fontSize: 13,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppStyle.primaryBlue,
                             ),
                           ),
                         ),

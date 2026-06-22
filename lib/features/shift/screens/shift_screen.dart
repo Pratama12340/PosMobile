@@ -190,7 +190,7 @@ void refreshShift() {
     showDialog(
       context: context,
       builder: (context) => const ClosingCashDialog(),
-    ).then((_) => _loadInitialData());
+    );
   }
 
   @override
@@ -287,9 +287,8 @@ void refreshShift() {
             }
           }
 
-          var filteredProducts =
-              productSalesQty.entries.where((e) => e.value >= 10).toList()
-                ..sort((a, b) => b.value.compareTo(a.value));
+          var filteredProducts = productSalesQty.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
           var topProducts = filteredProducts.take(5).toList();
 
           return RefreshIndicator(
@@ -518,7 +517,7 @@ void refreshShift() {
             const Expanded(
               child: Center(
                 child: Text(
-                  "Belum ada produk mencapai 10 porsi",
+                  "Belum ada produk terjual",
                   style: TextStyle(color: Colors.grey),
                 ),
               ),

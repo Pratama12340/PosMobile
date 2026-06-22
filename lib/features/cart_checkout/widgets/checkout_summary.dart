@@ -256,12 +256,13 @@ class CheckoutSummary extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   // Tombol hapus semua diskon
-                  GestureDetector(
-                    onTap: onClearDiscounts,
-                    child: const Icon(
-                      Icons.cancel,
-                      size: 18,
-                      color: Colors.red,
+                  IconButton(
+                    onPressed: onClearDiscounts,
+                    icon: const Icon(Icons.cancel, color: Colors.red, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    style: IconButton.styleFrom(
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
                 ] else ...[

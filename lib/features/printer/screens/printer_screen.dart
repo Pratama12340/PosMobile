@@ -6,7 +6,7 @@ import 'package:sistem_pos/features/printer/services/printer_service.dart';
 import 'package:sistem_pos/features/printer/models/print_model.dart';
 import 'package:sistem_pos/features/printer/models/printer_device.dart';
 import 'package:sistem_pos/features/printer/services/network_scanner_service.dart';
-
+import 'package:sistem_pos/core/utils/snackbar_helper.dart';
 class PrinterScreen extends StatefulWidget {
   const PrinterScreen({super.key});
 
@@ -77,12 +77,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
         setState(() {
           _isScanningNetwork = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Gagal scan otomatis jaringan: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
+        SnackbarHelper.showError(context, e, customMessage: "Gagal memindai jaringan otomatis: $e");
       }
     }
   }
@@ -185,9 +180,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
   Future<void> _executeTestPrint(PrinterDevice printer) async {
     // Tampilkan info printer yang akan diuji
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Mengirim tes cetak ke ${printer.name}..."), duration: const Duration(seconds: 2)),
-    );
+    SnackbarHelper.showInfo(context, "Mengirim tes cetak ke ${printer.name}...");
 
     // Data dummy untuk test print
     final testData = TransactionModel(
@@ -214,9 +207,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
       // Skip printer Bluetooth untuk sementara (belum diimplementasi)
       if (printer.conn != 'Network Printer') {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("${printer.name}: Bluetooth belum didukung, tidak dapat tes cetak.")),
-          );
+          SnackbarHelper.showInfo(context, "${printer.name}: Bluetooth belum didukung.");
         }
         return;
       }
@@ -251,12 +242,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("✓ ${printer.name} (${printer.ip}) berhasil mencetak."),
-            backgroundColor: Colors.green,
-          ),
-        );
+        SnackbarHelper.showSuccess(context, "${printer.name} (${printer.ip}) berhasil mencetak.");
       }
 
     } catch (e) {
@@ -514,15 +500,11 @@ class _PrinterScreenState extends State<PrinterScreen> {
                           _loadPrinterList();
                         }
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(
-                              online
-                                  ? "✓ ${data.name} Online (${data.ip})"
-                                  : "✗ ${data.name} tidak dapat dijangkau.",
-                            ),
-                            backgroundColor:
-                                online ? Colors.green : Colors.red,
-                          ));
+                          if (online) {
+                            SnackbarHelper.showSuccess(context, "${data.name} Online (${data.ip})");
+                          } else {
+                            SnackbarHelper.showError(context, null, customMessage: "${data.name} tidak dapat dijangkau.");
+                          }
                         }
                       },
                       style: OutlinedButton.styleFrom(

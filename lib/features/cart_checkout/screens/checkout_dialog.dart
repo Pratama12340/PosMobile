@@ -92,7 +92,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
   }
 
   /// Toggle diskon dengan aturan:
-  /// - Diskon PRODUK: bisa 2 sekaligus, otomatis hapus diskon global
+  /// - Diskon PRODUK/KATEGORI: maksimal 2 aktif, otomatis hapus diskon tertua jika memilih diskon ke-3 (FIFO), otomatis hapus diskon global
   /// - Diskon TRANSAKSI (global): hapus semua diskon produk, hanya 1 aktif
   void _toggleDiscount(Discount d) {
     setState(() {
@@ -115,9 +115,18 @@ class _CheckoutDialogState extends State<CheckoutDialog>
           // Pastikan tidak ada duplikat sebelum tambah
           _selectedDiscounts.removeWhere((s) => s.id == d.id);
 
-          if (_selectedDiscounts.length < 2) {
-            _selectedDiscounts.add(d);
+          // Batasi maksimal 2 diskon produk/kategori
+          final prodCatDiscounts = _selectedDiscounts
+              .where((s) => s.scope == 'products' || s.scope == 'categories')
+              .toList();
+
+          if (prodCatDiscounts.length >= 2) {
+            // Hapus yang tertua (indeks 0) dari daftar terpilih
+            final oldest = prodCatDiscounts.first;
+            _selectedDiscounts.removeWhere((s) => s.id == oldest.id);
           }
+
+          _selectedDiscounts.add(d);
         }
       }
     });
@@ -447,7 +456,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                       selectedDiscounts: _selectedDiscounts,
                                       hasGlobalDiscount: _hasGlobalDiscount,
                                       hasProductDiscount: _hasProductDiscount,
-                                      selectedProductCount: _selectedDiscounts.where((d) => d.scope == 'products').length,
+                                      selectedProductCount: _selectedDiscounts.where((d) => d.scope == 'products' || d.scope == 'categories').length,
                                       onToggleDiscount: _toggleDiscount,
                                       onClose: _closeDiscountList,
                                       formatCurrency: widget.formatCurrency,

@@ -19,7 +19,7 @@ class DiscountEligibilityHelper {
   }
 
   static bool isMaxProductReached(Discount discount, int selectedProductCount, bool isSelected) {
-    return discount.scope == 'products' && selectedProductCount >= 2 && !isSelected;
+    return false;
   }
 
   static String? getBlockedReason({
@@ -32,7 +32,6 @@ class DiscountEligibilityHelper {
     
     if (discount.scope == 'products') {
       if (hasGlobalDiscount) return "Hapus diskon transaksi dulu";
-      if (selectedProductCount >= 2) return "Maks. 2 diskon produk";
     }
     return null;
   }

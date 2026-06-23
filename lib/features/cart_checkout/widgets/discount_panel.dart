@@ -61,27 +61,7 @@ class DiscountPanel extends StatelessWidget {
                     letterSpacing: -0.3,
                   ),
                 ),
-                const Spacer(),
-                // Badge info multi-diskon produk
-                if (selectedProductCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _primaryBlue.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      "$selectedProductCount/2 Produk",
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: _primaryBlue,
-                      ),
-                    ),
-                  ),
+                // Badge info multi-diskon produk dihilangkan sesuai request
               ],
             ),
           ),

@@ -232,6 +232,7 @@ class Order {
   final int? discountId;
   final int? shiftId;
   final Map<String, dynamic>? latestAcceptance;
+  final DateTime? createdAt;
 
   final double subtotalPrice,
       discountAmount,
@@ -319,6 +320,7 @@ class Order {
     this.discountId,
     this.shiftId,
     this.latestAcceptance,
+    this.createdAt,
     this.paymentMethod, 
     required this.status,
     required this.subtotalPrice,
@@ -371,14 +373,24 @@ class Order {
         d['created_at']?.toString() ??
         "";
 
+    DateTime? parsedCreatedAt;
     String formattedDate = "-";
     if (rawDate.isNotEmpty) {
       try {
+        parsedCreatedAt = DateTime.parse(rawDate).toLocal();
         formattedDate = DateFormat('dd MMM yyyy, HH:mm', 'id_ID')
-            .format(DateTime.parse(rawDate).toLocal());
+            .format(parsedCreatedAt);
       } catch (_) {
         formattedDate = rawDate.replaceAll('T', ' ').split('.')[0];
       }
+    }
+    
+    // Attempt to explicitly get created_at if possible to avoid updated_at overwriting the actual creation day
+    final explicitCreated = d['created_at']?.toString();
+    if (explicitCreated != null && explicitCreated.isNotEmpty) {
+      try {
+        parsedCreatedAt = DateTime.parse(explicitCreated).toLocal();
+      } catch (_) {}
     }
 
     // Table
@@ -420,6 +432,7 @@ class Order {
       tableId: tId,
       discountId: int.tryParse(d['discount_id']?.toString() ?? ''),
       shiftId: int.tryParse(d['shift_id']?.toString() ?? ''),
+      createdAt: parsedCreatedAt,
 
       // ✅ PERBAIKAN 1: nullable, tidak crash jika null
       paymentMethod: d['payment_method']?.toString(),

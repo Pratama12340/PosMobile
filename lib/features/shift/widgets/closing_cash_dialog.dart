@@ -4,6 +4,8 @@ import 'package:sistem_pos/core/constants/style.dart';
 import 'package:sistem_pos/features/shift/services/shift_api_service.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
 import 'package:sistem_pos/features/auth/screens/login_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:sistem_pos/features/cart_checkout/providers/cart_provider.dart';
 
 class ClosingCashDialog extends StatefulWidget {
   const ClosingCashDialog({super.key});
@@ -54,6 +56,9 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
       if (result['success']) {
         await StorageService.tutupKasir();
         if (mounted) {
+          // Hapus semua draft saat shift ditutup
+          context.read<CartProvider>().clearAllDrafts();
+          
           Navigator.pop(context);
           Navigator.pushAndRemoveUntil(
             context,

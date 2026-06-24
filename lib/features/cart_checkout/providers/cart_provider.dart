@@ -282,4 +282,10 @@ class CartProvider extends ChangeNotifier {
       _saveDraftsToStorage();
     }
   }
+
+  void clearAllDrafts() {
+    _drafts.clear();
+    _saveDraftsToStorage();
+    notifyListeners();
+  }
 }

@@ -14,8 +14,24 @@ class OrderProvider extends ChangeNotifier {
   bool get isLoadingPendingOrders => _isLoadingPendingOrders;
 
   bool _isToday(Order order) {
-    final String todayStr = DateFormat('yyyyMMdd').format(DateTime.now());
-    return order.invoiceNo.contains(todayStr);
+    final now = DateTime.now();
+    
+    // 1. Cek dari tanggal pembuatan asli (paling akurat)
+    if (order.createdAt != null) {
+      return order.createdAt!.year == now.year &&
+             order.createdAt!.month == now.month &&
+             order.createdAt!.day == now.day;
+    }
+    
+    // 2. Fallback: cek dari formatted date ('dd MMM yyyy')
+    final String todayFormatted = DateFormat('dd MMM yyyy', 'id_ID').format(now);
+    if (order.date.contains(todayFormatted)) {
+      return true;
+    }
+
+    // 3. Fallback terakhir: cek dari invoice number
+    final String todayInvoice = DateFormat('yyyyMMdd').format(now);
+    return order.invoiceNo.contains(todayInvoice);
   }
 
   Future<void> fetchPendingOrders() async {

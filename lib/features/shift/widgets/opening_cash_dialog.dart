@@ -38,6 +38,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isTablet = screenWidth > 600;
+    final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
   return Dialog(
         backgroundColor: Colors.transparent,
@@ -62,27 +63,29 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: AppStyle.bgLightBlue,
-                shape: BoxShape.circle,
+            if (!isKeyboardOpen) ...[
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: AppStyle.bgLightBlue,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_rounded,
+                  color: AppStyle.primaryBlue,
+                  size: 45,
+                ),
               ),
-              child: const Icon(
-                Icons.account_balance_wallet_rounded,
-                color: AppStyle.primaryBlue,
-                size: 45,
+              const SizedBox(height: 20),
+              Text("Kas Awal", style: AppStyle.titleText.copyWith(fontSize: 28)),
+              const SizedBox(height: 10),
+              Text(
+                "Masukkan saldo awal di laci kasir untuk pencatatan transaksi yang akurat.",
+                textAlign: TextAlign.center,
+                style: AppStyle.subTitleText.copyWith(fontSize: 16, height: 1.5),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text("Kas Awal", style: AppStyle.titleText.copyWith(fontSize: 28)),
-            const SizedBox(height: 10),
-            Text(
-              "Masukkan saldo awal di laci kasir untuk pencatatan transaksi yang akurat.",
-              textAlign: TextAlign.center,
-              style: AppStyle.subTitleText.copyWith(fontSize: 16, height: 1.5),
-            ),
-            const SizedBox(height: 30),
+              const SizedBox(height: 30),
+            ],
 
             Flexible(
               child: SingleChildScrollView(
@@ -129,7 +132,7 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                     TextField(
                       controller: _cashController,
                       keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
+                      textAlign: TextAlign.left,
                       enabled: !_isSaving,
                       style: AppStyle.numPadText.copyWith(
                         fontSize: 34,
@@ -189,48 +192,50 @@ class _OpeningCashDialogState extends State<OpeningCashDialog> {
                         });
                       },
                     ),
-                    const SizedBox(height: 25),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      alignment: WrapAlignment.center,
-                      children: _quickAmounts.map((amount) {
-                        bool isSelected = _cashController.text == _formatNumber(amount.toString());
-                        return ActionChip(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                          label: Text(
-                            "Rp ${_formatNumber(amount.toString())}",
-                            style: AppStyle.numPadText.copyWith(
-                              fontSize: 16,
-                              color: isSelected ? Colors.white : AppStyle.primaryBlue,
+                    if (!isKeyboardOpen) ...[
+                      const SizedBox(height: 25),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.center,
+                        children: _quickAmounts.map((amount) {
+                          bool isSelected = _cashController.text == _formatNumber(amount.toString());
+                          return ActionChip(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
                             ),
-                          ),
-                          backgroundColor: isSelected ? AppStyle.primaryBlue : AppStyle.white,
-                          side: BorderSide(
-                            color: isSelected ? AppStyle.primaryBlue : AppStyle.primaryBlue.withValues(alpha: 0.2),
-                            width: 1.5,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          onPressed: _isSaving
-                              ? null
-                              : () {
-                                  setState(() {
-                                    if (_errorMessage != null) {
-                                      _errorMessage = null;
-                                    }
-                                    _cashController.text = _formatNumber(
-                                      amount.toString(),
-                                    );
-                                  });
-                                },
-                        );
-                      }).toList(),
-                    ),
+                            label: Text(
+                              "Rp ${_formatNumber(amount.toString())}",
+                              style: AppStyle.numPadText.copyWith(
+                                fontSize: 16,
+                                color: isSelected ? Colors.white : AppStyle.primaryBlue,
+                              ),
+                            ),
+                            backgroundColor: isSelected ? AppStyle.primaryBlue : AppStyle.white,
+                            side: BorderSide(
+                              color: isSelected ? AppStyle.primaryBlue : AppStyle.primaryBlue.withValues(alpha: 0.2),
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            onPressed: _isSaving
+                                ? null
+                                : () {
+                                    setState(() {
+                                      if (_errorMessage != null) {
+                                        _errorMessage = null;
+                                      }
+                                      _cashController.text = _formatNumber(
+                                        amount.toString(),
+                                      );
+                                    });
+                                  },
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -358,6 +358,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
     double screenWidth = MediaQuery.of(context).size.width;
     double dialogWidth = screenWidth < 1000 ? screenWidth * 0.95 : 1000;
+    bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -395,6 +396,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                 manualTenderController: _manualTenderController,
                                 isLoading: _isLoading,
                                 isLoadingPayment: _isLoadingPayment,
+                                isKeyboardOpen: isKeyboardOpen,
                                 errorMessage: _errorMessage,
                                 isExactChange: _isExactChange,
                                 selectedQuickAmount: _selectedQuickAmount,
@@ -478,9 +480,10 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                          if (!isKeyboardOpen)
                             Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -525,10 +528,12 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                               ),
                             ],
                           ),
-                          const Divider(height: 30),
-                          Expanded(
-                            child: ListView.builder(
-                              itemCount: widget.cart.length,
+                          if (!isKeyboardOpen)
+                            const Divider(height: 30),
+                          if (!isKeyboardOpen)
+                            Expanded(
+                              child: ListView.builder(
+                                itemCount: widget.cart.length,
                               itemBuilder: (context, index) {
                                 var item = widget.cart.values.elementAt(index);
                                 return Padding(
@@ -588,7 +593,8 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                               },
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          if (!isKeyboardOpen)
+                            const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.all(15),
                             decoration: BoxDecoration(

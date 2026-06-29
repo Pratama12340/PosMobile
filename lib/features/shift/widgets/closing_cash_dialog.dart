@@ -88,6 +88,7 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isTablet = screenWidth > 600;
+    final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
   return MediaQuery(
       data: MediaQuery.of(context).copyWith(viewInsets: EdgeInsets.zero),
@@ -114,30 +115,32 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: AppStyle.bgLightBlue,
-                shape: BoxShape.circle,
+            if (!isKeyboardOpen) ...[
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: AppStyle.bgLightBlue,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock_reset_rounded,
+                  color: AppStyle.primaryBlue,
+                  size: 45,
+                ),
               ),
-              child: const Icon(
-                Icons.lock_reset_rounded,
-                color: AppStyle.primaryBlue,
-                size: 45,
+              const SizedBox(height: 20),
+              Text(
+                "Tutup Shift",
+                style: AppStyle.titleText.copyWith(fontSize: 28),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              "Tutup Shift",
-              style: AppStyle.titleText.copyWith(fontSize: 28),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              "Hitung semua uang fisik di laci dan masukkan totalnya di bawah ini untuk mengakhiri shift.",
-              textAlign: TextAlign.center,
-              style: AppStyle.subTitleText.copyWith(fontSize: 16, height: 1.5),
-            ),
-            const SizedBox(height: 30),
+              const SizedBox(height: 10),
+              Text(
+                "Hitung semua uang fisik di laci dan masukkan totalnya di bawah ini untuk mengakhiri shift.",
+                textAlign: TextAlign.center,
+                style: AppStyle.subTitleText.copyWith(fontSize: 16, height: 1.5),
+              ),
+              const SizedBox(height: 30),
+            ],
 
             Flexible(
               child: SingleChildScrollView(
@@ -184,7 +187,7 @@ class _ClosingCashDialogState extends State<ClosingCashDialog> {
                     TextField(
                       controller: _actualCashController,
                       keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
+                      textAlign: TextAlign.left,
                       enabled: !_isLoading,
                       style: AppStyle.numPadText.copyWith(
                         fontSize: 34,

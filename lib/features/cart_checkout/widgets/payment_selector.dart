@@ -11,6 +11,7 @@ class PaymentSelector extends StatelessWidget {
   final TextEditingController manualTenderController;
   final bool isLoading;
   final bool isLoadingPayment;
+  final bool isKeyboardOpen;
   final String? errorMessage;
   final bool isExactChange;
   final double? selectedQuickAmount;
@@ -35,6 +36,7 @@ class PaymentSelector extends StatelessWidget {
     required this.manualTenderController,
     required this.isLoading,
     required this.isLoadingPayment,
+    this.isKeyboardOpen = false,
     this.errorMessage,
     required this.isExactChange,
     this.selectedQuickAmount,
@@ -95,7 +97,7 @@ class PaymentSelector extends StatelessWidget {
                   if (paymentMethod == 'Cash')
                     TextField(
                       controller: manualTenderController,
-                      textAlign: TextAlign.center,
+                      textAlign: TextAlign.left,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
@@ -133,7 +135,7 @@ class PaymentSelector extends StatelessWidget {
                       ),
                       onChanged: onManualAmountChanged,
                     ),
-                  if (paymentMethod == 'Cash')
+                  if (paymentMethod == 'Cash' && !isKeyboardOpen)
                     GridView.count(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),

@@ -8,7 +8,7 @@ class UnauthorizedException implements Exception {
 }
 
 class ApiClient {
-  static const String baseUrl = String.fromEnvironment('BASE_URL', defaultValue: 'https://api.etres.my.id/api/v1');
+  static const String baseUrl = String.fromEnvironment('BASE_URL', defaultValue: 'http://103.197.190.23:9010/api/v1');
 
   static Future<Map<String, String>> getHeaders() async {
     final token = await StorageService.getToken();
@@ -22,8 +22,12 @@ class ApiClient {
     return headers;
   }
 
-  static Future<void> _handleResponse(http.Response response) async {
+  static Future<void> _handleResponse(http.Response response, Uri url) async {
     if (response.statusCode == 401) {
+      // Allow login endpoints to handle their own 401 responses
+      if (url.path.contains('login-pin') || url.path.contains('login')) {
+        return;
+      }
       if (kDebugMode) {
         print('Token expired or unauthorized: 401');
       }
@@ -36,7 +40,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.get(url, headers: requestHeaders);
-    await _handleResponse(response);
+    await _handleResponse(response, url);
     return response;
   }
 
@@ -44,7 +48,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.post(url, headers: requestHeaders, body: body);
-    await _handleResponse(response);
+    await _handleResponse(response, url);
     return response;
   }
 
@@ -52,7 +56,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.put(url, headers: requestHeaders, body: body);
-    await _handleResponse(response);
+    await _handleResponse(response, url);
     return response;
   }
 
@@ -60,7 +64,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.delete(url, headers: requestHeaders);
-    await _handleResponse(response);
+    await _handleResponse(response, url);
     return response;
   }
 
@@ -68,7 +72,7 @@ class ApiClient {
     final requestHeaders = await getHeaders();
     if (headers != null) requestHeaders.addAll(headers);
     final response = await http.patch(url, headers: requestHeaders, body: body);
-    await _handleResponse(response);
+    await _handleResponse(response, url);
     return response;
   }
 }

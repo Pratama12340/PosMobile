@@ -26,7 +26,7 @@ class ProductCard extends StatelessWidget {
 
     String imageUrl = product.image.trim();
     if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
-      imageUrl = "https://api.etres.my.id/storage/${imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl}";
+      imageUrl = "http://103.197.190.23:9010/storage/${imageUrl.startsWith('/') ? imageUrl.substring(1) : imageUrl}";
     }
 
     Widget imagePlaceholder = Container(

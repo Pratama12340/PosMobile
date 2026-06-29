@@ -427,7 +427,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
                 radius: 24,
                 backgroundImage: _profilePhoto.isNotEmpty
                     ? NetworkImage(
-                        'https://api.etres.my.id/storage/$_profilePhoto')
+                        'http://103.197.190.23:9010/storage/$_profilePhoto')
                     : null,
               ),
               const SizedBox(width: 15),

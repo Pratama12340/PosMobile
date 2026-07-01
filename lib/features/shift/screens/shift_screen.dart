@@ -235,15 +235,19 @@ void refreshShift() {
           }
 
           final RekapShift activeShift = shiftList.firstWhere(
-            (s) {
+            (s) => s.status == 'active',
+            orElse: () {
               if (currentShiftId != null) {
-                return s.id.toString() == currentShiftId;
+                try {
+                  return shiftList.firstWhere((s) => 
+                      s.id.toString() == currentShiftId || 
+                      s.shiftId.toString() == currentShiftId);
+                } catch (_) {}
               }
-              return s.status == 'active';
+              return shiftList.isNotEmpty
+                  ? shiftList.first
+                  : RekapShift(id: 0, shiftId: 0, status: 'none');
             },
-            orElse: () => shiftList.isNotEmpty
-                ? shiftList.first
-                : RekapShift(id: 0, shiftId: 0, status: 'none'),
           );
 
           int kasAwal = localOpeningBalance > 0
@@ -256,7 +260,12 @@ void refreshShift() {
           Map<String, int> paymentAmount = {"CASH": 0, "CARD": 0, "QRIS": 0};
 
           if (activeShift.startedAt != null) {
-            DateTime startShiftWIB = activeShift.startedAt!.toLocal();
+            DateTime rawStartWIB = activeShift.startedAt!.toLocal();
+            // Truncate seconds so comparison with order.date (HH:mm) is accurate
+            DateTime startShiftWIB = DateTime(
+              rawStartWIB.year, rawStartWIB.month, rawStartWIB.day, 
+              rawStartWIB.hour, rawStartWIB.minute
+            );
             final df = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
             for (var order in allOrders) {
@@ -267,7 +276,7 @@ void refreshShift() {
                 if (!isMyOrderOrSystem) continue;
 
                 DateTime orderTime = df.parse(order.date);
-                if (orderTime.isAfter(startShiftWIB)) {
+                if (!orderTime.isBefore(startShiftWIB)) {
                   int orderTotal = order.totalPrice.round();
                   bersih += orderTotal;
                   count++;

@@ -239,7 +239,7 @@ class OrderApiService {
       Uri.parse(
         '${ApiClient.baseUrl}/orders?status=pending&outlet_id=$outletId&per_page=20&page=$page',
       ),
-    ).timeout(const Duration(seconds: 10));
+    ).timeout(const Duration(seconds: 30));
 
     if (response.statusCode != 200) {
       return _PendingPageResult(orders: [], lastPage: 1, failed: true);
@@ -351,7 +351,7 @@ class OrderApiService {
               Uri.parse(
                 '${ApiClient.baseUrl}/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=100&page=$currentPage',
               ),
-            ).timeout(const Duration(seconds: 15));
+            ).timeout(const Duration(seconds: 30));
             break;
           } catch (e) {
             attempt++;
@@ -385,7 +385,7 @@ class OrderApiService {
 
       final response = await ApiClient.get(
         Uri.parse('${ApiClient.baseUrl}/history-transactions?outlet_id=$outletId&shift_id=$shiftId&per_page=$perPage&page=$page'),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);

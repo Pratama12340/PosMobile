@@ -20,7 +20,7 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     bool isOutOfStock = product.stock <= 0;
     bool isBestseller = bestsellerProductIds.contains(product.id) || product.isBestseller == true;
-    bool isDiskon = product.discount != null;
+    bool isDiskon = product.discount != null && product.price >= product.discount!.minPurchase;
 
     double priceAfterDiscount = product.discountedPrice;
 

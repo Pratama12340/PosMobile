@@ -134,14 +134,26 @@ class CartProvider extends ChangeNotifier {
     if (item == null) return;
 
     final discount = _productDiscounts[productId];
-    // Hanya hitung diskon jika qty aktif > 0 agar tidak terjadi pembagian dengan nol
-    // (item yang dibatalkan penuh punya activeQty == 0).
+    
+    int eligibleQty = 0;
     if (discount != null && item.activeQty > 0) {
+      if (discount.minPurchase > 0) {
+        double lineTotal = item.originalPrice * item.activeQty;
+        if (lineTotal >= discount.minPurchase) {
+          eligibleQty = item.activeQty;
+        }
+      } else {
+        // Tidak ada syarat minPurchase
+        eligibleQty = item.activeQty;
+      }
+    }
+
+    if (discount != null && eligibleQty > 0) {
       double totalDiscount = 0;
       if (discount.type == 'percentage') {
-        totalDiscount = (item.originalPrice * (discount.value / 100)) * item.activeQty;
+        totalDiscount = (item.originalPrice * (discount.value / 100)) * eligibleQty;
       } else {
-        totalDiscount = discount.value * item.activeQty;
+        totalDiscount = discount.value * eligibleQty;
       }
 
       if (discount.maxDiscount != null && totalDiscount > discount.maxDiscount!) {

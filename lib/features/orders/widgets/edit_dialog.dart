@@ -38,6 +38,10 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   List<int>? _qtyBeforeEdit;
   SharedPreferences? _prefs;
   bool _prefsReady = false;
+  bool _isSummaryExpanded = false;
+
+  // Scroll controller untuk list item pesanan
+  final ScrollController _itemScrollController = ScrollController();
 
   @override
   void initState() {
@@ -51,6 +55,12 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   Future<void> _initPrefs() async {
     _prefs = await SharedPreferences.getInstance();
     if (mounted) setState(() => _prefsReady = true);
+  }
+
+  @override
+  void dispose() {
+    _itemScrollController.dispose();
+    super.dispose();
   }
 
   String _sanitizeKey(String raw) {
@@ -260,104 +270,167 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                           ),
                           const Divider(height: 32, thickness: 1),
                           Expanded(
-                            child: ListView(
-                              children: localOrder!.items
-                                  .map((item) =>
-                                      _buildItemRowCustom(item, style))
-                                  .toList(),
+                            child: localOrder!.items.length > 1
+                                ? Row(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 12),
+                                        child: _ItemScrollbar(controller: _itemScrollController),
+                                      ),
+                                      Expanded(
+                                        child: ScrollConfiguration(
+                                          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                                          child: ListView(
+                                            controller: _itemScrollController,
+                                            children: localOrder!.items
+                                                .map((item) =>
+                                                    _buildItemRowCustom(item, style))
+                                                .toList(),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : ScrollConfiguration(
+                                    behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                                    child: ListView(
+                                      children: localOrder!.items
+                                          .map((item) =>
+                                              _buildItemRowCustom(item, style))
+                                          .toList(),
+                                    ),
+                                  ),
+                          ),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            alignment: Alignment.topCenter,
+                            child: _isSummaryExpanded
+                                ? Column(
+                                    children: [
+                                      const Divider(height: 24, thickness: 1),
+                                      _buildSummaryRow(
+                                          "Subtotal", CurrencyFormatter.format(displaySubtotal)),
+
+                                      if (localOrder!.discountAmount > 0)
+                                        _buildSummaryRow(
+                                          "Diskon",
+                                          "-${CurrencyFormatter.format(localOrder!.discountAmount)}",
+                                          color: Colors.red,
+                                        ),
+
+                                      if (_masterTaxes.isNotEmpty)
+                                        ...() {
+                                          if (isEditMode) {
+                                            return calculatedTaxBreakdown.map((tax) {
+                                              double amt =
+                                                  tax['calculated_amount'] as double;
+                                              double rate = double.tryParse(
+                                                      tax['rate']?.toString() ?? '0') ??
+                                                  0;
+                                              String label = tax['name'] ?? "Pajak";
+                                              if (tax['type'] == 'percentage') {
+                                                label += " (${rate.toStringAsFixed(0)}%)";
+                                              }
+                                              return _buildSummaryRow(
+                                                  label, CurrencyFormatter.format(amt));
+                                            }).toList();
+                                          }
+
+                                          double serviceTotal = 0;
+                                          final List<Widget> rows = [];
+
+                                          for (var tax in _masterTaxes) {
+                                            final name = (tax['name'] ?? '')
+                                                .toString()
+                                                .toLowerCase();
+                                            final isPpn = name.contains('ppn') ||
+                                                name.contains('vat') ||
+                                                name.contains('tax');
+                                            if (isPpn) continue;
+
+                                            double rate = double.tryParse(
+                                                    tax['rate']?.toString() ?? '0') ??
+                                                0;
+                                            double amt = (tax['type'] == 'percentage')
+                                                ? (displayBase * (rate / 100))
+                                                : rate;
+                                            serviceTotal += amt;
+
+                                            String label = tax['name'] ?? "Pajak";
+                                            if (tax['type'] == 'percentage') {
+                                              label += " (${rate.toStringAsFixed(0)}%)";
+                                            }
+                                            rows.add(_buildSummaryRow(
+                                                label, CurrencyFormatter.format(amt)));
+                                          }
+
+                                          final afterService = displayBase + serviceTotal;
+                                          for (var tax in _masterTaxes) {
+                                            final name = (tax['name'] ?? '')
+                                                .toString()
+                                                .toLowerCase();
+                                            final isPpn = name.contains('ppn') ||
+                                                name.contains('vat') ||
+                                                name.contains('tax');
+                                            if (!isPpn) continue;
+
+                                            double rate = double.tryParse(
+                                                    tax['rate']?.toString() ?? '0') ??
+                                                0;
+                                            double amt = (tax['type'] == 'percentage')
+                                                ? (afterService * (rate / 100))
+                                                : rate;
+
+                                            String label = tax['name'] ?? "Pajak";
+                                            if (tax['type'] == 'percentage') {
+                                              label += " (${rate.toStringAsFixed(0)}%)";
+                                            }
+                                            rows.add(_buildSummaryRow(
+                                                label, CurrencyFormatter.format(amt)));
+                                          }
+
+                                          return rows;
+                                        }()
+                                      else if (localOrder!.taxAmount > 0)
+                                        _buildSummaryRow(
+                                            "Pajak",
+                                            CurrencyFormatter.format(localOrder!.taxAmount)),
+                                    ],
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isSummaryExpanded = !_isSummaryExpanded;
+                              });
+                            },
+                            onVerticalDragUpdate: (details) {
+                              if (details.primaryDelta! > 2 && _isSummaryExpanded) {
+                                setState(() => _isSummaryExpanded = false);
+                              } else if (details.primaryDelta! < -2 && !_isSummaryExpanded) {
+                                setState(() => _isSummaryExpanded = true);
+                              }
+                            },
+                            child: Container(
+                              color: Colors.transparent,
+                              width: double.infinity,
+                              padding: const EdgeInsets.only(top: 16, bottom: 16),
+                              child: Center(
+                                child: Container(
+                                  width: 40,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF4285F4),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                          const Divider(height: 24, thickness: 1),
-
-                          _buildSummaryRow(
-                              "Subtotal", CurrencyFormatter.format(displaySubtotal)),
-
-                          if (localOrder!.discountAmount > 0)
-                            _buildSummaryRow(
-                              "Diskon",
-                              "-${CurrencyFormatter.format(localOrder!.discountAmount)}",
-                              color: Colors.red,
-                            ),
-
-                          if (_masterTaxes.isNotEmpty)
-                            ...() {
-                              if (isEditMode) {
-                                return calculatedTaxBreakdown.map((tax) {
-                                  double amt =
-                                      tax['calculated_amount'] as double;
-                                  double rate = double.tryParse(
-                                          tax['rate']?.toString() ?? '0') ??
-                                      0;
-                                  String label = tax['name'] ?? "Pajak";
-                                  if (tax['type'] == 'percentage') {
-                                    label += " (${rate.toStringAsFixed(0)}%)";
-                                  }
-                                  return _buildSummaryRow(
-                                      label, CurrencyFormatter.format(amt));
-                                }).toList();
-                              }
-
-                              double serviceTotal = 0;
-                              final List<Widget> rows = [];
-
-                              for (var tax in _masterTaxes) {
-                                final name = (tax['name'] ?? '')
-                                    .toString()
-                                    .toLowerCase();
-                                final isPpn = name.contains('ppn') ||
-                                    name.contains('vat') ||
-                                    name.contains('tax');
-                                if (isPpn) continue;
-
-                                double rate = double.tryParse(
-                                        tax['rate']?.toString() ?? '0') ??
-                                    0;
-                                double amt = (tax['type'] == 'percentage')
-                                    ? (displayBase * (rate / 100))
-                                    : rate;
-                                serviceTotal += amt;
-
-                                String label = tax['name'] ?? "Pajak";
-                                if (tax['type'] == 'percentage') {
-                                  label += " (${rate.toStringAsFixed(0)}%)";
-                                }
-                                rows.add(_buildSummaryRow(
-                                    label, CurrencyFormatter.format(amt)));
-                              }
-
-                              final afterService = displayBase + serviceTotal;
-                              for (var tax in _masterTaxes) {
-                                final name = (tax['name'] ?? '')
-                                    .toString()
-                                    .toLowerCase();
-                                final isPpn = name.contains('ppn') ||
-                                    name.contains('vat') ||
-                                    name.contains('tax');
-                                if (!isPpn) continue;
-
-                                double rate = double.tryParse(
-                                        tax['rate']?.toString() ?? '0') ??
-                                    0;
-                                double amt = (tax['type'] == 'percentage')
-                                    ? (afterService * (rate / 100))
-                                    : rate;
-
-                                String label = tax['name'] ?? "Pajak";
-                                if (tax['type'] == 'percentage') {
-                                  label += " (${rate.toStringAsFixed(0)}%)";
-                                }
-                                rows.add(_buildSummaryRow(
-                                    label, CurrencyFormatter.format(amt)));
-                              }
-
-                              return rows;
-                            }()
-                          else if (localOrder!.taxAmount > 0)
-                            _buildSummaryRow(
-                                "Pajak",
-                                CurrencyFormatter.format(localOrder!.taxAmount)),
-
-                          const Divider(height: 32, thickness: 1),
 
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1116,3 +1189,83 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   }
 }
 
+class _ItemScrollbar extends StatefulWidget {
+  final ScrollController controller;
+
+  const _ItemScrollbar({Key? key, required this.controller}) : super(key: key);
+
+  @override
+  State<_ItemScrollbar> createState() => _ItemScrollbarState();
+}
+
+class _ItemScrollbarState extends State<_ItemScrollbar> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didUpdateWidget(_ItemScrollbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onScroll);
+      widget.controller.addListener(_onScroll);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.controller.hasClients || widget.controller.position.maxScrollExtent <= 0) {
+      return Container(
+        width: 6,
+        decoration: BoxDecoration(
+          color: const Color(0xFF4285F4).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(6),
+        ),
+      );
+    }
+
+    final pos = widget.controller.position;
+    final extent = pos.viewportDimension;
+    final maxScroll = pos.maxScrollExtent;
+    final total = maxScroll + extent;
+    final fraction = (extent / total).clamp(0.1, 1.0);
+
+    final progress = maxScroll > 0 ? pos.pixels / maxScroll : 0.0;
+    final alignmentY = -1.0 + (progress.clamp(0.0, 1.0) * 2.0);
+
+    return Container(
+      width: 6,
+      decoration: BoxDecoration(
+        color: const Color(0xFF4285F4).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Align(
+        alignment: Alignment(0, alignmentY),
+        child: FractionallySizedBox(
+          heightFactor: fraction,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF4285F4),
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

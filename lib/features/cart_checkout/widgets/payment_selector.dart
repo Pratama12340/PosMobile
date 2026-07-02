@@ -91,6 +91,8 @@ class PaymentSelector extends StatelessWidget {
                       if (paymentMethod != 'Cash') ...[
                         const SizedBox(height: 30),
                         _buildCashlessView(),
+                      ] else ...[
+                        const SizedBox(height: 30),
                       ],
                     ],
                   ),

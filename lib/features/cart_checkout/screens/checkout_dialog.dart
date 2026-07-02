@@ -358,7 +358,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
     double screenWidth = MediaQuery.of(context).size.width;
     double dialogWidth = screenWidth < 1000 ? screenWidth * 0.95 : 1000;
-    bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 150;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),

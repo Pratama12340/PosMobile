@@ -9,6 +9,7 @@ import 'package:sistem_pos/core/constants/style.dart';
 import 'package:sistem_pos/features/auth/services/auth_api_service.dart';
 import 'package:sistem_pos/core/network/master_api_service.dart';
 import 'package:sistem_pos/features/orders/services/order_api_service.dart';
+import 'package:sistem_pos/core/utils/discount_eligibility_helper.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/checkout_calculator.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/discount_panel.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/payment_selector.dart';
@@ -114,17 +115,6 @@ class _CheckoutDialogState extends State<CheckoutDialog>
 
           // Pastikan tidak ada duplikat sebelum tambah
           _selectedDiscounts.removeWhere((s) => s.id == d.id);
-
-          // Batasi maksimal 2 diskon produk/kategori
-          final prodCatDiscounts = _selectedDiscounts
-              .where((s) => s.scope == 'products' || s.scope == 'categories')
-              .toList();
-
-          if (prodCatDiscounts.length >= 2) {
-            // Hapus yang tertua (indeks 0) dari daftar terpilih
-            final oldest = prodCatDiscounts.first;
-            _selectedDiscounts.removeWhere((s) => s.id == oldest.id);
-          }
 
           _selectedDiscounts.add(d);
         }
@@ -285,14 +275,13 @@ class _CheckoutDialogState extends State<CheckoutDialog>
             .map((item) => item.discountId!)
             .toSet();
 
-        // Cari objek Discount yang match, ambil maks 2 (untuk scope products/categories)
+        // Cari objek Discount yang match
         final List<Discount> autoSelected = discounts
             .where(
               (d) =>
                   cartDiscountIds.contains(d.id) &&
-                  widget.totalAmount >= d.minPurchase,
+                  DiscountEligibilityHelper.isMinPurchaseMet(d, widget.totalAmount, widget.cart.values.toList()),
             )
-            .take(2)
             .toList();
         _selectedDiscounts = autoSelected;
       }
@@ -454,6 +443,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
                                       subTotal: subTotal,
                                       cartProductIds: widget.cart.values.map((item) => item.productId).toList(),
                                       cartCategoryIds: widget.cart.values.where((item) => item.categoryId != null).map((item) => item.categoryId!).toList(),
+                                      cartItems: widget.cart.values.toList(),
                                       availableDiscounts: _availableDiscounts,
                                       selectedDiscounts: _selectedDiscounts,
                                       hasGlobalDiscount: _hasGlobalDiscount,
@@ -766,41 +756,44 @@ class _CheckoutDialogState extends State<CheckoutDialog>
       int uangMasukInt = _isExactChange ? tagihanInt : _amountTendered.toInt();
       int change = uangMasukInt - tagihanInt;
 
-      var existingItems = widget.cart.values
-          .where((item) => item.id > 0)
-          .map(
-            (item) => {
-              'product_id': item.productId,
-              'qty': item.quantity,
-              'price': item.originalPrice.toInt(), // ? harga asli
-              'notes': item.notes,
-              'id': item.id,
-            },
-          )
-          .toList();
+      var mappedItems = widget.cart.values.map((item) {
+        int? assignedDiscountId = item.discountId;
 
-      var newItems = widget.cart.values
-          .where((item) => item.id == 0)
-          .map(
-            (item) => {
-              'product_id': item.productId,
-              'qty': item.quantity,
-              'price': item.originalPrice.toInt(), // ? harga asli
-              'notes': item.notes,
-            },
-          )
-          .toList();
+        // Cari diskon produk/kategori dari panel voucher yang sedang dipilih
+        for (var d in _selectedDiscounts) {
+          if (d.scope == 'products' && d.productIds.contains(item.productId)) {
+            assignedDiscountId = d.id;
+            break;
+          } else if (d.scope == 'categories' && item.categoryId != null && d.categoryIds.contains(item.categoryId)) {
+            assignedDiscountId = d.id;
+            break;
+          }
+        }
 
-      var mappedItems = [...existingItems, ...newItems];
+        Map<String, dynamic> itemPayload = {
+          'product_id': item.productId,
+          'qty': item.quantity,
+          'price': item.originalPrice.toInt(), // harga asli
+          'notes': item.notes,
+        };
+        
+        if (item.id > 0) itemPayload['id'] = item.id;
+        if (assignedDiscountId != null) itemPayload['discount_id'] = assignedDiscountId;
+
+        return itemPayload;
+      }).toList();
 
       final String payloadMethod = _paymentMethod == 'Qris' ? 'Midtrans' : _paymentMethod;
+
+      // Cari diskon global (transaksi)
+      final globalDiscounts = _selectedDiscounts.where((d) => d.scope == 'global').toList();
 
       // payload tetap sama, hanya harga item yang berubah ke originalPrice
       Map<String, dynamic> payload = {
         'outlet_id': savedOutletId,
         'customer_name': widget.customerName,
         'table_id': widget.tableId,
-        'subtotal_price': subTotal.toInt(), // ? originalTotalAmount
+        'subtotal_price': subTotal.toInt(), // originalTotalAmount
         'discount_amount': discountAmount.toInt(),
         'total_price': grandTotal.toInt(),
         'tax_amount': taxAmountFinal.toInt(),
@@ -808,7 +801,11 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         'payment_method': payloadMethod.toLowerCase(),
         'paid_amount': _paymentMethod == 'Cash' ? uangMasukInt : tagihanInt,
         'items': mappedItems,
-        if (_selectedDiscounts.length == 1)
+        // Kirimkan array seluruh id diskon sebagai fallback support di backend
+        'discount_ids': _selectedDiscounts.map((d) => d.id).toList(),
+        if (globalDiscounts.isNotEmpty)
+          'discount_id': globalDiscounts.first.id
+        else if (_selectedDiscounts.length == 1)
           'discount_id': _selectedDiscounts.first.id,
       };
 

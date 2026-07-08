@@ -423,6 +423,8 @@ class OrderApiService {
     required String reason,
     required double taxAmount,
     required double totalPrice,
+    required double discountAmount,
+    required double subtotalPrice,
   }) async {
     try {
       final Map<String, dynamic> bodyData = {
@@ -430,6 +432,8 @@ class OrderApiService {
         'items': items.map((item) => item.toJson()).toList(),
         'tax_amount': taxAmount,
         'total_price': totalPrice,
+        'discount_amount': discountAmount,
+        'subtotal_price': subtotalPrice,
       };
       final response = await ApiClient.post(
         Uri.parse('${ApiClient.baseUrl}/orders/$orderId/void-items'),

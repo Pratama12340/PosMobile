@@ -12,6 +12,7 @@ import 'package:sistem_pos/features/printer/utils/print_helper.dart';
 import 'package:sistem_pos/core/utils/tax_calculator.dart' as tax_calc;
 import 'package:sistem_pos/core/utils/string_utils.dart';
 import 'package:sistem_pos/core/utils/snackbar_helper.dart';
+import 'package:sistem_pos/core/models/discount_model.dart';
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
   const ReceiptDialog({super.key, required this.orderId});
@@ -29,6 +30,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
   String _currentUserName = "";
   List<dynamic> _masterTaxes = [];
+  List<Discount> _masterDiscounts = [];
   bool _isPrinting = false;
   bool _isSaving = false;
 
@@ -49,6 +51,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     _detailFuture = OrderApiService.fetchHistoryDetail(widget.orderId);
     _loadCurrentUserData();
     _loadTaxSettings();
+    _loadDiscounts();
     _initPrefs();
   }
 
@@ -83,6 +86,11 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   void _loadTaxSettings() async {
     final taxes = await MasterApiService.getTaxes();
     if (mounted) setState(() => _masterTaxes = taxes);
+  }
+
+  void _loadDiscounts() async {
+    final discounts = await MasterApiService.getDiscounts();
+    if (mounted) setState(() => _masterDiscounts = discounts);
   }
 
   // ← TAMBAH FUNGSI INI
@@ -162,9 +170,66 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     return total;
   }
 
+  double get currentDiscountAmount {
+    if (localOrder == null) return 0;
+    
+    // Jika data master belum siap, pakai bawaan
+    if (_masterDiscounts.isEmpty) return localOrder!.discountAmount;
+
+    double totalDiscount = 0;
+    bool hasAnyDiscountId = localOrder!.discountId != null;
+    
+    // 1. Hitung ulang diskon spesifik (per produk)
+    for (var item in localOrder!.items) {
+      if (item.discountId != null) hasAnyDiscountId = true;
+      if (item.activeQty <= 0 || item.isVoided) continue;
+      
+      if (item.discountId != null) {
+        final discount = _masterDiscounts.firstWhere(
+          (d) => d.id == item.discountId,
+          orElse: () => Discount(id: 0, name: '', scope: '', type: '', value: 0, minPurchase: 0),
+        );
+        if (discount.id != 0) {
+          if (discount.type == 'percentage') {
+            totalDiscount += (item.originalPrice * (discount.value / 100)) * item.activeQty;
+          } else {
+            totalDiscount += discount.value * item.activeQty;
+          }
+        }
+      }
+    }
+    
+    // 2. Tambahkan diskon global transaksi (jika ada)
+    if (localOrder!.discountId != null) {
+      final globalDiscount = _masterDiscounts.firstWhere(
+        (d) => d.id == localOrder!.discountId,
+        orElse: () => Discount(id: 0, name: '', scope: '', type: '', value: 0, minPurchase: 0),
+      );
+      if (globalDiscount.id != 0 && globalDiscount.scope == 'global') {
+        if (globalDiscount.type == 'percentage') {
+          totalDiscount += currentSubtotalPrice * (globalDiscount.value / 100);
+        } else {
+          totalDiscount += globalDiscount.value;
+        }
+      }
+    }
+
+    // Hitung proporsional jika backend tidak mengirimkan discountId
+    if (!hasAnyDiscountId && localOrder!.discountAmount > 0) {
+      if (localOrder!.subtotalPrice == 0) return 0;
+      double ratio = currentSubtotalPrice / localOrder!.subtotalPrice;
+      if (ratio < 0) ratio = 0;
+      if (ratio > 1) ratio = 1;
+      return (localOrder!.discountAmount * ratio).floorToDouble();
+    }
+
+    return totalDiscount.floorToDouble();
+  }
+
   double get baseAmount {
     if (localOrder == null) return 0;
-    return currentSubtotalPrice - localOrder!.discountAmount;
+    final discount = isEditMode ? currentDiscountAmount : localOrder!.discountAmount;
+    return currentSubtotalPrice - discount;
   }
 
   List<Map<String, dynamic>> get calculatedTaxBreakdown {
@@ -218,11 +283,16 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
         bool showRightSide = localOrder!.logs.isNotEmpty || isEditMode;
 
-        double displaySubtotal =
-            isEditMode ? currentSubtotalPrice : localOrder!.subtotalPrice;
-        double displayBase = displaySubtotal - localOrder!.discountAmount;
-        double displayTotal =
-            isEditMode ? currentTotalPrice : localOrder!.totalPrice;
+        double displaySubtotal = _masterDiscounts.isNotEmpty 
+            ? currentSubtotalPrice 
+            : (isEditMode ? currentSubtotalPrice : localOrder!.subtotalPrice);
+        double displayDiscount = _masterDiscounts.isNotEmpty 
+            ? currentDiscountAmount 
+            : (isEditMode ? currentDiscountAmount : localOrder!.discountAmount);
+        double displayBase = displaySubtotal - displayDiscount;
+        double displayTotal = _masterDiscounts.isNotEmpty 
+            ? currentTotalPrice 
+            : (isEditMode ? currentTotalPrice : localOrder!.totalPrice);
 
         return Dialog(
           backgroundColor: const Color(0xFFF8FAFC),
@@ -313,16 +383,16 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                                       _buildSummaryRow(
                                           "Subtotal", CurrencyFormatter.format(displaySubtotal)),
 
-                                      if (localOrder!.discountAmount > 0)
+                                      if (displayDiscount > 0)
                                         _buildSummaryRow(
                                           "Diskon",
-                                          "-${CurrencyFormatter.format(localOrder!.discountAmount)}",
+                                          "-${CurrencyFormatter.format(displayDiscount)}",
                                           color: Colors.red,
                                         ),
 
                                       if (_masterTaxes.isNotEmpty)
                                         ...() {
-                                          if (isEditMode) {
+                                          if (isEditMode || _masterDiscounts.isNotEmpty) {
                                             return calculatedTaxBreakdown.map((tax) {
                                               double amt =
                                                   tax['calculated_amount'] as double;
@@ -393,10 +463,10 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
                                           return rows;
                                         }()
-                                      else if (localOrder!.taxAmount > 0)
+                                      else if (_masterDiscounts.isNotEmpty ? currentTaxAmount > 0 : (isEditMode ? currentTaxAmount > 0 : localOrder!.taxAmount > 0))
                                         _buildSummaryRow(
                                             "Pajak",
-                                            CurrencyFormatter.format(localOrder!.taxAmount)),
+                                            CurrencyFormatter.format(_masterDiscounts.isNotEmpty ? currentTaxAmount : (isEditMode ? currentTaxAmount : localOrder!.taxAmount))),
                                     ],
                                   )
                                 : const SizedBox.shrink(),
@@ -1150,6 +1220,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           reason: _noteController.text,
           taxAmount: currentTaxAmount,
           totalPrice: totalAfter,
+          discountAmount: currentDiscountAmount,
+          subtotalPrice: currentSubtotalPrice,
         );
 
         if (!mounted) return;
@@ -1157,11 +1229,22 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
         if (success) {
           final diff = totalBefore - totalAfter;
-          final newOrder =
+          final newOrderFetched =
               await OrderApiService.fetchHistoryDetail(widget.orderId);
 
-          if (diff > 0 && newOrder != null && newOrder.logs.isNotEmpty) {
-            final newLog = newOrder.logs.first;
+          Order? finalNewOrder = newOrderFetched;
+          if (newOrderFetched != null) {
+            // override locally because backend doesn't update it
+            finalNewOrder = newOrderFetched.copyWith(
+              discountAmount: currentDiscountAmount,
+              subtotalPrice: currentSubtotalPrice,
+              taxAmount: currentTaxAmount,
+              totalPrice: totalAfter,
+            );
+          }
+
+          if (diff > 0 && finalNewOrder != null && finalNewOrder.logs.isNotEmpty) {
+            final newLog = finalNewOrder.logs.first;
             final logKey = _buildRefundKey(newLog);
             if (_prefs != null) {
               await _prefs!.setDouble(logKey, diff);
@@ -1170,8 +1253,8 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
           if (!mounted) return;
           setState(() {
-            localOrder = newOrder;
-            _detailFuture = Future.value(newOrder);
+            localOrder = finalNewOrder;
+            _detailFuture = Future.value(finalNewOrder);
             isEditMode = false;
             _qtyBeforeEdit = null; // snapshot lama tidak relevan utk order baru
             _noteController.clear();

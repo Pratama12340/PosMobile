@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:sistem_pos/core/models/discount_model.dart';
 import 'package:sistem_pos/core/utils/discount_eligibility_helper.dart';
+import 'package:sistem_pos/features/orders/models/order_model.dart';
 
 class DiscountPanel extends StatelessWidget {
   final double subTotal;
   final List<int> cartProductIds;
   final List<int> cartCategoryIds;
+  final List<OrderItem> cartItems;
   final List<Discount> availableDiscounts;
   final List<Discount> selectedDiscounts;
   final bool hasGlobalDiscount;
@@ -20,6 +22,7 @@ class DiscountPanel extends StatelessWidget {
     required this.subTotal,
     required this.cartProductIds,
     required this.cartCategoryIds,
+    required this.cartItems,
     required this.availableDiscounts,
     required this.selectedDiscounts,
     required this.hasGlobalDiscount,
@@ -108,6 +111,7 @@ class DiscountPanel extends StatelessWidget {
                         hasGlobalDiscount: hasGlobalDiscount,
                         selectedProductCount: selectedProductCount,
                         isSelected: isSelected,
+                        cartItems: cartItems,
                       );
 
                       bool canTap = DiscountEligibilityHelper.canTap(
@@ -117,6 +121,7 @@ class DiscountPanel extends StatelessWidget {
                         cartCategoryIds: cartCategoryIds,
                         selectedProductCount: selectedProductCount,
                         isSelected: isSelected,
+                        cartItems: cartItems,
                       );
 
                       return Opacity(

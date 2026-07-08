@@ -1,4 +1,5 @@
 import 'package:sistem_pos/core/models/discount_model.dart';
+import 'package:sistem_pos/features/orders/models/order_model.dart';
 
 class DiscountEligibilityHelper {
   static bool isProductEligible(Discount discount, List<int> cartProductIds, List<int> cartCategoryIds) {
@@ -10,8 +11,23 @@ class DiscountEligibilityHelper {
     return true;
   }
 
-  static bool isMinPurchaseMet(Discount discount, double subTotal) {
-    return subTotal >= discount.minPurchase;
+  static bool isMinPurchaseMet(Discount discount, double subTotal, List<OrderItem> cartItems) {
+    if (discount.scope == 'global') {
+      return subTotal >= discount.minPurchase;
+    }
+    
+    double eligibleSubTotal = 0;
+    for (var item in cartItems) {
+      if (item.isVoided || item.activeQty <= 0) continue;
+      
+      if (discount.scope == 'products' && discount.productIds.contains(item.productId)) {
+        eligibleSubTotal += item.originalPrice * item.activeQty;
+      } else if (discount.scope == 'categories' && item.categoryId != null && discount.categoryIds.contains(item.categoryId)) {
+        eligibleSubTotal += item.originalPrice * item.activeQty;
+      }
+    }
+    
+    return eligibleSubTotal >= discount.minPurchase;
   }
 
   static bool isBlockedByGlobal(Discount discount, bool hasGlobalDiscount) {
@@ -44,8 +60,9 @@ class DiscountEligibilityHelper {
     required bool hasGlobalDiscount,
     required int selectedProductCount,
     required bool isSelected,
+    required List<OrderItem> cartItems,
   }) {
-    return isMinPurchaseMet(discount, subTotal) &&
+    return isMinPurchaseMet(discount, subTotal, cartItems) &&
            isProductEligible(discount, cartProductIds, cartCategoryIds) &&
            !isMaxProductReached(discount, selectedProductCount, isSelected) &&
            !isBlockedByGlobal(discount, hasGlobalDiscount);
@@ -58,11 +75,12 @@ class DiscountEligibilityHelper {
     required List<int> cartCategoryIds,
     required int selectedProductCount,
     required bool isSelected,
+    required List<OrderItem> cartItems,
   }) {
     if (isSelected) return true;
     if (discount.scope == 'global') return true;
     
-    return isMinPurchaseMet(discount, subTotal) &&
+    return isMinPurchaseMet(discount, subTotal, cartItems) &&
            isProductEligible(discount, cartProductIds, cartCategoryIds) &&
            !isMaxProductReached(discount, selectedProductCount, isSelected);
   }

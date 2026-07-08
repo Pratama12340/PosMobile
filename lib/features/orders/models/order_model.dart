@@ -335,6 +335,60 @@ class Order {
     required this.payments,
   });
 
+  Order copyWith({
+    int? id,
+    int? orderId,
+    String? invoiceNo,
+    String? date,
+    String? cashierName,
+    String? customerName,
+    String? tableNo,
+    int? tableId,
+    int? discountId,
+    int? shiftId,
+    Map<String, dynamic>? latestAcceptance,
+    DateTime? createdAt,
+    String? paymentMethod,
+    String? status,
+    double? subtotalPrice,
+    double? discountAmount,
+    double? taxAmount,
+    List<dynamic>? taxBreakdown,
+    double? totalPrice,
+    double? paidAmount,
+    double? changeAmount,
+    List<OrderItem>? items,
+    List<OrderLog>? logs,
+    List<OrderPayment>? payments,
+  }) {
+    return Order(
+      id: id ?? this.id,
+      orderId: orderId ?? this.orderId,
+      invoiceNo: invoiceNo ?? this.invoiceNo,
+      date: date ?? this.date,
+      cashierName: cashierName ?? this.cashierName,
+      customerName: customerName ?? this.customerName,
+      tableNo: tableNo ?? this.tableNo,
+      tableId: tableId ?? this.tableId,
+      discountId: discountId ?? this.discountId,
+      shiftId: shiftId ?? this.shiftId,
+      latestAcceptance: latestAcceptance ?? this.latestAcceptance,
+      createdAt: createdAt ?? this.createdAt,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      status: status ?? this.status,
+      subtotalPrice: subtotalPrice ?? this.subtotalPrice,
+      discountAmount: discountAmount ?? this.discountAmount,
+      taxAmount: taxAmount ?? this.taxAmount,
+      taxBreakdown: taxBreakdown ?? this.taxBreakdown,
+      totalPrice: totalPrice ?? this.totalPrice,
+      paidAmount: paidAmount ?? this.paidAmount,
+      changeAmount: changeAmount ?? this.changeAmount,
+      items: items ?? this.items,
+      logs: logs ?? this.logs,
+      payments: payments ?? this.payments,
+    );
+  }
+
   factory Order.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic> d =
         (json['data'] != null && json['data'] is Map)

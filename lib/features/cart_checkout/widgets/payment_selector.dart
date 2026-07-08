@@ -83,9 +83,9 @@ class PaymentSelector extends StatelessWidget {
                         children: [
                           _payBtn('Cash', Icons.payments_outlined),
                           const SizedBox(width: 15),
-                          _payBtn('Card', Icons.credit_card_outlined),
+                          _payBtn('Card', Icons.credit_card_outlined, isEnabled: !isUpdatingOrder),
                           const SizedBox(width: 15),
-                          _payBtn('Qris', Icons.qr_code_scanner),
+                          _payBtn('Qris', Icons.qr_code_scanner, isEnabled: !isUpdatingOrder),
                         ],
                       ),
                       if (paymentMethod != 'Cash') ...[

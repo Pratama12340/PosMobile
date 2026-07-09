@@ -52,8 +52,8 @@ void main() {
         minPurchase: 50000,
       );
 
-      expect(DiscountEligibilityHelper.isMinPurchaseMet(discount, 60000), isTrue);
-      expect(DiscountEligibilityHelper.isMinPurchaseMet(discount, 40000), isFalse);
+      expect(DiscountEligibilityHelper.isMinPurchaseMet(discount, 60000, []), isTrue);
+      expect(DiscountEligibilityHelper.isMinPurchaseMet(discount, 40000, []), isFalse);
     });
 
     test('isBlockedByGlobal blocks product discounts when global is active', () {

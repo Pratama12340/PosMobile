@@ -783,7 +783,7 @@ class _CheckoutDialogState extends State<CheckoutDialog>
         return itemPayload;
       }).toList();
 
-      final String payloadMethod = _paymentMethod == 'Qris' ? 'Midtrans' : _paymentMethod;
+      final String payloadMethod = _paymentMethod;
 
       // Cari diskon global (transaksi)
       final globalDiscounts = _selectedDiscounts.where((d) => d.scope == 'global').toList();

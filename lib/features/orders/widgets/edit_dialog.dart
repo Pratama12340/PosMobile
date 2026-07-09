@@ -13,6 +13,8 @@ import 'package:sistem_pos/core/utils/tax_calculator.dart' as tax_calc;
 import 'package:sistem_pos/core/utils/string_utils.dart';
 import 'package:sistem_pos/core/utils/snackbar_helper.dart';
 import 'package:sistem_pos/core/models/discount_model.dart';
+import 'package:sistem_pos/core/utils/discount_eligibility_helper.dart';
+import 'package:sistem_pos/features/cart_checkout/widgets/checkout_calculator.dart';
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
   const ReceiptDialog({super.key, required this.orderId});
@@ -190,10 +192,12 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
           orElse: () => Discount(id: 0, name: '', scope: '', type: '', value: 0, minPurchase: 0),
         );
         if (discount.id != 0) {
-          if (discount.type == 'percentage') {
-            totalDiscount += (item.originalPrice * (discount.value / 100)) * item.activeQty;
-          } else {
-            totalDiscount += discount.value * item.activeQty;
+          if (DiscountEligibilityHelper.isMinPurchaseMet(discount, currentSubtotalPrice, localOrder!.items)) {
+            if (discount.type == 'percentage') {
+              totalDiscount += (item.originalPrice * (discount.value / 100)) * item.activeQty;
+            } else {
+              totalDiscount += discount.value * item.activeQty;
+            }
           }
         }
       }
@@ -206,10 +210,12 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
         orElse: () => Discount(id: 0, name: '', scope: '', type: '', value: 0, minPurchase: 0),
       );
       if (globalDiscount.id != 0 && globalDiscount.scope == 'global') {
-        if (globalDiscount.type == 'percentage') {
-          totalDiscount += currentSubtotalPrice * (globalDiscount.value / 100);
-        } else {
-          totalDiscount += globalDiscount.value;
+        if (DiscountEligibilityHelper.isMinPurchaseMet(globalDiscount, currentSubtotalPrice, localOrder!.items)) {
+          if (globalDiscount.type == 'percentage') {
+            totalDiscount += currentSubtotalPrice * (globalDiscount.value / 100);
+          } else {
+            totalDiscount += globalDiscount.value;
+          }
         }
       }
     }
@@ -217,6 +223,56 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
     // Hitung proporsional jika backend tidak mengirimkan discountId
     if (!hasAnyDiscountId && localOrder!.discountAmount > 0) {
       if (localOrder!.subtotalPrice == 0) return 0;
+      
+      // RECONSTRUCTION LOGIC: Coba tebak diskon yang dipakai sebelumnya
+      if (_masterDiscounts.isNotEmpty) {
+        Map<int, OrderItem> originalCart = {};
+        for (var item in localOrder!.items) {
+          originalCart[item.productId] = OrderItem(
+            id: item.id, productId: item.productId,
+            originalQty: item.originalQty, activeQty: item.originalQty, 
+            itemName: item.itemName, unitPrice: item.originalPrice, 
+            originalPrice: item.originalPrice, stationId: item.stationId,
+            categoryId: item.categoryId
+          );
+        }
+
+        List<Discount> eligibleDiscounts = [];
+        for (var d in _masterDiscounts) {
+          if (CheckoutCalculator.calculateDiscountValue(localOrder!.subtotalPrice, [d], originalCart) > 0) {
+            eligibleDiscounts.add(d);
+          }
+        }
+
+        List<Discount>? bestMatch;
+        int n = eligibleDiscounts.length;
+        if (n > 12) n = 12; // Safeguard limit (max 4096 iterasi)
+        
+        for (int i = 1; i < (1 << n); i++) {
+          List<Discount> currentSubset = [];
+          for (int j = 0; j < n; j++) {
+            if ((i & (1 << j)) != 0) {
+              currentSubset.add(eligibleDiscounts[j]);
+            }
+          }
+          
+          double subsetSum = CheckoutCalculator.calculateDiscountValue(localOrder!.subtotalPrice, currentSubset, originalCart);
+          if ((subsetSum - localOrder!.discountAmount).abs() < 1.0) {
+            bestMatch = currentSubset;
+            break; 
+          }
+        }
+
+        if (bestMatch != null) {
+           Map<int, OrderItem> currentCart = {};
+           for (var item in localOrder!.items) {
+             if (item.isVoided || item.activeQty <= 0) continue;
+             currentCart[item.productId] = item;
+           }
+           return CheckoutCalculator.calculateDiscountValue(currentSubtotalPrice, bestMatch, currentCart).floorToDouble();
+        }
+      }
+
       double ratio = currentSubtotalPrice / localOrder!.subtotalPrice;
       if (ratio < 0) ratio = 0;
       if (ratio > 1) ratio = 1;

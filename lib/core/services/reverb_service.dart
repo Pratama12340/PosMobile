@@ -26,8 +26,9 @@ class ReverbService {
   final Map<String, Map<String, dynamic>> _subscriptionRegistry = {};
 
   final String reverbAppKey = const String.fromEnvironment('REVERB_APP_KEY', defaultValue: 'r3gcjhwwanzthldyihry');
-  final String reverbHost   = const String.fromEnvironment('REVERB_HOST', defaultValue: '103.197.190.23');
-  final int reverbPort      = const int.fromEnvironment('REVERB_PORT', defaultValue: 9011);
+  final String reverbHost   = const String.fromEnvironment('REVERB_HOST', defaultValue: 'ws.etres.my.id');
+  final int reverbPort      = const int.fromEnvironment('REVERB_PORT', defaultValue: 443);
+  final String reverbScheme = const String.fromEnvironment('REVERB_SCHEME', defaultValue: 'wss');
   String get authUrl      => "${ApiClient.baseUrl}/broadcasting/auth";
 
   List<String> get activeChannels => _channels.keys.toList();
@@ -85,7 +86,7 @@ class ReverbService {
 
   Future<void> _initPusher(String token) async {
     final options = PusherChannelsOptions.fromHost(
-      scheme: reverbPort == 443 ? 'wss' : 'ws',
+      scheme: reverbScheme,
       host: reverbHost,
       port: reverbPort,
       key: reverbAppKey,

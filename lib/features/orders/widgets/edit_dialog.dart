@@ -17,7 +17,8 @@ import 'package:sistem_pos/core/utils/discount_eligibility_helper.dart';
 import 'package:sistem_pos/features/cart_checkout/widgets/checkout_calculator.dart';
 class ReceiptDialog extends StatefulWidget {
   final int orderId;
-  const ReceiptDialog({super.key, required this.orderId});
+  final VoidCallback? onOrderUpdated;
+  const ReceiptDialog({super.key, required this.orderId, this.onOrderUpdated});
 
   @override
   State<ReceiptDialog> createState() => _ReceiptDialogState();
@@ -130,6 +131,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
       await PrintHelper.printToAllPrinters(
         transaction: transaction,
+        skipStation: true,
         onSuccess: (name) {
           snackbarKey.currentState?.showSnackBar(
             SnackBar(
@@ -339,16 +341,9 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
         bool showRightSide = localOrder!.logs.isNotEmpty || isEditMode;
 
-        double displaySubtotal = _masterDiscounts.isNotEmpty 
-            ? currentSubtotalPrice 
-            : (isEditMode ? currentSubtotalPrice : localOrder!.subtotalPrice);
-        double displayDiscount = _masterDiscounts.isNotEmpty 
-            ? currentDiscountAmount 
-            : (isEditMode ? currentDiscountAmount : localOrder!.discountAmount);
-        double displayBase = displaySubtotal - displayDiscount;
-        double displayTotal = _masterDiscounts.isNotEmpty 
-            ? currentTotalPrice 
-            : (isEditMode ? currentTotalPrice : localOrder!.totalPrice);
+        double displaySubtotal = isEditMode ? currentSubtotalPrice : localOrder!.subtotalPrice;
+        double displayDiscount = isEditMode ? currentDiscountAmount : localOrder!.discountAmount;
+        double displayTotal = isEditMode ? currentTotalPrice : localOrder!.totalPrice;
 
         return Dialog(
           backgroundColor: const Color(0xFFF8FAFC),
@@ -448,81 +443,33 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 
                                       if (_masterTaxes.isNotEmpty)
                                         ...() {
-                                          if (isEditMode || _masterDiscounts.isNotEmpty) {
-                                            return calculatedTaxBreakdown.map((tax) {
-                                              double amt =
-                                                  tax['calculated_amount'] as double;
-                                              double rate = double.tryParse(
-                                                      tax['rate']?.toString() ?? '0') ??
-                                                  0;
+                                          final breakdown = calculatedTaxBreakdown;
+                                          double totalCalculatedTax = 0;
+                                          for (var t in breakdown) {
+                                            totalCalculatedTax += (t['calculated_amount'] as num).toDouble();
+                                          }
+                                          
+                                          // If we are in edit mode, OR the calculated tax exactly matches the backend's tax amount, show breakdown.
+                                          if (isEditMode || totalCalculatedTax == localOrder!.taxAmount) {
+                                            return breakdown.map((tax) {
+                                              double amt = (tax['calculated_amount'] as num).toDouble();
+                                              double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
                                               String label = tax['name'] ?? "Pajak";
                                               if (tax['type'] == 'percentage') {
                                                 label += " (${rate.toStringAsFixed(0)}%)";
                                               }
-                                              return _buildSummaryRow(
-                                                  label, CurrencyFormatter.format(amt));
+                                              return _buildSummaryRow(label, CurrencyFormatter.format(amt));
                                             }).toList();
+                                          } else if (localOrder!.taxAmount > 0) {
+                                            // Fallback: show single aggregated row from backend
+                                            return [_buildSummaryRow("Pajak", CurrencyFormatter.format(localOrder!.taxAmount))];
                                           }
-
-                                          double serviceTotal = 0;
-                                          final List<Widget> rows = [];
-
-                                          for (var tax in _masterTaxes) {
-                                            final name = (tax['name'] ?? '')
-                                                .toString()
-                                                .toLowerCase();
-                                            final isPpn = name.contains('ppn') ||
-                                                name.contains('vat') ||
-                                                name.contains('tax');
-                                            if (isPpn) continue;
-
-                                            double rate = double.tryParse(
-                                                    tax['rate']?.toString() ?? '0') ??
-                                                0;
-                                            double amt = (tax['type'] == 'percentage')
-                                                ? (displayBase * (rate / 100))
-                                                : rate;
-                                            serviceTotal += amt;
-
-                                            String label = tax['name'] ?? "Pajak";
-                                            if (tax['type'] == 'percentage') {
-                                              label += " (${rate.toStringAsFixed(0)}%)";
-                                            }
-                                            rows.add(_buildSummaryRow(
-                                                label, CurrencyFormatter.format(amt)));
-                                          }
-
-                                          final afterService = displayBase + serviceTotal;
-                                          for (var tax in _masterTaxes) {
-                                            final name = (tax['name'] ?? '')
-                                                .toString()
-                                                .toLowerCase();
-                                            final isPpn = name.contains('ppn') ||
-                                                name.contains('vat') ||
-                                                name.contains('tax');
-                                            if (!isPpn) continue;
-
-                                            double rate = double.tryParse(
-                                                    tax['rate']?.toString() ?? '0') ??
-                                                0;
-                                            double amt = (tax['type'] == 'percentage')
-                                                ? (afterService * (rate / 100))
-                                                : rate;
-
-                                            String label = tax['name'] ?? "Pajak";
-                                            if (tax['type'] == 'percentage') {
-                                              label += " (${rate.toStringAsFixed(0)}%)";
-                                            }
-                                            rows.add(_buildSummaryRow(
-                                                label, CurrencyFormatter.format(amt)));
-                                          }
-
-                                          return rows;
+                                          return <Widget>[];
                                         }()
-                                      else if (_masterDiscounts.isNotEmpty ? currentTaxAmount > 0 : (isEditMode ? currentTaxAmount > 0 : localOrder!.taxAmount > 0))
+                                      else if (isEditMode ? currentTaxAmount > 0 : localOrder!.taxAmount > 0)
                                         _buildSummaryRow(
                                             "Pajak",
-                                            CurrencyFormatter.format(_masterDiscounts.isNotEmpty ? currentTaxAmount : (isEditMode ? currentTaxAmount : localOrder!.taxAmount))),
+                                            CurrencyFormatter.format(isEditMode ? currentTaxAmount : localOrder!.taxAmount)),
                                     ],
                                   )
                                 : const SizedBox.shrink(),
@@ -1289,16 +1236,6 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
               await OrderApiService.fetchHistoryDetail(widget.orderId);
 
           Order? finalNewOrder = newOrderFetched;
-          if (newOrderFetched != null) {
-            // override locally because backend doesn't update it
-            finalNewOrder = newOrderFetched.copyWith(
-              discountAmount: currentDiscountAmount,
-              subtotalPrice: currentSubtotalPrice,
-              taxAmount: currentTaxAmount,
-              totalPrice: totalAfter,
-            );
-          }
-
           if (diff > 0 && finalNewOrder != null && finalNewOrder.logs.isNotEmpty) {
             final newLog = finalNewOrder.logs.first;
             final logKey = _buildRefundKey(newLog);
@@ -1316,6 +1253,9 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
             _noteController.clear();
           });
           SnackbarHelper.showSuccess(context, "Pesanan berhasil diperbarui");
+          if (widget.onOrderUpdated != null) {
+            widget.onOrderUpdated!();
+          }
         } else {
           SnackbarHelper.showError(context, "Gagal memperbarui pesanan");
         }
@@ -1331,7 +1271,7 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
 class _ItemScrollbar extends StatefulWidget {
   final ScrollController controller;
 
-  const _ItemScrollbar({Key? key, required this.controller}) : super(key: key);
+  const _ItemScrollbar({required this.controller});
 
   @override
   State<_ItemScrollbar> createState() => _ItemScrollbarState();

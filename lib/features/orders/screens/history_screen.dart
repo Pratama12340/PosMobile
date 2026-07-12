@@ -262,11 +262,20 @@ class HistoryScreenState extends State<HistoryScreen> {
                                       color: Colors.transparent,
                                       child: InkWell(
                                         onTap: () async {
+                                          bool needsReload = false;
                                           await showDialog(
                                             context: context,
                                             builder: (context) =>
-                                                ReceiptDialog(orderId: order.id),
+                                                ReceiptDialog(
+                                                  orderId: order.id,
+                                                  onOrderUpdated: () {
+                                                    needsReload = true;
+                                                  },
+                                                ),
                                           );
+                                          if (needsReload) {
+                                            _loadInitialData();
+                                          }
                                         },
                                         child: Container(
                                           height: double.infinity,

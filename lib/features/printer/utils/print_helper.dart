@@ -66,6 +66,7 @@ class PrintHelper {
     Function()? onNoPrinter,
     bool isDoublePrint = false,
     bool skipCashier = false,
+    bool skipStation = false,
   }) async {
     final List<PrinterDevice> allPrinters = await StorageService.getPrinterList();
     final List<PrinterDevice> activePrinters = allPrinters.where((p) => p.isActive).toList();
@@ -103,6 +104,8 @@ class PrintHelper {
             port: printer.port,
           );
         } else {
+          if (skipStation) continue;
+
           final stationKey = printer.stationName.trim().toLowerCase();
           final stationItems = groupedByStation[stationKey] ?? [];
           if (stationItems.isEmpty) continue;

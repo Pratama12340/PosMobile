@@ -14,6 +14,7 @@ import 'package:sistem_pos/features/home/widgets/product_grid.dart';
 import 'package:sistem_pos/features/home/providers/home_controller.dart';
 import 'package:sistem_pos/features/printer/utils/print_helper.dart';
 import 'package:sistem_pos/core/services/storage_service.dart';
+import 'package:sistem_pos/core/utils/snackbar_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   final TextEditingController searchController;
@@ -326,9 +327,11 @@ class HomeScreenState extends State<HomeScreen> {
                         cartProvider.loadFromDraft(draft);
                         homeCtrl.hideAllPanels();
                         widget.onCartToggled?.call(true);
+                        SnackbarHelper.showSuccess(context, "Draft berhasil dimuat");
                       },
                       onDelete: (index) {
                         cartProvider.removeDraft(index);
+                        SnackbarHelper.showSuccess(context, "Draft berhasil dihapus");
                       },
                     )
                   else
@@ -360,6 +363,7 @@ class HomeScreenState extends State<HomeScreen> {
                       onSaveDraft: (name, table, id) {
                         cartProvider.saveToDraft(name, table, id);
                         widget.onCartToggled?.call(false);
+                        SnackbarHelper.showSuccess(context, "Pesanan berhasil disimpan ke draft");
                       },
                       onCancelPendingMode: () {
                         cartProvider.clearCart();

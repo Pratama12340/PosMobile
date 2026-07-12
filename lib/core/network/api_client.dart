@@ -8,7 +8,8 @@ class UnauthorizedException implements Exception {
 }
 
 class ApiClient {
-  static const String baseUrl = String.fromEnvironment('BASE_URL', defaultValue: 'http://103.197.190.23:9010/api/v1');
+  // static const String baseUrl = String.fromEnvironment('BASE_URL', defaultValue: 'http://103.197.190.23:9010/api/v1');
+  static const String baseUrl = String.fromEnvironment('BASE_URL', defaultValue: 'https://api.etres.my.id/api/v1');
 
   static Future<Map<String, String>> getHeaders() async {
     final token = await StorageService.getToken();

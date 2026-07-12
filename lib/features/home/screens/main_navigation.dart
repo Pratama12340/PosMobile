@@ -185,7 +185,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
     await _reverbService.initConnection(
       channelName: channelName,
       eventName: 'order.created', // 🛠️ FIX: Tidak perlu titik manual, service baru sudah handle otomatis
-      onEventReceived: (data) {
+      onEventReceived: (data) async {
 // debugPrint('⚡ [ORDER CREATED RAW]: $data');
 
   final orderData = _parseOrderData(data);
@@ -197,18 +197,32 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
   final String? invoiceNo = orderData['invoice_number']?.toString() ??
       orderData['invoice_no']?.toString();
 
-  OrderApiService.invalidatePendingCache();              // ← TAMBAH: buang cache dulu
+  OrderApiService.invalidatePendingCache();              // buang cache dulu
   if (mounted) context.read<OrderProvider>().fetchPendingOrders();
-   // ← TAMBAH: update panel jika terbuka
   _historyKey.currentState?.loadHistory();
   _shiftKey.currentState?.refreshShift();
 
   final String? orderCashierName = orderData['cashier_name']?.toString() ?? 
                                    orderData['user']?['name']?.toString();
+  final String currentCashier = await StorageService.getCashierName();
+  final bool isMyOrder = orderCashierName != null && orderCashierName.isNotEmpty && orderCashierName == currentCashier;
+
   final bool isCurrentlyViewingQris = invoiceNo != null && 
                                       invoiceNo == OrderNotificationController().activeQrisInvoice;
-  final bool shouldShowUi = (orderCashierName == null || orderCashierName.isEmpty) && !isCurrentlyViewingQris;
 
+  // Tentukan apakah order ini dari POS QR (Pelanggan sendiri) atau dari Kasir/POS Mobile
+  // POS QR tidak punya nama kasir, POS Mobile/Kasir selalu punya nama kasir
+  final bool isFromPosQr = orderCashierName == null || orderCashierName.trim().isEmpty;
+
+  // Notifikasi HANYA untuk pesanan dari POS QR.
+  // Pesanan dari POS Mobile/Kasir tidak perlu notifikasi (kasir sudah tahu).
+  if (!isFromPosQr) {
+    // Order dari kasir/POS mobile — tidak perlu notifikasi, cukup refresh UI
+    return;
+  }
+
+  // Dari sini, order pasti dari POS QR. Tampilkan notifikasi.
+  final bool shouldShowUi = !isMyOrder && !isCurrentlyViewingQris;
   _fireNotification(
     paymentMethod: paymentMethod,
     customerName: customerName,
@@ -223,7 +237,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
     _reverbService.bindEvent(
       channelName,
       'order.updated', // 🛠️ FIX: Tidak perlu titik manual, service baru sudah handle otomatis
-      (data) {
+      (data) async {
 // debugPrint('⚡ [ORDER UPDATED RAW]: $data');
 
         // Refresh UI dulu
@@ -243,11 +257,24 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
 
         final String? orderCashierName = orderData['cashier_name']?.toString() ?? 
                                          orderData['user']?['name']?.toString();
+
+        // Notifikasi HANYA untuk pesanan dari POS QR (tanpa nama kasir).
+        // Pesanan dari POS Mobile/Kasir tidak perlu notifikasi.
+        final bool isFromPosQr = orderCashierName == null || orderCashierName.trim().isEmpty;
+
+        if (!isFromPosQr) {
+          // Order dari kasir/POS mobile — tidak perlu notifikasi
+          return;
+        }
+
+        final String currentCashier = await StorageService.getCashierName();
+        final bool isMyOrder = orderCashierName != null && orderCashierName.isNotEmpty && orderCashierName == currentCashier;
+
         final String? invoiceNo = orderData['invoice_number']?.toString() ??
                                   orderData['invoice_no']?.toString();
         final bool isCurrentlyViewingQris = invoiceNo != null && 
                                             invoiceNo == OrderNotificationController().activeQrisInvoice;
-        final bool shouldShowUi = (orderCashierName == null || orderCashierName.isEmpty) && !isCurrentlyViewingQris;
+        final bool shouldShowUi = !isMyOrder && !isCurrentlyViewingQris;
 
         // Hanya tembak notifikasi overlay jika status = paid DAN pembayaran via QRIS
         if (status == 'paid' && isQris) {
@@ -427,7 +454,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
                 radius: 24,
                 backgroundImage: _profilePhoto.isNotEmpty
                     ? NetworkImage(
-                        'http://103.197.190.23:9010/storage/$_profilePhoto')
+                        // 'http://103.197.190.23:9010/storage/$_profilePhoto')
+                        'https://api.etres.my.id/storage/$_profilePhoto')
                     : null,
               ),
               const SizedBox(width: 15),

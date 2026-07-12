@@ -247,6 +247,8 @@ class Order {
 
   // ✅ PERBAIKAN 4: Type-safe payment list
   final List<OrderPayment> payments;
+  
+  final bool isFromPosQr;
 
   // ============================================================
   // ✅ PERBAIKAN 5: Getter yang benar untuk logika pending
@@ -333,6 +335,7 @@ class Order {
     required this.items,
     required this.logs,
     required this.payments,
+    this.isFromPosQr = false,
   });
 
   Order copyWith({
@@ -360,6 +363,7 @@ class Order {
     List<OrderItem>? items,
     List<OrderLog>? logs,
     List<OrderPayment>? payments,
+    bool? isFromPosQr,
   }) {
     return Order(
       id: id ?? this.id,
@@ -386,6 +390,7 @@ class Order {
       items: items ?? this.items,
       logs: logs ?? this.logs,
       payments: payments ?? this.payments,
+      isFromPosQr: isFromPosQr ?? this.isFromPosQr,
     );
   }
 
@@ -486,6 +491,7 @@ class Order {
       tableId: tId,
       discountId: int.tryParse(d['discount_id']?.toString() ?? ''),
       shiftId: int.tryParse(d['shift_id']?.toString() ?? ''),
+      latestAcceptance: d['latest_acceptance'] as Map<String, dynamic>?,
       createdAt: parsedCreatedAt,
 
       // ✅ PERBAIKAN 1: nullable, tidak crash jika null
@@ -521,6 +527,7 @@ class Order {
       payments: (d['payments'] as List? ?? [])
           .map((p) => OrderPayment.fromJson(p))
           .toList(),
+      isFromPosQr: (d['user_id'] == null && d['cashier_name'] == null && d['cashier'] == null && d['user'] == null),
     );
   }
 

@@ -81,7 +81,7 @@ Map<String, dynamic> calculateTaxesAndGrandTotal(
           : rate;
     }
 
-    amt = amt.floorToDouble();
+    amt = amt.roundToDouble();
     totalTaxAmount += amt;
 
     final Map<String, dynamic> taxData = Map<String, dynamic>.from(tax);

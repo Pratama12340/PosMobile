@@ -98,7 +98,21 @@ class HistoryScreenState extends State<HistoryScreen> {
           order.invoiceNo.toLowerCase().contains(query) ||
           order.customerName.toLowerCase().contains(query);
 
-      return isCurrentShift && isMyOrderOrSystem && matchesSearch;
+      // Sembunyikan pesanan dari riwayat jika belum di-accept oleh kasir.
+      // Pesanan POS QR yang sudah 'paid' tapi belum di-accept harusnya hanya muncul di Pesanan Masuk, bukan di Riwayat.
+      // Tetap tampilkan jika statusnya dibatalkan (cancelled/void).
+      // Riwayat seharusnya hanya untuk transaksi yang sudah selesai/dibayar/dibatalkan
+      bool isNotPending = order.status.toLowerCase() != 'pending';
+      
+      // Untuk pesanan dari POS QR (Pelanggan), WAJIB sudah di-accept kasir baru masuk riwayat.
+      // (Kecuali jika dibatalkan/void, maka tetap masuk riwayat).
+      // Untuk pesanan yang dibuat kasir langsung, biasanya otomatis selesai setelah dibayar.
+      bool isFinished = true;
+      if (order.isFromPosQr) {
+        isFinished = order.isAccepted || ['cancelled', 'void'].contains(order.status.toLowerCase());
+      }
+
+      return isCurrentShift && isMyOrderOrSystem && matchesSearch && isNotPending && isFinished;
     }).toList();
 
     return Scaffold(

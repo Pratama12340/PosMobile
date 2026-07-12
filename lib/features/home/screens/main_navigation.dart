@@ -214,11 +214,22 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold>
   // POS QR tidak punya nama kasir, POS Mobile/Kasir selalu punya nama kasir
   final bool isFromPosQr = orderCashierName == null || orderCashierName.trim().isEmpty;
 
+  final String status = orderData['status']?.toString() ?? '';
+  
   // Notifikasi HANYA untuk pesanan dari POS QR.
   // Pesanan dari POS Mobile/Kasir tidak perlu notifikasi (kasir sudah tahu).
   if (!isFromPosQr) {
     // Order dari kasir/POS mobile — tidak perlu notifikasi, cukup refresh UI
     return;
+  }
+
+  // Untuk pesanan QRIS dari POS QR, jangan munculkan notifikasi awal
+  // Notifikasi baru akan muncul di event `order.updated` saat status menjadi 'paid'.
+  final String methodLower = paymentMethod.toLowerCase().trim();
+  final bool isQris = ['qris', 'midtrans', 'gopay', 'other_qris'].contains(methodLower);
+  
+  if (isQris && status != 'paid') {
+    return; // Abaikan notifikasi untuk QRIS yang belum lunas
   }
 
   // Dari sini, order pasti dari POS QR. Tampilkan notifikasi.

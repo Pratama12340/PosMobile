@@ -43,6 +43,12 @@ class OrderProvider extends ChangeNotifier {
       _pendingOrders = orders.where((o) {
         if (_dismissedOrderIds.contains(o.id)) return false;
         if (!_isToday(o)) return false;
+        
+        // Jangan tampilkan di daftar pending jika ini dari POS QR, menggunakan QRIS, dan status belum dibayar
+        if (o.isFromPosQr && o.isNonCashOrder && o.status != 'paid') {
+          return false;
+        }
+
         return true;
       }).toList();
     } catch (e) {

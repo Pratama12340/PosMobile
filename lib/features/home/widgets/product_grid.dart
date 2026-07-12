@@ -26,6 +26,15 @@ class ProductGrid extends StatelessWidget {
     double itemHeight = (constraints.maxHeight - (spacing * 2)) / 3;
     double itemWidth = (constraints.maxWidth - (spacing * 3)) / 4;
 
+    final sortedProducts = List.of(productProvider.products);
+    sortedProducts.sort((a, b) {
+      final aIsBest = productProvider.bestsellerProductIds.contains(a.id);
+      final bIsBest = productProvider.bestsellerProductIds.contains(b.id);
+      if (aIsBest && !bIsBest) return -1;
+      if (!aIsBest && bIsBest) return 1;
+      return 0;
+    });
+
     return GridView.builder(
       padding: EdgeInsets.zero,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -34,9 +43,9 @@ class ProductGrid extends StatelessWidget {
         crossAxisSpacing: spacing,
         mainAxisSpacing: spacing,
       ),
-              itemCount: productProvider.products.length,
+              itemCount: sortedProducts.length,
               itemBuilder: (context, index) {
-                final p = productProvider.products[index];
+                final p = sortedProducts[index];
                 return ProductCard(
                   product: p,
                   bestsellerProductIds: productProvider.bestsellerProductIds,

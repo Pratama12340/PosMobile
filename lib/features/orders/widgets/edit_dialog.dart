@@ -291,12 +291,34 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
   }
 
   List<Map<String, dynamic>> get calculatedTaxBreakdown {
-    if (localOrder == null || _masterTaxes.isEmpty) return [];
-    return tax_calc.calculateTaxBreakdown(baseAmount, _masterTaxes);
+    if (localOrder == null) return [];
+    
+    // Jika _masterTaxes gagal dimuat, gunakan taxBreakdown bawaan dari order asli sebagai acuan
+    List<dynamic> activeTaxes = _masterTaxes.isNotEmpty ? _masterTaxes : (localOrder!.taxBreakdown ?? []);
+    
+    if (activeTaxes.isEmpty) return [];
+    
+    // Hitung ulang menggunakan tax_calculator
+    return tax_calc.calculateTaxBreakdown(baseAmount, activeTaxes);
   }
 
-  double get currentTaxAmount => calculatedTaxBreakdown.fold(
-      0.0, (sum, t) => sum + (t['calculated_amount'] as double));
+  double get currentTaxAmount {
+    if (calculatedTaxBreakdown.isNotEmpty) {
+      return calculatedTaxBreakdown.fold(
+          0.0, (sum, t) => sum + ((t['calculated_amount'] as num?)?.toDouble() ?? 0.0));
+    }
+    
+    // Fallback: Jika tidak ada tax breakdown (transaksi lama) atau master taxes gagal dimuat,
+    // hitung pajak secara proporsional dari nominal awal.
+    if (localOrder != null && localOrder!.taxAmount > 0) {
+      double oldBaseAmount = localOrder!.subtotalPrice - localOrder!.discountAmount;
+      if (oldBaseAmount > 0) {
+        double rate = localOrder!.taxAmount / oldBaseAmount;
+        return (baseAmount * rate).roundToDouble();
+      }
+    }
+    return 0.0;
+  }
 
   double get currentTotalPrice {
     if (localOrder == null) return 0;
@@ -441,18 +463,13 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                                           color: Colors.red,
                                         ),
 
-                                      if (_masterTaxes.isNotEmpty)
-                                        ...() {
+                                      ...() {
+                                        // 1. Jika dalam mode edit, SELALU tampilkan rincian yang dihitung ulang secara dinamis.
+                                        if (isEditMode) {
                                           final breakdown = calculatedTaxBreakdown;
-                                          double totalCalculatedTax = 0;
-                                          for (var t in breakdown) {
-                                            totalCalculatedTax += (t['calculated_amount'] as num).toDouble();
-                                          }
-                                          
-                                          // If we are in edit mode, OR the calculated tax exactly matches the backend's tax amount, show breakdown.
-                                          if (isEditMode || totalCalculatedTax == localOrder!.taxAmount) {
+                                          if (breakdown.isNotEmpty) {
                                             return breakdown.map((tax) {
-                                              double amt = (tax['calculated_amount'] as num).toDouble();
+                                              double amt = (tax['calculated_amount'] ?? tax['amount'] ?? 0).toDouble();
                                               double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
                                               String label = tax['name'] ?? "Pajak";
                                               if (tax['type'] == 'percentage') {
@@ -460,16 +477,38 @@ class _ReceiptDialogState extends State<ReceiptDialog> {
                                               }
                                               return _buildSummaryRow(label, CurrencyFormatter.format(amt));
                                             }).toList();
+                                          } else if (currentTaxAmount > 0) {
+                                            return [_buildSummaryRow("Pajak", CurrencyFormatter.format(currentTaxAmount))];
+                                          }
+                                        } 
+                                        // 2. Jika BUKAN mode edit (hanya melihat riwayat), TAMPILKAN rincian asli dari backend (taxBreakdown)
+                                        else {
+                                          // Prioritas: taxBreakdown dari backend > calculatedTaxBreakdown dari masterTaxes > fallback gabungan
+                                          List<dynamic> breakdownToDisplay = [];
+                                          
+                                          if (localOrder!.taxBreakdown != null && localOrder!.taxBreakdown!.isNotEmpty) {
+                                            breakdownToDisplay = localOrder!.taxBreakdown!;
+                                          } else if (calculatedTaxBreakdown.isNotEmpty) {
+                                            breakdownToDisplay = calculatedTaxBreakdown;
+                                          }
+
+                                          if (breakdownToDisplay.isNotEmpty) {
+                                            return breakdownToDisplay.map((tax) {
+                                              double amt = double.tryParse(tax['calculated_amount']?.toString() ?? tax['amount']?.toString() ?? '0') ?? 0;
+                                              double rate = double.tryParse(tax['rate']?.toString() ?? '0') ?? 0;
+                                              String label = tax['name'] ?? "Pajak";
+                                              if (tax['type'] == 'percentage' && rate > 0) {
+                                                label += " (${rate.toStringAsFixed(0)}%)";
+                                              }
+                                              return _buildSummaryRow(label, CurrencyFormatter.format(amt));
+                                            }).toList();
                                           } else if (localOrder!.taxAmount > 0) {
-                                            // Fallback: show single aggregated row from backend
+                                            // Jika backend tidak mengirim taxBreakdown DAN masterTaxes kosong, tampilkan baris gabungan
                                             return [_buildSummaryRow("Pajak", CurrencyFormatter.format(localOrder!.taxAmount))];
                                           }
-                                          return <Widget>[];
-                                        }()
-                                      else if (isEditMode ? currentTaxAmount > 0 : localOrder!.taxAmount > 0)
-                                        _buildSummaryRow(
-                                            "Pajak",
-                                            CurrencyFormatter.format(isEditMode ? currentTaxAmount : localOrder!.taxAmount)),
+                                        }
+                                        return <Widget>[];
+                                      }(),
                                     ],
                                   )
                                 : const SizedBox.shrink(),
